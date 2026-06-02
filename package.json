@@ -1,0 +1,65 @@
+{
+  "name": "donpollo-music-desktop",
+  "private": true,
+  "version": "1.0.0",
+  "type": "module",
+  "main": "dist-electron/main.cjs",
+  "scripts": {
+    "dev": "concurrently -k \"vite\" \"npm run dev:electron\"",
+    "dev:electron": "wait-on tcp:5173 && tsup electron/main.ts electron/preload.ts --out-dir dist-electron --format cjs --external electron && cross-env NODE_ENV=development electron .",
+    "build": "tsc && vite build && tsup electron/main.ts electron/preload.ts --out-dir dist-electron --format cjs --external electron",
+    "preview": "vite preview",
+    "dist": "electron-builder"
+  },
+  "build": {
+    "appId": "com.donpollo.music",
+    "productName": "DonPollo Music",
+    "directories": {
+      "output": "release"
+    },
+    "files": [
+      "dist/**/*",
+      "dist-electron/**/*",
+      "package.json"
+    ],
+    "extraMetadata": {
+      "main": "dist-electron/main.cjs"
+    },
+    "win": {
+      "target": [
+        {
+          "target": "nsis",
+          "arch": [
+            "x64"
+          ]
+        }
+      ]
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "shortcutName": "DonPollo Music"
+    }
+  },
+  "devDependencies": {
+    "@types/react": "^19.2.16",
+    "@types/react-dom": "^19.2.3",
+    "@vitejs/plugin-react": "^6.0.2",
+    "concurrently": "^10.0.3",
+    "cross-env": "^10.1.0",
+    "electron": "^42.3.1",
+    "electron-builder": "^26.8.1",
+    "tsup": "^8.5.1",
+    "typescript": "~6.0.2",
+    "vite": "^8.0.12",
+    "wait-on": "^9.0.10"
+  },
+  "dependencies": {
+    "lucide-react": "^1.17.0",
+    "react": "^19.2.7",
+    "react-dom": "^19.2.7",
+    "react-router-dom": "^7.16.0"
+  }
+}
