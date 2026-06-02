@@ -5,7 +5,7 @@ import './index.css';
 const API_BASE_URL = 'http://179.41.4.182:7097';
 // ⚠️ Ganti dengan Client ID dari Discord Developer Portal Anda
 const DISCORD_CLIENT_ID = '1257064052203458712';
-const DISCORD_REDIRECT_URI = 'http://localhost:5173/callback';
+const DISCORD_REDIRECT_URI = 'https://donpollo-music-desktop.vercel.app/callback';
 
 type Page = 'home' | 'library' | 'playlist' | 'playlist-detail' | 'settings';
 
@@ -705,7 +705,7 @@ function App() {
           <div className="settings-warning">
             ⚠️ <strong>Developer Note:</strong> Isi variabel <code>DISCORD_CLIENT_ID</code> di baris atas file App.tsx dengan Client ID dari{' '}
             <a href="https://discord.com/developers/applications" target="_blank" rel="noreferrer" style={{ color: 'var(--accent-primary)' }}>Discord Developer Portal</a>.
-            Tambahkan <code>http://localhost:5173/callback</code> sebagai Redirect URI di OAuth2 settings.
+            Tambahkan <code>https://donpollo-music-desktop.vercel.app/callback</code> sebagai Redirect URI di OAuth2 settings.
           </div>
         )}
       </div>
