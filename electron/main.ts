@@ -22,7 +22,7 @@ function createWindow() {
   });
 
   if (isDev) {
-    mainWindow.loadURL('http://localhost:5173');
+    mainWindow.loadURL('https://donpollo-music-desktop.vercel.app/');
   } else {
     mainWindow.loadFile(path.join(__dirname, '../dist/index.html'));
   }
