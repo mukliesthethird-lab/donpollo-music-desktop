@@ -1,6 +1,8 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { Home, Library, Plus, Mic2, Settings, Play, Pause, SkipBack, SkipForward, Repeat, Shuffle, Volume2, VolumeX, ListMusic, UserCircle, ChevronRight, Search, Bell, AlertCircle, Headset, Loader2, Maximize2, X, ChevronLeft, Music, PanelRight, Trash2, Heart, LogIn, LogOut, Check, FolderPlus, Radio } from 'lucide-react';
+import { Home, Library, Plus, Mic2, Settings, Play, Pause, SkipBack, SkipForward, Repeat, Shuffle, Volume2, VolumeX, ListMusic, UserCircle, ChevronRight, Search, AlertCircle, Headset, Loader2, Maximize2, X, ChevronLeft, Music, PanelRight, Trash2, Heart, LogIn, LogOut, Check, FolderPlus, Globe } from 'lucide-react';
 import './index.css';
+import { createTranslator } from './translations';
+import type { Language } from './translations';
 
 const API_BASE_URL = 'http://179.41.4.182:7097';
 // ⚠️ Ganti dengan Client ID dari Discord Developer Portal Anda
@@ -50,7 +52,7 @@ function App() {
 
   // ─── Playlists ──────────────────────────────────────────────
   const [playlists, setPlaylists] = useState<Playlist[]>([]);
-  
+
   useEffect(() => {
     const fetchPlaylists = async () => {
       try {
@@ -66,6 +68,8 @@ function App() {
   }, [discordUser]);
   const [showCreatePlaylist, setShowCreatePlaylist] = useState(false);
   const [newPlaylistName, setNewPlaylistName] = useState('');
+  const [newPlaylistAvatar, setNewPlaylistAvatar] = useState('');
+  const [showLogoutDropdown, setShowLogoutDropdown] = useState(false);
   const [addToPlaylistSong, setAddToPlaylistSong] = useState<any | null>(null);
   const [playlistToDelete, setPlaylistToDelete] = useState<string | null>(null);
   const [isEditingPlaylistName, setIsEditingPlaylistName] = useState(false);
@@ -78,6 +82,16 @@ function App() {
   const [likedSongs, setLikedSongs] = useState<any[]>(() => {
     try { return JSON.parse(localStorage.getItem('donpollo_liked') || '[]'); } catch { return []; }
   });
+
+  // ─── Language ─────────────────────────────────────────────────
+  const [language, setLanguage] = useState<Language>(() => {
+    return (localStorage.getItem('donpollo_language') as Language) || 'id';
+  });
+  const t = createTranslator(language);
+
+  useEffect(() => {
+    localStorage.setItem('donpollo_language', language);
+  }, [language]);
 
   // ─── Settings ────────────────────────────────────────────────
   const [settings, setSettings] = useState(() => {
@@ -116,8 +130,7 @@ function App() {
 
   const audioRef = useRef<HTMLAudioElement | null>(null);
 
-  // ─── Autoplay & Context Menu ────────────────────────────────
-  const [isAutoplay, setIsAutoplay] = useState(false);
+  // ─── Context Menu ──────────────────────────────────────────────
   const [contextMenu, setContextMenu] = useState<{ x: number, y: number, song: any } | null>(null);
 
   useEffect(() => {
@@ -172,11 +185,11 @@ function App() {
             setDiscordUser(user);
             localStorage.setItem('donpollo_user', JSON.stringify(user));
             localStorage.setItem('donpollo_discord_token', token);
-            showToast(`Selamat datang, ${user.global_name || user.username}!`, 'user');
+            showToast(`${t('toastWelcome')}, ${user.global_name || user.username}!`, 'user');
             window.history.replaceState(null, '', window.location.pathname);
             setActivePage('home');
           })
-          .catch(() => showToast('Gagal mengambil data profil Discord.'));
+          .catch(() => showToast(t('toastDiscordError')));
       }
     }
   }, []);
@@ -231,7 +244,7 @@ function App() {
   const showToast = (msg: string, iconType: 'success' | 'error' | 'music' | 'playlist' | 'user' = 'success') => {
     let IconComponent = <Check size={20} />;
     let type: 'success' | 'error' = 'success';
-    
+
     if (msg.toLowerCase().includes('gagal') || msg.toLowerCase().includes('error')) {
       IconComponent = <AlertCircle size={20} />;
       type = 'error';
@@ -269,9 +282,9 @@ function App() {
 
   const getGreeting = () => {
     const h = new Date().getHours();
-    if (h < 12) return 'Good morning';
-    if (h < 17) return 'Good afternoon';
-    return 'Good evening';
+    if (h < 12) return t('goodMorning');
+    if (h < 17) return t('goodAfternoon');
+    return t('goodEvening');
   };
 
   const isLiked = (songId: string) => likedSongs.some(s => s.id === songId);
@@ -290,17 +303,36 @@ function App() {
     const newPl: Playlist = {
       id: Date.now().toString(),
       name: newPlaylistName.trim(),
+      avatar: newPlaylistAvatar.trim() || undefined,
       songs: [],
       createdAt: Date.now(),
       discordId: discordUser?.id || '',
     };
-    
+
     if ((window as any).electronAPI) await (window as any).electronAPI.savePlaylist(newPl);
 
     setPlaylists(prev => [newPl, ...prev]);
     setNewPlaylistName('');
+    setNewPlaylistAvatar('');
     setShowCreatePlaylist(false);
-    showToast(`Playlist "${newPl.name}" berhasil dibuat!`, 'playlist');
+    showToast(`Playlist "${newPl.name}" ${t('toastPlaylistCreated')}`, 'playlist');
+  };
+
+  const handleLogout = () => {
+    if (audioRef.current) {
+      audioRef.current.pause();
+    }
+    setIsPlaying(false);
+    setCurrentSong(null);
+    setQueue([]);
+    setOriginalQueue([]);
+    setCurrentIndex(-1);
+    setLyricsData(null);
+    setDiscordUser(null);
+    localStorage.removeItem('discord_user');
+    setShowLogoutDropdown(false);
+    setActivePage('home');
+    showToast(t('toastLogout'), 'success');
   };
 
   const addSongToPlaylist = async (playlistId: string, song: any) => {
@@ -309,19 +341,19 @@ function App() {
       setAddToPlaylistSong(null);
       return;
     }
-    
+
     const updated = { ...pl, songs: [...pl.songs, song] };
     if ((window as any).electronAPI) await (window as any).electronAPI.savePlaylist(updated);
 
     setPlaylists(prev => prev.map(p => p.id === playlistId ? updated : p));
     setAddToPlaylistSong(null);
-    showToast('Lagu ditambahkan ke playlist!', 'playlist');
+    showToast(t('toastAddedToPlaylist'), 'playlist');
   };
 
   const removeSongFromPlaylist = async (playlistId: string, songId: string) => {
     const pl = playlists.find(p => p.id === playlistId);
     if (!pl) return;
-    
+
     const updated = { ...pl, songs: pl.songs.filter(s => s.id !== songId) };
     if ((window as any).electronAPI) await (window as any).electronAPI.savePlaylist(updated);
 
@@ -333,7 +365,7 @@ function App() {
     setPlaylists(prev => prev.filter(pl => pl.id !== playlistId));
     setActivePage('playlist');
     setPlaylistToDelete(null);
-    showToast('Playlist dihapus.');
+    showToast(t('toastPlaylistDeleted'));
   };
 
   const handleEditPlaylistName = async (playlistId: string) => {
@@ -343,7 +375,7 @@ function App() {
     }
     const pl = playlists.find(p => p.id === playlistId);
     if (!pl) return;
-    
+
     const updated = { ...pl, name: editPlaylistNameValue.trim() };
     if ((window as any).electronAPI) await (window as any).electronAPI.savePlaylist(updated);
 
@@ -354,7 +386,7 @@ function App() {
   const handleUpdatePlaylistAvatar = async (playlistId: string) => {
     const pl = playlists.find(p => p.id === playlistId);
     if (!pl) return;
-    
+
     const updated = { ...pl, avatar: avatarUrlInput.trim() };
     if ((window as any).electronAPI) await (window as any).electronAPI.savePlaylist(updated);
 
@@ -373,7 +405,7 @@ function App() {
       if (data.results) setPlaylistSearchResults(data.results);
     } catch (err) {
       console.error(err);
-      showToast('Gagal mencari lagu');
+      showToast(t('toastSearchFail'));
     }
     setIsPlaylistSearching(false);
   };
@@ -389,7 +421,7 @@ function App() {
     setDiscordUser(null);
     localStorage.removeItem('donpollo_user');
     localStorage.removeItem('donpollo_discord_token');
-    showToast('Berhasil keluar dari Discord.');
+    showToast(t('toastLogout'));
   };
 
   const getDiscordAvatar = (user: DiscordUser) => {
@@ -437,7 +469,7 @@ function App() {
       const data = await response.json();
       if (data.results) setSearchResults(data.results);
     } catch {
-      showToast('Gagal terhubung ke server pencarian.');
+      showToast(t('toastSearchFail'));
     } finally {
       setIsLoading(false);
     }
@@ -496,7 +528,7 @@ function App() {
         audioRef.current.src = `${API_BASE_URL}/api/stream?id=${song.id}`;
         audioRef.current.play().catch(async (err) => {
           if (err.name === 'AbortError') return;
-          showToast('Server utama diblokir. Mengalihkan ke server cadangan...');
+          showToast(t('toastServerBlocked'));
           try {
             const pipedData = await (await fetch(`https://pipedapi.kavin.rocks/streams/${song.id}`)).json();
             if (pipedData.error) throw new Error(pipedData.error);
@@ -505,10 +537,10 @@ function App() {
               audioRef.current!.src = bestAudio.url;
               await audioRef.current!.play();
               setIsPlaying(true);
-              showToast('Terhubung ke server cadangan!', 'music');
+              showToast(t('toastServerFallback'), 'music');
             } else throw new Error('Format tidak didukung.');
           } catch {
-            showToast('Gagal total: Video ini dikunci ketat oleh YouTube.');
+            showToast(t('toastVideoLocked'));
             setIsPlaying(false);
           }
         });
@@ -543,29 +575,6 @@ function App() {
     if (currentIndex < queue.length - 1) {
       setCurrentIndex(currentIndex + 1);
       executePlay(queue[currentIndex + 1]);
-    } else if (isAutoplay && currentSong) {
-      try {
-        const query = encodeURIComponent(currentSong.artist);
-        const response = await fetch(`${API_BASE_URL}/api/search?q=${query}`);
-        const data = await response.json();
-        if (data.results && data.results.length > 0) {
-          const validSongs = data.results.filter((s: any) => s.id !== currentSong.id && !queue.find(q => q.id === s.id));
-          if (validSongs.length > 0) {
-            const next = validSongs[Math.floor(Math.random() * validSongs.length)];
-            setQueue(prev => [...prev, next]);
-            setOriginalQueue(prev => [...prev, next]);
-            setCurrentIndex(queue.length);
-            executePlay(next);
-          } else {
-            setIsPlaying(false);
-          }
-        } else {
-          setIsPlaying(false);
-        }
-      } catch (e) {
-        console.error("Autoplay fetch error", e);
-        setIsPlaying(false);
-      }
     } else {
       setIsPlaying(false);
     }
@@ -639,15 +648,15 @@ function App() {
   const renderLibraryPage = () => (
     <div className="page-content">
       <div className="page-header">
-        <h1>Koleksi Saya</h1>
-        <p className="page-subtitle">{playHistory.length} lagu dari riwayat putar</p>
+        <h1>{t('myLibrary')}</h1>
+        <p className="page-subtitle">{playHistory.length} {t('savedSongs')}</p>
       </div>
 
       {likedSongs.length > 0 && (
         <section className="home-section">
           <div className="section-header">
-            <h2 style={{ display: 'flex', alignItems: 'center', gap: '8px' }}><Heart size={24} fill="#ff6b9d" color="#ff6b9d" /> Lagu Disukai</h2>
-            <span className="show-all" onClick={() => startPlayingFromList(likedSongs, 0)}>Play All</span>
+            <h2 style={{ display: 'flex', alignItems: 'center', gap: '8px' }}><Heart size={24} fill="#ff6b9d" color="#ff6b9d" /> {t('likedSongs')}</h2>
+            <span className="show-all" onClick={() => startPlayingFromList(likedSongs, 0)}>{t('playAll')}</span>
           </div>
           <div className="library-list">
             {likedSongs.map((song, i) => (
@@ -676,8 +685,8 @@ function App() {
       {playHistory.length > 0 ? (
         <section className="home-section">
           <div className="section-header">
-            <h2>Riwayat Putar</h2>
-            <span className="show-all" onClick={() => { setPlayHistory([]); showToast('Riwayat dihapus.'); }}>Hapus Semua</span>
+            <h2>{t('recentlyPlayed')}</h2>
+            <span className="show-all" onClick={() => { setPlayHistory([]); showToast(t('toastHistoryCleared')); }}>{t('clearHistory')}</span>
           </div>
           <div className="library-list">
             {playHistory.map((song, i) => (
@@ -704,8 +713,8 @@ function App() {
       ) : (
         <div className="empty-state">
           <Music size={64} color="var(--text-muted)" />
-          <h3>Koleksi Kosong</h3>
-          <p>Putar lagu apa saja, dan mereka akan muncul di sini!</p>
+          <h3>{t('noHistory')}</h3>
+          <p>{t('noHistoryDesc')}</p>
         </div>
       )}
     </div>
@@ -719,8 +728,8 @@ function App() {
         <div className="page-content">
           <div className="page-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
             <div style={{ display: 'flex', gap: '20px', alignItems: 'center' }}>
-              <div 
-                className="playlist-avatar-large" 
+              <div
+                className="playlist-avatar-large"
                 style={{ width: '120px', height: '120px', borderRadius: '8px', backgroundColor: 'var(--surface-color)', display: 'flex', alignItems: 'center', justifyContent: 'center', overflow: 'hidden', cursor: 'pointer', position: 'relative' }}
                 onClick={() => { setAvatarUrlInput(pl.avatar || ''); setShowAvatarPrompt(true); }}
               >
@@ -730,24 +739,24 @@ function App() {
                   <ListMusic size={48} color="var(--text-muted)" />
                 )}
                 <div className="avatar-overlay" style={{ position: 'absolute', inset: 0, backgroundColor: 'rgba(0,0,0,0.6)', display: 'flex', alignItems: 'center', justifyContent: 'center', opacity: 0, transition: 'opacity 0.2s' }}>
-                  <span style={{ fontSize: '12px', fontWeight: 'bold' }}>Ubah Gambar</span>
+                  <span style={{ fontSize: '12px', fontWeight: 'bold' }}>{t('changeImage')}</span>
                 </div>
               </div>
-              
+
               <div>
                 {isEditingPlaylistName ? (
                   <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                    <input 
-                      type="text" 
-                      value={editPlaylistNameValue} 
+                    <input
+                      type="text"
+                      value={editPlaylistNameValue}
                       onChange={e => setEditPlaylistNameValue(e.target.value)}
                       onKeyDown={e => e.key === 'Enter' && handleEditPlaylistName(pl.id)}
                       autoFocus
                       className="modal-input"
                       style={{ fontSize: '24px', fontWeight: 'bold', width: '300px', marginBottom: 0 }}
                     />
-                    <button className="btn-primary" onClick={() => handleEditPlaylistName(pl.id)}>Simpan</button>
-                    <button className="btn-secondary" onClick={() => setIsEditingPlaylistName(false)}>Batal</button>
+                    <button className="btn-primary" onClick={() => handleEditPlaylistName(pl.id)}>{t('save')}</button>
+                    <button className="btn-secondary" onClick={() => setIsEditingPlaylistName(false)}>{t('cancel')}</button>
                   </div>
                 ) : (
                   <h1 style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
@@ -757,17 +766,17 @@ function App() {
                     </button>
                   </h1>
                 )}
-                <p className="page-subtitle">{pl.songs.length} lagu</p>
+                <p className="page-subtitle">{pl.songs.length} {t('songs')}</p>
               </div>
             </div>
             <div style={{ display: 'flex', gap: '12px', marginTop: 'auto' }}>
               {pl.songs.length > 0 && (
                 <button className="btn-primary" onClick={() => startPlayingFromList(pl.songs, 0)}>
-                  <Play size={16} fill="currentColor" /> Play All
+                  <Play size={16} fill="currentColor" /> {t('playAll')}
                 </button>
               )}
               <button className="btn-secondary" onClick={() => setPlaylistToDelete(pl.id)} style={{ color: '#ff5555' }}>
-                <Trash2 size={16} /> Hapus
+                <Trash2 size={16} /> {t('delete')}
               </button>
             </div>
           </div>
@@ -793,8 +802,8 @@ function App() {
           ) : (
             <div className="empty-state">
               <ListMusic size={64} color="var(--text-muted)" />
-              <h3>Playlist Masih Kosong</h3>
-              <p>Cari dan tambahkan lagu di bawah ini!</p>
+              <h3>{t('noPlaylists')}</h3>
+              <p>{t('addSongs')}</p>
             </div>
           )}
 
@@ -802,19 +811,19 @@ function App() {
           <div className="playlist-search-section" style={{ marginTop: '40px', paddingTop: '20px', borderTop: '1px solid var(--border-color)' }}>
             <h2 style={{ fontSize: '18px', marginBottom: '16px' }}>Tambahkan lagu ke playlist ini</h2>
             <form onSubmit={handlePlaylistSearch} style={{ display: 'flex', gap: '12px', marginBottom: '20px' }}>
-              <input 
-                type="text" 
-                placeholder="Cari lagu, artis, atau album..." 
+              <input
+                type="text"
+                placeholder={t('searchPlaceholder')}
                 value={playlistSearchQuery}
                 onChange={(e) => setPlaylistSearchQuery(e.target.value)}
                 className="search-input"
                 style={{ flex: 1, padding: '12px 16px', borderRadius: '8px', border: '1px solid var(--border-color)', backgroundColor: 'var(--surface-color)', color: 'var(--text-primary)' }}
               />
               <button type="submit" className="btn-primary" disabled={isPlaylistSearching}>
-                {isPlaylistSearching ? 'Mencari...' : 'Cari'}
+                {isPlaylistSearching ? '...' : t('addSongs')}
               </button>
             </form>
-            
+
             {playlistSearchResults.length > 0 && (
               <div className="library-list">
                 {playlistSearchResults.map((song, i) => (
@@ -827,12 +836,12 @@ function App() {
                       <div className="library-item-artist">{song.artist}</div>
                     </div>
                     <div className="library-item-duration">{formatTime(song.duration)}</div>
-                    <button 
-                      className="btn-secondary" 
-                      onClick={() => addSongToPlaylist(pl.id, song)} 
+                    <button
+                      className="btn-secondary"
+                      onClick={() => addSongToPlaylist(pl.id, song)}
                       disabled={pl.songs.some(s => s.id === song.id)}
                     >
-                      {pl.songs.some(s => s.id === song.id) ? 'Ditambahkan' : 'Tambah'}
+                      {pl.songs.some(s => s.id === song.id) ? t('toastAddedToPlaylist') : t('addSongs')}
                     </button>
                   </div>
                 ))}
@@ -848,11 +857,11 @@ function App() {
       <div className="page-content">
         <div className="page-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
           <div>
-            <h1>Playlist Saya</h1>
-            <p className="page-subtitle">{playlists.length} playlist</p>
+            <h1>{t('myLibrary')}</h1>
+            <p className="page-subtitle">{playlists.length} {t('playlist')}</p>
           </div>
           <button className="btn-primary" onClick={() => setShowCreatePlaylist(true)}>
-            <Plus size={16} /> Buat Playlist
+            <Plus size={16} /> {t('createPlaylist')}
           </button>
         </div>
         {playlists.length > 0 ? (
@@ -870,15 +879,15 @@ function App() {
                   <div className="playlist-card-play"><Play size={20} fill="currentColor" /></div>
                 </div>
                 <div className="playlist-card-name">{pl.name}</div>
-                <div className="playlist-card-count">{pl.songs.length} lagu</div>
+                <div className="playlist-card-count">{pl.songs.length} {t('songs')}</div>
               </div>
             ))}
           </div>
         ) : (
           <div className="empty-state">
             <ListMusic size={64} color="var(--text-muted)" />
-            <h3>Belum Ada Playlist</h3>
-            <p>Buat playlist pertama Anda sekarang!</p>
+            <h3>{t('noPlaylists')}</h3>
+            <p>{t('noPlaylistsDesc')}</p>
           </div>
         )}
       </div>
@@ -888,12 +897,12 @@ function App() {
   const renderSettingsPage = () => (
     <div className="page-content">
       <div className="page-header">
-        <h1>Pengaturan</h1>
+        <h1>{t('settingsTitle')}</h1>
       </div>
 
       {/* Akun Discord */}
       <div className="settings-section">
-        <div className="settings-section-title" style={{ display: 'flex', alignItems: 'center', gap: '8px' }}><UserCircle size={20} color="var(--accent-primary)" /> Akun</div>
+        <div className="settings-section-title" style={{ display: 'flex', alignItems: 'center', gap: '8px' }}><UserCircle size={20} color="var(--accent-primary)" /> {t('accountSection')}</div>
         {discordUser ? (
           <div className="settings-account-card">
             {getDiscordAvatar(discordUser) ? (
@@ -906,7 +915,7 @@ function App() {
               <div className="settings-account-sub">@{discordUser.username}#{discordUser.discriminator} • Login dengan Discord</div>
             </div>
             <button className="btn-secondary" onClick={logoutDiscord} style={{ marginLeft: 'auto' }}>
-              <LogOut size={16} /> Keluar
+              <LogOut size={16} /> {t('logout')}
             </button>
           </div>
         ) : (
@@ -917,23 +926,45 @@ function App() {
               </svg>
             </div>
             <div className="settings-account-info">
-              <div className="settings-account-name">Belum Login</div>
-              <div className="settings-account-sub">Login untuk menyinkronkan data antar perangkat</div>
+              <div className="settings-account-name">{t('notLoggedIn')}</div>
+              <div className="settings-account-sub">{t('loginToSync')}</div>
             </div>
             <button className="btn-primary" onClick={loginWithDiscord} style={{ marginLeft: 'auto' }}>
-              <LogIn size={16} /> Login Discord
+              <LogIn size={16} /> {t('loginDiscord')}
             </button>
           </div>
         )}
       </div>
 
-      {/* Audio */}
+      {/* Bahasa */}
       <div className="settings-section">
-        <div className="settings-section-title" style={{ display: 'flex', alignItems: 'center', gap: '8px' }}><Volume2 size={20} color="var(--accent-primary)" /> Audio</div>
+        <div className="settings-section-title" style={{ display: 'flex', alignItems: 'center', gap: '8px' }}><Globe size={20} color="var(--accent-primary)" /> {t('languageSection')}</div>
         <div className="settings-row">
           <div>
-            <div className="settings-label">Volume Default</div>
-            <div className="settings-desc">Volume yang digunakan saat aplikasi pertama dibuka</div>
+            <div className="settings-label">{t('languageLabel')}</div>
+            <div className="settings-desc">{t('languageDesc')}</div>
+          </div>
+          <div className="language-picker">
+            {(['id', 'en', 'ja'] as Language[]).map(lang => (
+              <button
+                key={lang}
+                className={`lang-btn ${language === lang ? 'active' : ''}`}
+                onClick={() => setLanguage(lang)}
+              >
+                {lang === 'id' ? '🇮🇩 Indonesia' : lang === 'en' ? '🇬🇧 English' : '🇯🇵 日本語'}
+              </button>
+            ))}
+          </div>
+        </div>
+      </div>
+
+      {/* Audio */}
+      <div className="settings-section">
+        <div className="settings-section-title" style={{ display: 'flex', alignItems: 'center', gap: '8px' }}><Volume2 size={20} color="var(--accent-primary)" /> {t('audioSection')}</div>
+        <div className="settings-row">
+          <div>
+            <div className="settings-label">{t('defaultVolume')}</div>
+            <div className="settings-desc">{t('defaultVolumeDesc')}</div>
           </div>
           <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
             <span style={{ color: 'var(--text-secondary)', fontSize: '13px' }}>{Math.round(volume * 100)}%</span>
@@ -944,26 +975,26 @@ function App() {
         </div>
         <div className="settings-row">
           <div>
-            <div className="settings-label">Kualitas Audio</div>
-            <div className="settings-desc">Preferensi kualitas stream dari YouTube</div>
+            <div className="settings-label">{t('audioQuality')}</div>
+            <div className="settings-desc">{t('audioQualityDesc')}</div>
           </div>
           <select className="settings-select"
             value={settings.audioQuality || 'auto'}
             onChange={e => setSettings((p: any) => ({ ...p, audioQuality: e.target.value }))}>
-            <option value="auto">Auto (Direkomendasikan)</option>
-            <option value="high">Tinggi (160kbps)</option>
-            <option value="medium">Sedang (128kbps)</option>
+            <option value="auto">{t('qualityAuto')}</option>
+            <option value="high">{t('qualityHigh')}</option>
+            <option value="medium">{t('qualityMedium')}</option>
           </select>
         </div>
       </div>
 
       {/* Tampilan */}
       <div className="settings-section">
-        <div className="settings-section-title" style={{ display: 'flex', alignItems: 'center', gap: '8px' }}><Settings size={20} color="var(--accent-primary)" /> Tampilan</div>
+        <div className="settings-section-title" style={{ display: 'flex', alignItems: 'center', gap: '8px' }}><Settings size={20} color="var(--accent-primary)" /> {t('displaySection')}</div>
         <div className="settings-row">
           <div>
-            <div className="settings-label">Auto-tampilkan Lirik</div>
-            <div className="settings-desc">Buka panel lirik otomatis saat lagu diputar</div>
+            <div className="settings-label">{t('autoLyrics')}</div>
+            <div className="settings-desc">{t('autoLyricsDesc')}</div>
           </div>
           <button className={`settings-toggle ${settings.autoLyrics ? 'on' : ''}`}
             onClick={() => setSettings((p: any) => ({ ...p, autoLyrics: !p.autoLyrics }))}>
@@ -972,8 +1003,8 @@ function App() {
         </div>
         <div className="settings-row">
           <div>
-            <div className="settings-label">Panel Kanan Otomatis Terbuka</div>
-            <div className="settings-desc">Tampilkan Queue/Lirik panel saat aplikasi dibuka</div>
+            <div className="settings-label">{t('autoSidebar')}</div>
+            <div className="settings-desc">{t('autoSidebarDesc')}</div>
           </div>
           <button className={`settings-toggle ${settings.autoSidebar !== false ? 'on' : ''}`}
             onClick={() => setSettings((p: any) => ({ ...p, autoSidebar: !(p.autoSidebar !== false) }))}>
@@ -984,28 +1015,28 @@ function App() {
 
       {/* Data */}
       <div className="settings-section">
-        <div className="settings-section-title" style={{ display: 'flex', alignItems: 'center', gap: '8px' }}><Library size={20} color="var(--accent-primary)" /> Data</div>
+        <div className="settings-section-title" style={{ display: 'flex', alignItems: 'center', gap: '8px' }}><Library size={20} color="var(--accent-primary)" /> {t('dataSection')}</div>
         <div className="settings-row">
           <div>
-            <div className="settings-label">Riwayat Putar</div>
-            <div className="settings-desc">{playHistory.length} lagu tersimpan</div>
+            <div className="settings-label">{t('playHistory')}</div>
+            <div className="settings-desc">{playHistory.length} {t('savedSongs')}</div>
           </div>
-          <button className="btn-secondary" onClick={() => { setPlayHistory([]); showToast('Riwayat dihapus.'); }}>
-            <Trash2 size={14} /> Hapus Riwayat
+          <button className="btn-secondary" onClick={() => { setPlayHistory([]); showToast(t('toastHistoryCleared')); }}>
+            <Trash2 size={14} /> {t('clearHistory')}
           </button>
         </div>
         <div className="settings-row">
           <div>
-            <div className="settings-label">Playlist</div>
-            <div className="settings-desc">{playlists.length} playlist tersimpan</div>
+            <div className="settings-label">{t('playlist')}</div>
+            <div className="settings-desc">{playlists.length} {t('playlistCount')}</div>
           </div>
-          <button className="btn-secondary" onClick={() => { setPlaylists([]); showToast('Semua playlist dihapus.'); }}>
-            <Trash2 size={14} /> Hapus Semua Playlist
+          <button className="btn-secondary" onClick={() => { setPlaylists([]); showToast(t('toastHistoryCleared')); }}>
+            <Trash2 size={14} /> {t('deleteAllPlaylists')}
           </button>
         </div>
         <div className="settings-row">
           <div>
-            <div className="settings-label">Versi Aplikasi</div>
+            <div className="settings-label">{t('appVersion')}</div>
             <div className="settings-desc">Don Pollo Music Desktop</div>
           </div>
           <span style={{ color: 'var(--text-muted)', fontSize: '13px' }}>v1.0.0</span>
@@ -1013,6 +1044,7 @@ function App() {
       </div>
     </div>
   );
+
 
   const renderHomePage = () => (
     <div className="main-scroll">
@@ -1035,8 +1067,8 @@ function App() {
           {playHistory.length > 0 && (
             <section className="home-section">
               <div className="section-header">
-                <h2>Recently Played</h2>
-                <span className="show-all" onClick={() => setActivePage('library')}>Show all</span>
+                <h2>{t('recentlyPlayed')}</h2>
+                <span className="show-all" onClick={() => setActivePage('library')}>{t('playAll')}</span>
               </div>
               <div className="card-scroll-container">
                 {playHistory.map((item, i) => (
@@ -1056,8 +1088,8 @@ function App() {
           {recommendations.length > 0 && (
             <section className="home-section">
               <div className="section-header">
-                <h2>{playHistory.length > 0 ? `More like ${playHistory[0].artist}` : 'Recommended for today'}</h2>
-                <span className="show-all">Show all</span>
+                <h2>{playHistory.length > 0 ? `${t('recommendations')} ${playHistory[0].artist}` : t('recommendations')}</h2>
+                <span className="show-all">{t('playAll')}</span>
               </div>
               <div className="card-scroll-container">
                 {recommendations.map((item, i) => (
@@ -1185,7 +1217,7 @@ function App() {
             <div className="login-feature"><span style={{ display: 'flex' }}><Music size={20} color="var(--accent-primary)" /></span> Streaming musik tanpa batas</div>
             <div className="login-feature"><span style={{ display: 'flex' }}><Mic2 size={20} color="var(--accent-primary)" /></span> Lirik tersinkron real-time</div>
             <div className="login-feature"><span style={{ display: 'flex' }}><ListMusic size={20} color="var(--accent-primary)" /></span> Playlist & Koleksi pribadi</div>
-            <div className="login-feature"><span style={{ display: 'flex' }}><Maximize2 size={20} color="var(--accent-primary)" /></span> Mini player yang elegan</div>
+            <div className="login-feature"><span style={{ display: 'flex' }}><Maximize2 size={20} color="var(--accent-primary)" /></span> Full Screen UI</div>
           </div>
           <button className="login-btn-discord" onClick={loginWithDiscord}>
             <svg width="22" height="22" viewBox="0 0 127.14 96.36" fill="white" style={{ flexShrink: 0 }}>
@@ -1212,11 +1244,11 @@ function App() {
       {playlistToDelete && (
         <div className="modal-overlay" onClick={() => setPlaylistToDelete(null)}>
           <div className="modal" onClick={e => e.stopPropagation()}>
-            <h3 className="modal-title">Hapus Playlist?</h3>
-            <p style={{ color: 'var(--text-secondary)', marginBottom: '24px' }}>Tindakan ini tidak dapat dibatalkan.</p>
+            <h3 className="modal-title">{t('confirmDeletePlaylist')}</h3>
+            <p style={{ color: 'var(--text-secondary)', marginBottom: '24px' }}>{t('cannotUndo')}</p>
             <div className="modal-actions">
-              <button className="btn-secondary" onClick={() => setPlaylistToDelete(null)}>Batal</button>
-              <button className="btn-primary" style={{ backgroundColor: '#ff5555', color: 'white' }} onClick={() => deletePlaylist(playlistToDelete)}>Ya, Hapus</button>
+              <button className="btn-secondary" onClick={() => setPlaylistToDelete(null)}>{t('cancel')}</button>
+              <button className="btn-primary" style={{ backgroundColor: '#ff5555', color: 'white' }} onClick={() => deletePlaylist(playlistToDelete)}>{t('delete')}</button>
             </div>
           </div>
         </div>
@@ -1226,20 +1258,10 @@ function App() {
       {showAvatarPrompt && (
         <div className="modal-overlay" onClick={() => setShowAvatarPrompt(false)}>
           <div className="modal" onClick={e => e.stopPropagation()}>
-            <h3 className="modal-title">Ubah Gambar Playlist</h3>
-            <p style={{ color: 'var(--text-secondary)', fontSize: '13px', marginBottom: '16px' }}>Masukkan URL gambar dari internet (opsional). Biarkan kosong untuk menghapus.</p>
-            <input
-              className="modal-input"
-              type="text"
-              placeholder="https://contoh.com/gambar.jpg"
-              value={avatarUrlInput}
-              onChange={e => setAvatarUrlInput(e.target.value)}
-              onKeyDown={e => e.key === 'Enter' && activePlaylistId && handleUpdatePlaylistAvatar(activePlaylistId)}
-              autoFocus
-            />
+            <h3 className="modal-title">{t('changeImage')}</h3>
             <div className="modal-actions">
-              <button className="btn-secondary" onClick={() => setShowAvatarPrompt(false)}>Batal</button>
-              <button className="btn-primary" onClick={() => activePlaylistId && handleUpdatePlaylistAvatar(activePlaylistId)}>Simpan</button>
+              <button className="btn-secondary" onClick={() => setShowAvatarPrompt(false)}>{t('cancel')}</button>
+              <button className="btn-primary" onClick={() => activePlaylistId && handleUpdatePlaylistAvatar(activePlaylistId)}>{t('save')}</button>
             </div>
           </div>
         </div>
@@ -1249,19 +1271,38 @@ function App() {
       {showCreatePlaylist && (
         <div className="modal-overlay" onClick={() => setShowCreatePlaylist(false)}>
           <div className="modal" onClick={e => e.stopPropagation()}>
-            <h3 className="modal-title">Buat Playlist Baru</h3>
+            <h3 className="modal-title">{t('newPlaylistTitle')}</h3>
             <input
               className="modal-input"
               type="text"
-              placeholder="Nama playlist..."
+              placeholder={t('playlistNamePlaceholder')}
               value={newPlaylistName}
               onChange={e => setNewPlaylistName(e.target.value)}
               onKeyDown={e => e.key === 'Enter' && createPlaylist()}
               autoFocus
+              style={{ marginBottom: '12px' }}
             />
+            <p style={{ fontSize: '13px', color: 'var(--text-secondary)', marginBottom: '8px' }}>{t('coverOptional')}</p>
+            <input
+              className="modal-input"
+              type="text"
+              placeholder={t('imageUrlPlaceholder')}
+              value={newPlaylistAvatar}
+              onChange={e => setNewPlaylistAvatar(e.target.value)}
+              onKeyDown={e => e.key === 'Enter' && createPlaylist()}
+              style={{ marginBottom: '8px' }}
+            />
+            <input type="file" className="modal-file-input" accept="image/*" onChange={(e) => {
+              if (e.target.files && e.target.files[0]) {
+                const p = (e.target.files[0] as any).path;
+                if (p) setNewPlaylistAvatar(`file:///${p.replace(/\\/g, '/')}`);
+                else setNewPlaylistAvatar(URL.createObjectURL(e.target.files[0]));
+              }
+            }} />
+
             <div className="modal-actions">
-              <button className="btn-secondary" onClick={() => setShowCreatePlaylist(false)}>Batal</button>
-              <button className="btn-primary" onClick={createPlaylist} disabled={!newPlaylistName.trim()}>Buat</button>
+              <button className="btn-secondary" onClick={() => setShowCreatePlaylist(false)}>{t('cancel')}</button>
+              <button className="btn-primary" onClick={createPlaylist} disabled={!newPlaylistName.trim()}>{t('create')}</button>
             </div>
           </div>
         </div>
@@ -1271,13 +1312,13 @@ function App() {
       {addToPlaylistSong && (
         <div className="modal-overlay" onClick={() => setAddToPlaylistSong(null)}>
           <div className="modal" onClick={e => e.stopPropagation()}>
-            <h3 className="modal-title">Tambah ke Playlist</h3>
+            <h3 className="modal-title">{t('addToPlaylist')}</h3>
             <p style={{ color: 'var(--text-secondary)', fontSize: '13px', marginBottom: '16px' }}>"{addToPlaylistSong.title}"</p>
             {playlists.length === 0 ? (
               <div style={{ textAlign: 'center', padding: '20px 0' }}>
                 <p style={{ color: 'var(--text-muted)' }}>Belum ada playlist.</p>
                 <button className="btn-primary" style={{ marginTop: '12px' }} onClick={() => { setAddToPlaylistSong(null); setShowCreatePlaylist(true); }}>
-                  <Plus size={16} /> Buat Playlist Baru
+                  <Plus size={16} /> {t('createPlaylist')}
                 </button>
               </div>
             ) : (
@@ -1295,7 +1336,7 @@ function App() {
                     </div>
                     <div>
                       <div style={{ fontWeight: 600, fontSize: '14px' }}>{pl.name}</div>
-                      <div style={{ fontSize: '12px', color: 'var(--text-secondary)' }}>{pl.songs.length} lagu</div>
+                      <div style={{ fontSize: '12px', color: 'var(--text-secondary)' }}>{pl.songs.length} {t('songs')}</div>
                     </div>
                     {pl.songs.some(s => s.id === addToPlaylistSong.id) && (
                       <Check size={16} color="var(--accent-primary)" style={{ marginLeft: 'auto' }} />
@@ -1305,7 +1346,7 @@ function App() {
               </div>
             )}
             <div className="modal-actions">
-              <button className="btn-secondary" onClick={() => setAddToPlaylistSong(null)}>Tutup</button>
+              <button className="btn-secondary" onClick={() => setAddToPlaylistSong(null)}>{t('cancel')}</button>
             </div>
           </div>
         </div>
@@ -1316,26 +1357,89 @@ function App() {
 
         {/* LEFT SIDEBAR */}
         <div className="nav-sidebar">
-          <div className="nav-logo-container">
-            <img src="https://donpollobot.vercel.app/donpollo-icon.jpg" alt="Don Pollo" className="nav-logo-img" />
-            <span className="nav-logo-text">Don Pollo Music</span>
+          <div className="nav-top-box">
+            <div className="nav-logo-container">
+              <img src="https://donpollobot.vercel.app/donpollo-icon.jpg" alt="Don Pollo" className="nav-logo-img" />
+              <span className="nav-logo-text">Don Pollo Music</span>
+            </div>
+            <div className="nav-menu">
+              <div className={`nav-item ${activePage === 'home' ? 'active' : ''}`} onClick={goHome}>
+                <Home size={24} /> <span className="nav-label">{t('home')}</span>
+              </div>
+              <div className={`nav-item ${activePage === 'settings' ? 'active' : ''}`} onClick={() => setActivePage('settings')}>
+                <Settings size={24} /> <span className="nav-label">{t('settings')}</span>
+              </div>
+            </div>
           </div>
-          <div className="nav-menu">
-            <div className={`nav-item ${activePage === 'home' ? 'active' : ''}`} onClick={goHome}>
-              <Home size={24} /> <span className="nav-label">Beranda</span>
+
+          <div className="library-section">
+            <div className="library-header">
+              <div className="library-header-left">
+                <ListMusic size={24} />
+                <span>{t('yourLibrary')}</span>
+              </div>
+              <button className="library-header-btn" onClick={() => setShowCreatePlaylist(true)} title="Buat Playlist Baru">
+                <Plus size={20} />
+              </button>
             </div>
-            <div className={`nav-item ${(activePage === 'playlist' || activePage === 'playlist-detail') ? 'active' : ''}`} onClick={() => setActivePage('playlist')}>
-              <ListMusic size={24} /> <span className="nav-label">Playlist</span>
+
+            <div className="library-pills">
+              <button className="library-pill">Playlists</button>
             </div>
-            <div className={`nav-item ${activePage === 'library' ? 'active' : ''}`} onClick={() => setActivePage('library')}>
-              <Heart size={24} /> <span className="nav-label">Disukai</span>
+
+            <div className="library-list-container">
+              {/* Liked Songs Fixed Item */}
+              <button className={`sidebar-list-item ${activePage === 'library' ? 'active' : ''}`} onClick={() => setActivePage('library')}>
+                <div className="sidebar-item-img" style={{ background: 'linear-gradient(135deg, var(--accent-primary), #2a2a2a)' }}>
+                  <Heart size={20} color="white" fill="white" />
+                </div>
+                <div className="sidebar-item-info">
+                  <div className="sidebar-item-title">{t('liked')}</div>
+                  <div className="sidebar-item-subtitle">{t('playlist')} • {likedSongs.length} {t('songs')}</div>
+                </div>
+              </button>
+
+              {/* Playlists */}
+              {playlists.map(pl => (
+                <button key={pl.id} className={`sidebar-list-item ${(activePage === 'playlist-detail' && activePlaylistId === pl.id) ? 'active' : ''}`} onClick={() => {
+                  setActivePlaylistId(pl.id);
+                  setActivePage('playlist-detail');
+                }}>
+                  <div className="sidebar-item-img">
+                    {pl.avatar ? (
+                      <img src={pl.avatar} alt="cover" style={{ width: '100%', height: '100%', objectFit: 'cover', borderRadius: '4px' }} />
+                    ) : (
+                      pl.songs.length > 0 ? (
+                        <img src={pl.songs[0].thumbnail} alt="cover" style={{ width: '100%', height: '100%', objectFit: 'cover', borderRadius: '4px' }} />
+                      ) : (
+                        <Music size={24} color="var(--text-secondary)" />
+                      )
+                    )}
+                  </div>
+                  <div className="sidebar-item-info">
+                    <div className="sidebar-item-title">{pl.name}</div>
+                    <div className="sidebar-item-subtitle">{t('playlist')} • {discordUser ? (discordUser.global_name || discordUser.username) : t('guest')}</div>
+                  </div>
+                </button>
+              ))}
             </div>
           </div>
-          <div className="nav-bottom">
-            <div className={`nav-item ${activePage === 'settings' ? 'active' : ''}`} onClick={() => setActivePage('settings')}>
-              <Settings size={24} /> <span className="nav-label">Pengaturan</span>
-            </div>
-            <button className="user-profile-btn" onClick={() => setActivePage('settings')} title={discordUser ? `${discordUser.global_name || discordUser.username}` : 'Login'}>
+
+          <div className="nav-bottom" style={{ position: 'relative' }}>
+            {showLogoutDropdown && (
+              <div className="logout-dropdown">
+                {discordUser ? (
+                  <div className="logout-item" onClick={handleLogout}>
+                    <LogOut size={16} /> {t('logoutDropdown')}
+                  </div>
+                ) : (
+                  <div className="logout-item" onClick={() => { setShowLogoutDropdown(false); setActivePage('settings'); }} style={{ color: 'var(--text-primary)' }}>
+                    <Settings size={16} /> {t('goToSettings')}
+                  </div>
+                )}
+              </div>
+            )}
+            <button className="user-profile-btn" onClick={() => setShowLogoutDropdown(!showLogoutDropdown)} title={discordUser ? `${discordUser.global_name || discordUser.username}` : 'Login'}>
               <div className="user-avatar">
                 {discordUser && getDiscordAvatar(discordUser) ? (
                   <img src={getDiscordAvatar(discordUser)!} alt="avatar" style={{ width: '100%', height: '100%', borderRadius: '50%', objectFit: 'cover' }} />
@@ -1344,7 +1448,7 @@ function App() {
                 )}
               </div>
               <span className="nav-label" style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                {discordUser ? (discordUser.global_name || discordUser.username) : 'Guest'}
+                {discordUser ? (discordUser.global_name || discordUser.username) : t('guest')}
               </span>
             </button>
           </div>
@@ -1361,11 +1465,11 @@ function App() {
             <div className="search-container">
               <form onSubmit={handleSearch}>
                 <Search size={16} className="search-icon" />
-                <input type="text" className="search-input" placeholder="Cari lagu, artis, album..."
+                <input type="text" className="search-input" placeholder={t('searchPlaceholder')}
                   value={searchQuery} onChange={e => setSearchQuery(e.target.value)} />
               </form>
             </div>
-            <div className="bell-icon"><Bell size={20} /><div className="bell-dot"></div></div>
+            <div style={{ width: '60px' }}></div> {/* Spacer untuk menjaga search bar tetap di tengah */}
           </div>
 
           {/* Page Router */}
@@ -1401,7 +1505,7 @@ function App() {
             )}
             <div className="sidebar-header" style={{ position: 'relative', zIndex: 1 }}>
               <div>
-                <div className="sidebar-title">{showLyrics ? 'Lyrics' : 'Queue'}</div>
+                <div className="sidebar-title">{showLyrics ? t('lyricsPanel') : t('queue')}</div>
                 <div className="sidebar-subtitle">
                   {showLyrics ? (currentSong ? currentSong.title : 'No song') : `${Math.max(0, queue.length - Math.max(0, currentIndex))} songs • ${formatTime(queue.slice(Math.max(0, currentIndex)).reduce((acc, s) => acc + (s.duration || 0), 0))}`}
                 </div>
@@ -1473,7 +1577,7 @@ function App() {
                   );
                 })}
                 {queue.length > 0 && (
-                  <div className="clear-queue" onClick={() => { setQueue([]); setOriginalQueue([]); setCurrentIndex(-1); }}>Clear Queue</div>
+                  <div className="clear-queue" onClick={() => { setQueue([]); setOriginalQueue([]); setCurrentIndex(-1); }}>{t('clearQueue')}</div>
                 )}
               </div>
             )}
@@ -1497,7 +1601,7 @@ function App() {
                 </button>
               </>
             ) : (
-              <div style={{ color: 'var(--text-muted)', fontSize: '13px' }}>Belum ada lagu</div>
+              <div style={{ color: 'var(--text-muted)', fontSize: '13px' }}>{t('noHistory')}</div>
             )}
           </div>
           <div className="player-center">
@@ -1507,9 +1611,8 @@ function App() {
               <button className="chat-play-btn" onClick={togglePlay} disabled={!currentSong}>
                 {isPlaying ? <Pause size={20} fill="currentColor" /> : <Play size={20} fill="currentColor" style={{ marginLeft: '4px' }} />}
               </button>
-              <button className="chat-btn" onClick={handleNext} disabled={currentIndex >= queue.length - 1 && !isAutoplay} style={{ opacity: (currentIndex >= queue.length - 1 && !isAutoplay) ? 0.3 : 1 }}><SkipForward size={22} fill="currentColor" /></button>
+              <button className="chat-btn" onClick={handleNext} disabled={currentIndex >= queue.length - 1} style={{ opacity: (currentIndex >= queue.length - 1) ? 0.3 : 1 }}><SkipForward size={22} fill="currentColor" /></button>
               <button className="chat-btn" onClick={() => setIsLooping(!isLooping)} style={{ color: isLooping ? 'var(--accent-primary)' : 'var(--text-secondary)' }}><Repeat size={18} /></button>
-              <button className="chat-btn" onClick={() => setIsAutoplay(!isAutoplay)} style={{ color: isAutoplay ? 'var(--accent-primary)' : 'var(--text-secondary)' }} title="Smart Autoplay"><Radio size={18} /></button>
             </div>
             <div className="player-progress-container">
               <span className="chat-time">{formatTime(progress)}</span>
@@ -1525,7 +1628,7 @@ function App() {
             <button className="chat-btn" onClick={() => setIsRightSidebarOpen(!isRightSidebarOpen)} style={{ color: isRightSidebarOpen ? 'var(--accent-primary)' : 'var(--text-secondary)' }} title="Right Sidebar">
               <PanelRight size={20} />
             </button>
-            <button className="chat-btn" onClick={() => setIsWidgetMode(true)} title="Mini Player"><Maximize2 size={16} /></button>
+            <button className="chat-btn" onClick={() => setIsWidgetMode(true)} title="Full Screen"><Maximize2 size={16} /></button>
             <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginLeft: '16px' }}>
               <button className="chat-btn" onClick={() => setIsMuted(!isMuted)}>
                 {isMuted || volume === 0 ? <VolumeX size={18} /> : <Volume2 size={18} />}
@@ -1538,64 +1641,71 @@ function App() {
         </div>
       )}
 
-      {/* MINI PLAYER WIDGET */}
+      {/* FULLSCREEN PLAYER */}
       {isWidgetMode && (
-        <div className="floating-player">
-          <div className="fp-background">
-            <img src={currentSong?.thumbnail || 'https://images.unsplash.com/photo-1614680376573-df3480f0c6ff?auto=format&fit=crop&w=300&q=80'} alt="bg" />
+        <div className="fullscreen-player">
+          <div className="fs-background">
+            <img key={currentSong?.id || 'bg'} src={currentSong?.thumbnail || 'https://images.unsplash.com/photo-1614680376573-df3480f0c6ff?auto=format&fit=crop&w=300&q=80'} alt="bg" />
           </div>
-          <div className="fp-content">
-            <div className="fp-header">
-              <img src={currentSong?.thumbnail || 'https://images.unsplash.com/photo-1614680376573-df3480f0c6ff?auto=format&fit=crop&w=150&q=80'} alt="art" />
-              <div className="fp-header-info">
-                <div className="fp-title">{currentSong ? currentSong.title : 'No Music Playing'}</div>
-                <div className="fp-artist">{currentSong ? currentSong.artist : 'Select a song'}</div>
-              </div>
-            </div>
-            <div className="fp-lyrics-container" ref={widgetLyricsRef} onWheel={handleUserScroll} onTouchMove={handleUserScroll} onMouseDown={handleUserScroll} style={{ overflowY: 'auto', scrollbarWidth: 'none' }}>
-              {lyricsData && lyricsData.length > 0 ? (
-                lyricsData.map((line, idx) => {
-                  const nextLineTime = idx < lyricsData.length - 1 ? lyricsData[idx + 1].time : duration;
-                  const isActive = (progress - lyricsOffset) >= line.time && (progress - lyricsOffset) < nextLineTime;
-                  if (line.isInstrumental) return null;
-                  return <div key={idx} data-lyric-idx={idx} className={`fp-lyric-line ${isActive ? 'active' : ''}`}>{line.text}</div>;
-                })
-              ) : (
-                <div className="fp-lyric-line active">{plainLyrics || 'Instrumental'}</div>
-              )}
-            </div>
-          </div>
-          <div style={{ position: 'absolute', top: 16, left: 16, width: 48, height: 48, zIndex: 3, cursor: 'pointer' }}
-            onMouseEnter={() => setShowWidgetOverlay(true)} />
-          <div className="fp-overlay" style={{ opacity: showWidgetOverlay ? 1 : 0, pointerEvents: showWidgetOverlay ? 'auto' : 'none' }}
-            onMouseLeave={() => setShowWidgetOverlay(false)}>
-            <div className="fp-overlay-top">
-              <button className="fp-overlay-btn" title="Library"><ListMusic size={16} /></button>
-              <button className="fp-overlay-btn" onClick={() => setIsWidgetMode(false)} title="Close Mini Player"><X size={16} /></button>
-            </div>
-            <div className="fp-overlay-center">
-              <div className="fp-giant-heart" onClick={() => currentSong && toggleLike(currentSong)}>
-                <svg width="100" height="100" viewBox="0 0 24 24" fill={currentSong && isLiked(currentSong.id) ? '#ff6b9d' : 'none'} stroke={currentSong && isLiked(currentSong.id) ? '#ff6b9d' : 'currentColor'} strokeWidth="1" strokeLinecap="round" strokeLinejoin="round">
-                  <path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"></path>
-                </svg>
-              </div>
-            </div>
-            <div className="fp-overlay-bottom">
-              <div className="fp-overlay-controls">
-                <button onClick={toggleShuffle} style={{ color: isShuffled ? 'var(--accent-primary)' : 'white' }}><Shuffle size={18} /></button>
-                <button onClick={handlePrev}><SkipBack size={20} fill="currentColor" /></button>
-                <button className="fp-overlay-play" onClick={togglePlay}>
-                  {isPlaying ? <Pause size={24} fill="black" /> : <Play size={24} fill="black" style={{ marginLeft: '4px' }} />}
-                </button>
-                <button onClick={handleNext}><SkipForward size={20} fill="currentColor" /></button>
-                <button onClick={() => setIsLooping(!isLooping)} style={{ color: isLooping ? 'var(--accent-primary)' : 'white' }}><Repeat size={18} /></button>
-              </div>
-              <div className="fp-overlay-progress">
-                <span>{formatTime(progress)}</span>
-                <div className="fp-overlay-progress-bar" onClick={handleSeek}>
-                  <div className="fp-overlay-progress-fill" style={{ width: `${duration ? (progress / duration) * 100 : 0}%` }}></div>
+
+          <div className="fs-content">
+            <div className="fs-left">
+              <div className="fs-art-container" onMouseEnter={() => setShowWidgetOverlay(true)} onMouseLeave={() => setShowWidgetOverlay(false)}>
+                <img key={currentSong?.id || 'art'} src={currentSong?.thumbnail || 'https://images.unsplash.com/photo-1614680376573-df3480f0c6ff?auto=format&fit=crop&w=500&q=80'} alt="art" className="fs-art" />
+
+                <div className={`fs-art-overlay ${showWidgetOverlay ? 'visible' : ''}`}>
+                  <div className="fs-overlay-top">
+                    <button className="fs-overlay-btn" onClick={() => setIsWidgetMode(false)} title="Close Fullscreen"><X size={20} /></button>
+                  </div>
+
+                  <div className="fs-overlay-center">
+                    <div className="fs-giant-heart" onClick={() => currentSong && toggleLike(currentSong)}>
+                      <svg width="120" height="120" viewBox="0 0 24 24" fill={currentSong && isLiked(currentSong.id) ? '#ff6b9d' : 'none'} stroke={currentSong && isLiked(currentSong.id) ? '#ff6b9d' : 'currentColor'} strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+                        <path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"></path>
+                      </svg>
+                    </div>
+                  </div>
+
+                  <div className="fs-overlay-bottom">
+                    <div className="fs-overlay-controls">
+                      <button onClick={toggleShuffle} style={{ color: isShuffled ? 'var(--accent-primary)' : 'white' }}><Shuffle size={20} /></button>
+                      <button onClick={handlePrev}><SkipBack size={24} fill="currentColor" /></button>
+                      <button className="fs-overlay-play" onClick={togglePlay}>
+                        {isPlaying ? <Pause size={28} fill="black" /> : <Play size={28} fill="black" style={{ marginLeft: '6px' }} />}
+                      </button>
+                      <button onClick={handleNext}><SkipForward size={24} fill="currentColor" /></button>
+                      <button onClick={() => setIsLooping(!isLooping)} style={{ color: isLooping ? 'var(--accent-primary)' : 'white' }}><Repeat size={20} /></button>
+                    </div>
+
+                    <div className="fs-overlay-progress">
+                      <span>{formatTime(progress)}</span>
+                      <div className="fs-overlay-progress-bar" onClick={handleSeek}>
+                        <div className="fs-overlay-progress-fill" style={{ width: `${duration ? (progress / duration) * 100 : 0}%` }}></div>
+                      </div>
+                      <span>{formatTime(duration)}</span>
+                    </div>
+                  </div>
                 </div>
-                <span>{formatTime(duration)}</span>
+              </div>
+
+              <div className="fs-info">
+                <div className="fs-title">{currentSong ? currentSong.title : 'No Music Playing'}</div>
+                <div className="fs-artist">{currentSong ? currentSong.artist : 'Select a song'}</div>
+              </div>
+            </div>
+
+            <div className="fs-right">
+              <div className="fs-lyrics-container" ref={widgetLyricsRef} onWheel={handleUserScroll} onTouchMove={handleUserScroll} onMouseDown={handleUserScroll}>
+                {lyricsData && lyricsData.length > 0 ? (
+                  lyricsData.map((line, idx) => {
+                    const nextLineTime = idx < lyricsData.length - 1 ? lyricsData[idx + 1].time : duration;
+                    const isActive = (progress - lyricsOffset) >= line.time && (progress - lyricsOffset) < nextLineTime;
+                    if (line.isInstrumental) return null;
+                    return <div key={idx} data-lyric-idx={idx} className={`fs-lyric-line ${isActive ? 'active' : ''}`}>{line.text}</div>;
+                  })
+                ) : (
+                  <div className="fs-lyric-line active">{plainLyrics || 'Instrumental'}</div>
+                )}
               </div>
             </div>
           </div>
@@ -1608,9 +1718,9 @@ function App() {
             newQ.splice(currentIndex + 1, 0, contextMenu.song);
             setQueue(newQ);
             setOriginalQueue(newQ);
-            showToast('Ditambahkan untuk diputar selanjutnya');
+            showToast(t('toastPlayNext'));
           }}>
-            <Play size={16} /> Play Next
+            <Play size={16} /> {t('playNext')}
           </div>
           <div className="context-menu-item" onClick={() => {
             setQueue(prev => [...prev, contextMenu.song]);
@@ -1619,16 +1729,16 @@ function App() {
               setCurrentIndex(0);
               executePlay(contextMenu.song);
             } else {
-              showToast('Ditambahkan ke antrean');
+              showToast(t('toastAddedToQueue'));
             }
           }}>
-            <ListMusic size={16} /> Add to Queue
+            <ListMusic size={16} /> {t('addToQueue')}
           </div>
           <div className="context-menu-item" onClick={() => {
             setAddToPlaylistSong(contextMenu.song);
             setContextMenu(null);
           }}>
-            <FolderPlus size={16} /> Add to Playlist
+            <FolderPlus size={16} /> {t('addToPlaylist')}
           </div>
         </div>
       )}
