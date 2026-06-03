@@ -1,10 +1,40 @@
 import { app, BrowserWindow, ipcMain } from 'electron';
 import * as path from 'path';
+import * as fs from 'fs';
+import mysql from 'mysql2/promise';
+import dotenv from 'dotenv';
 
 const isDev = !app.isPackaged;
+dotenv.config({ path: path.join(__dirname, '../.env') });
 
 let mainWindow: BrowserWindow | null = null;
 let miniPlayerWindow: BrowserWindow | null = null;
+let db: mysql.Connection | null = null;
+
+async function initDB() {
+  try {
+    db = await mysql.createConnection({
+      host: process.env.DB_HOST,
+      user: process.env.DB_USER,
+      password: process.env.DB_PASSWORD,
+      database: process.env.DB_NAME,
+      port: Number(process.env.DB_PORT) || 3306,
+    });
+    
+    await db.execute(`
+      CREATE TABLE IF NOT EXISTS playlists (
+        id VARCHAR(255) PRIMARY KEY,
+        name VARCHAR(255) NOT NULL,
+        avatar LONGTEXT,
+        songs LONGTEXT,
+        discord_id VARCHAR(255)
+      )
+    `);
+    console.log('MySQL connected and table initialized');
+  } catch (error) {
+    console.error('MySQL connection error:', error);
+  }
+}
 
 function createWindow() {
   mainWindow = new BrowserWindow({
@@ -22,7 +52,24 @@ function createWindow() {
   });
 
   if (isDev) {
-    mainWindow.loadURL('https://donpollo-music-desktop.vercel.app/');
+    let useVercel = false;
+    try {
+      const envPath = path.join(__dirname, '../.env');
+      if (fs.existsSync(envPath)) {
+        const envContent = fs.readFileSync(envPath, 'utf-8');
+        if (envContent.includes('LOAD_VERCEL=true')) {
+          useVercel = true;
+        }
+      }
+    } catch (e) {
+      console.error('Failed to read .env', e);
+    }
+
+    if (useVercel) {
+      mainWindow.loadURL('https://donpollo-music-desktop.vercel.app/');
+    } else {
+      mainWindow.loadURL('http://localhost:5173/');
+    }
   } else {
     mainWindow.loadFile(path.join(__dirname, '../dist/index.html'));
   }
@@ -117,8 +164,51 @@ ipcMain.on('close-mini-player-window', () => {
   }
 });
 
+ipcMain.handle('get-playlists', async (event, discordId) => {
+  if (!db) return [];
+  try {
+    const [rows] = await db.execute('SELECT * FROM playlists WHERE discord_id = ? OR discord_id IS NULL OR discord_id = ""', [discordId || '']);
+    return (rows as any[]).map(row => ({
+      id: row.id,
+      name: row.name,
+      avatar: row.avatar,
+      songs: JSON.parse(row.songs || '[]'),
+      discordId: row.discord_id
+    }));
+  } catch (error) {
+    console.error(error);
+    return [];
+  }
+});
+
+ipcMain.handle('save-playlist', async (event, pl) => {
+  if (!db) return false;
+  try {
+    await db.execute(
+      'INSERT INTO playlists (id, name, avatar, songs, discord_id) VALUES (?, ?, ?, ?, ?) ON DUPLICATE KEY UPDATE name = ?, avatar = ?, songs = ?, discord_id = ?',
+      [pl.id, pl.name, pl.avatar || '', JSON.stringify(pl.songs), pl.discordId || '', pl.name, pl.avatar || '', JSON.stringify(pl.songs), pl.discordId || '']
+    );
+    return true;
+  } catch (error) {
+    console.error(error);
+    return false;
+  }
+});
+
+ipcMain.handle('delete-playlist', async (event, id) => {
+  if (!db) return false;
+  try {
+    await db.execute('DELETE FROM playlists WHERE id = ?', [id]);
+    return true;
+  } catch (error) {
+    console.error(error);
+    return false;
+  }
+});
+
 // APP LIFECYCLE
-app.whenReady().then(() => {
+app.whenReady().then(async () => {
+  await initDB();
   createWindow();
 
   app.on('activate', () => {
