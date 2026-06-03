@@ -23,6 +23,24 @@ type TranslationKeys = {
   guest: string;
   logoutDropdown: string;
   goToSettings: string;
+  
+  // Status & Join
+  statusOnline: string;
+  statusIdle: string;
+  statusDnd: string;
+  askToJoin: string;
+  joinRequestSent: string;
+  joinRequestRejected: string;
+  joinRequestReceived: string;
+  accept: string;
+  reject: string;
+  joinDisabled: string;
+  friendActivityTitle: string;
+  friendActivitySubtitle: string;
+  pendingRequests: string;
+  noFriendsOnline: string;
+  listenAlong: string;
+  leaveParty: string;
 
   // Home Page
   goodMorning: string;
@@ -166,6 +184,24 @@ const translations: Record<Language, TranslationKeys> = {
     logoutDropdown: 'Logout',
     goToSettings: 'Ke Pengaturan (Login)',
 
+    // Status & Join
+    statusOnline: 'Online',
+    statusIdle: 'Idle',
+    statusDnd: 'Do Not Disturb',
+    askToJoin: 'Minta Izin Gabung',
+    joinRequestSent: 'Permintaan terkirim...',
+    joinRequestRejected: 'Permintaan ditolak.',
+    joinRequestReceived: 'ingin ikut mendengarkan!',
+    accept: 'Terima',
+    reject: 'Tolak',
+    joinDisabled: 'Tidak bisa gabung',
+    friendActivityTitle: 'Aktivitas Teman',
+    friendActivitySubtitle: 'Dengarkan bersama teman',
+    pendingRequests: 'PERMINTAAN TERTUNDA',
+    noFriendsOnline: 'Tidak ada teman yang sedang online.',
+    listenAlong: 'Ikut Dengar',
+    leaveParty: 'Tinggalkan Party',
+
     // Home Page
     goodMorning: 'Selamat Pagi',
     goodAfternoon: 'Selamat Siang',
@@ -307,6 +343,24 @@ const translations: Record<Language, TranslationKeys> = {
     logoutDropdown: 'Logout',
     goToSettings: 'Go to Settings (Login)',
 
+    // Status & Join
+    statusOnline: 'Online',
+    statusIdle: 'Idle',
+    statusDnd: 'Do Not Disturb',
+    askToJoin: 'Ask to Join',
+    joinRequestSent: 'Request sent...',
+    joinRequestRejected: 'Request rejected.',
+    joinRequestReceived: 'wants to listen along!',
+    accept: 'Accept',
+    reject: 'Reject',
+    joinDisabled: 'Cannot join',
+    friendActivityTitle: 'Friend Activity',
+    friendActivitySubtitle: 'Listen Along with friends',
+    pendingRequests: 'PENDING REQUESTS',
+    noFriendsOnline: 'No friends are currently online.',
+    listenAlong: 'Listen Along',
+    leaveParty: 'Leave Party',
+
     // Home Page
     goodMorning: 'Good Morning',
     goodAfternoon: 'Good Afternoon',
@@ -447,6 +501,24 @@ const translations: Record<Language, TranslationKeys> = {
     guest: 'ゲスト',
     logoutDropdown: 'ログアウト',
     goToSettings: '設定へ（ログイン）',
+
+    // Status & Join
+    statusOnline: 'オンライン',
+    statusIdle: '退席中',
+    statusDnd: '取り込み中',
+    askToJoin: '参加をリクエスト',
+    joinRequestSent: 'リクエスト送信中...',
+    joinRequestRejected: 'リクエストが拒否されました。',
+    joinRequestReceived: 'さんが一緒に聴きたいと言っています！',
+    accept: '承認',
+    reject: '拒否',
+    joinDisabled: '参加できません',
+    friendActivityTitle: 'フレンドアクティビティ',
+    friendActivitySubtitle: '友達と一緒に聴く',
+    pendingRequests: '保留中のリクエスト',
+    noFriendsOnline: '現在オンラインのフレンドはいません。',
+    listenAlong: '一緒に聴く',
+    leaveParty: '退出する',
 
     // Home Page
     goodMorning: 'おはようございます',

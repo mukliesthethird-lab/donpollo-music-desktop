@@ -19,6 +19,9 @@ contextBridge.exposeInMainWorld('electronAPI', {
   hostParty: (partyId: string, hostDiscordId: string, song: any, currentTime: number, isPlaying: boolean) => ipcRenderer.invoke('host-party', partyId, hostDiscordId, song, currentTime, isPlaying),
   getPartyState: (partyId: string) => ipcRenderer.invoke('get-party-state', partyId),
   deleteParty: (partyId: string) => ipcRenderer.invoke('delete-party', partyId),
+  sendJoinRequest: (hostId: string, guestId: string, guestName: string) => ipcRenderer.invoke('send-join-request', hostId, guestId, guestName),
+  pollJoinRequests: (userId: string) => ipcRenderer.invoke('poll-join-requests', userId),
+  respondJoinRequest: (requestId: number, status: string) => ipcRenderer.invoke('respond-join-request', requestId, status),
   setActivity: (song: any, progressStr?: string) => ipcRenderer.send('set-activity', song, progressStr),
   clearActivity: () => ipcRenderer.send('clear-activity'),
   onDiscordOAuthToken: (callback: (token: string) => void) =>

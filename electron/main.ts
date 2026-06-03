@@ -69,7 +69,25 @@ async function initDB() {
         avatar_url VARCHAR(255),
         current_song LONGTEXT,
         party_id VARCHAR(255),
+        status VARCHAR(20) DEFAULT 'online',
         last_seen TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+      )
+    `);
+
+    try {
+      await db.execute("ALTER TABLE online_users ADD COLUMN status VARCHAR(20) DEFAULT 'online'");
+    } catch (e: any) {
+      // Ignore error if column already exists
+    }
+
+    await db.execute(`
+      CREATE TABLE IF NOT EXISTS join_requests (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        host_id VARCHAR(255),
+        guest_id VARCHAR(255),
+        guest_name VARCHAR(255),
+        status VARCHAR(20) DEFAULT 'pending',
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
       )
     `);
 
@@ -330,13 +348,13 @@ ipcMain.handle('delete-playlist', async (event, id) => {
 ipcMain.handle('update-presence', async (event, data) => {
   if (!db) return false;
   try {
-    const { discordId, username, avatarUrl, currentSong, partyId } = data;
+    const { discordId, username, avatarUrl, currentSong, partyId, status } = data;
     const songDataStr = currentSong ? JSON.stringify(currentSong) : '';
     await db.execute(
-      `INSERT INTO online_users (discord_id, username, avatar_url, current_song, party_id, last_seen) 
-       VALUES (?, ?, ?, ?, ?, NOW()) 
-       ON DUPLICATE KEY UPDATE username = ?, avatar_url = ?, current_song = ?, party_id = ?, last_seen = NOW()`,
-      [discordId, username, avatarUrl, songDataStr, partyId || '', username, avatarUrl, songDataStr, partyId || '']
+      `INSERT INTO online_users (discord_id, username, avatar_url, current_song, party_id, status, last_seen) 
+       VALUES (?, ?, ?, ?, ?, ?, NOW()) 
+       ON DUPLICATE KEY UPDATE username = ?, avatar_url = ?, current_song = ?, party_id = ?, status = ?, last_seen = NOW()`,
+      [discordId, username, avatarUrl, songDataStr, partyId || '', status || 'online', username, avatarUrl, songDataStr, partyId || '', status || 'online']
     );
     return true;
   } catch (error) {
@@ -357,11 +375,68 @@ ipcMain.handle('get-online-users', async (event, currentUserId) => {
       username: row.username,
       avatarUrl: row.avatar_url,
       currentSong: row.current_song ? JSON.parse(row.current_song) : null,
-      partyId: row.party_id
+      partyId: row.party_id,
+      status: row.status
     }));
   } catch (error) {
     console.error(error);
     return [];
+  }
+});
+
+// JOIN REQUESTS IPC
+ipcMain.handle('send-join-request', async (event, hostId, guestId, guestName) => {
+  if (!db) return false;
+  try {
+    await db.execute(
+      `INSERT INTO join_requests (host_id, guest_id, guest_name, status) VALUES (?, ?, ?, 'pending')`,
+      [hostId, guestId, guestName]
+    );
+    return true;
+  } catch (error) {
+    console.error(error);
+    return false;
+  }
+});
+
+ipcMain.handle('poll-join-requests', async (event, userId) => {
+  if (!db) return { incoming: [], outgoing: [] };
+  try {
+    // Clean up old requests (older than 2 minutes)
+    await db.execute('DELETE FROM join_requests WHERE created_at < DATE_SUB(NOW(), INTERVAL 2 MINUTE)');
+    
+    const [incomingRows] = await db.execute('SELECT * FROM join_requests WHERE host_id = ? AND status = "pending"', [userId]);
+    const [outgoingRows] = await db.execute('SELECT * FROM join_requests WHERE guest_id = ?', [userId]);
+    
+    return {
+      incoming: (incomingRows as any[]).map(row => ({
+        id: row.id,
+        hostId: row.host_id,
+        guestId: row.guest_id,
+        guestName: row.guest_name,
+        status: row.status
+      })),
+      outgoing: (outgoingRows as any[]).map(row => ({
+        id: row.id,
+        hostId: row.host_id,
+        guestId: row.guest_id,
+        status: row.status
+      }))
+    };
+  } catch (error) {
+    console.error(error);
+    return { incoming: [], outgoing: [] };
+  }
+});
+
+ipcMain.handle('respond-join-request', async (event, requestId, status) => {
+  if (!db) return false;
+  try {
+    await db.execute('UPDATE join_requests SET status = ? WHERE id = ?', [status, requestId]);
+    return true;
+  } catch (error) {
+    console.error(error);
+    return false;
   }
 });
 

@@ -341,6 +341,9 @@ function App() {
   const [isWidgetMode, setIsWidgetMode] = useState(false);
   const [isRightSidebarOpen, setIsRightSidebarOpen] = useState(true);
 
+  const [userStatus, setUserStatus] = useState<'online' | 'idle' | 'dnd'>(localStorage.getItem('donpollo_status') as any || 'online');
+  const [joinRequests, setJoinRequests] = useState<{incoming: any[], outgoing: any[]}>({ incoming: [], outgoing: [] });
+
   // ─── Listen Along & Presence Sync ───
   useEffect(() => {
     if (!discordUser) return;
@@ -354,10 +357,32 @@ function App() {
             username: discordUser.global_name || discordUser.username,
             avatarUrl: avatar,
             currentSong: currentSong,
-            partyId: activePartyId
+            partyId: activePartyId,
+            status: userStatus
           });
           const users = await (window as any).electronAPI.getOnlineUsers(discordUser.id);
           setOnlineUsers(users);
+
+          // Poll requests
+          const reqs = await (window as any).electronAPI.pollJoinRequests(discordUser.id);
+          setJoinRequests(reqs);
+
+          // Handle Guest acceptance automatically
+          if (reqs.outgoing && reqs.outgoing.length > 0) {
+            const accepted = reqs.outgoing.find((r: any) => r.status === 'accepted');
+            const rejected = reqs.outgoing.find((r: any) => r.status === 'rejected');
+            
+            if (accepted && !isGuest) {
+              setActivePartyId(accepted.hostId);
+              setIsGuest(true);
+              showToast(`Request accepted! Listening along...`, 'success');
+              await (window as any).electronAPI.respondJoinRequest(accepted.id, 'consumed'); // clean up
+            } else if (rejected) {
+              showToast(t('joinRequestRejected'), 'error');
+              await (window as any).electronAPI.respondJoinRequest(rejected.id, 'consumed'); // clean up
+            }
+          }
+
         } catch (e) {
           console.error('Failed to sync presence', e);
         }
@@ -367,7 +392,7 @@ function App() {
     syncPresence();
     const presenceInterval = setInterval(syncPresence, 5000);
     return () => clearInterval(presenceInterval);
-  }, [discordUser, currentSong, activePartyId]);
+  }, [discordUser, currentSong, activePartyId, userStatus, isGuest]);
 
   // ─── Lyrics ──────────────────────────────────────────────────
   const [lyricsData, setLyricsData] = useState<{ time: number, text: string, isInstrumental?: boolean }[] | null>(null);
@@ -893,6 +918,18 @@ function App() {
       showToast(`Error: ${err.message}`);
     }
   };
+
+  // ─── Listen Along Sync Effect ───
+  useEffect(() => {
+    if (isGuest && activePartyId) {
+      const hostUser = onlineUsers.find(u => u.discordId === activePartyId);
+      if (hostUser && hostUser.currentSong) {
+        if (!currentSong || currentSong.id !== hostUser.currentSong.id) {
+          executePlay(hostUser.currentSong);
+        }
+      }
+    }
+  }, [onlineUsers, isGuest, activePartyId, currentSong]);
 
   const addToHistory = (song: any) => {
     if (!song || !song.id) return;
@@ -2064,30 +2101,69 @@ function App() {
         {discordUser && (
           <div className="friend-activity-section">
             <div className="sidebar-header" style={{ padding: '0 0 12px 0', borderBottom: '1px solid rgba(255,255,255,0.05)', marginBottom: '8px' }}>
-              <div className="sidebar-title" style={{ fontSize: '12px' }}>Friend Activity</div>
-              <div className="sidebar-subtitle" style={{ fontSize: '11px' }}>Listen Along with friends</div>
+              <div className="sidebar-title" style={{ fontSize: '12px' }}>{t('friendActivityTitle')}</div>
+              <div className="sidebar-subtitle" style={{ fontSize: '11px' }}>{t('friendActivitySubtitle')}</div>
             </div>
+            
+            {joinRequests.incoming && joinRequests.incoming.length > 0 && (
+              <div className="join-requests-container" style={{ marginBottom: '12px', padding: '8px', backgroundColor: 'rgba(240, 178, 50, 0.1)', border: '1px solid rgba(240, 178, 50, 0.3)', borderRadius: '8px' }}>
+                <div style={{ fontSize: '11px', color: '#f0b232', fontWeight: 700, marginBottom: '8px' }}>{t('pendingRequests')}</div>
+                {joinRequests.incoming.map((req: any) => (
+                  <div key={req.id} style={{ display: 'flex', flexDirection: 'column', gap: '8px', marginBottom: '8px', paddingBottom: '8px', borderBottom: '1px solid rgba(255,255,255,0.05)' }}>
+                    <div style={{ fontSize: '12px', color: 'var(--text-primary)' }}>
+                      <strong>{req.guestName}</strong> {t('joinRequestReceived')}
+                    </div>
+                    <div style={{ display: 'flex', gap: '8px' }}>
+                      <button onClick={async () => {
+                        await (window as any).electronAPI.respondJoinRequest(req.id, 'accepted');
+                        setJoinRequests(prev => ({ ...prev, incoming: prev.incoming.filter(r => r.id !== req.id) }));
+                      }} style={{ flex: 1, padding: '4px 0', backgroundColor: '#23a559', color: 'white', border: 'none', borderRadius: '4px', cursor: 'pointer', fontSize: '11px', fontWeight: 600 }}>{t('accept')}</button>
+                      
+                      <button onClick={async () => {
+                        await (window as any).electronAPI.respondJoinRequest(req.id, 'rejected');
+                        setJoinRequests(prev => ({ ...prev, incoming: prev.incoming.filter(r => r.id !== req.id) }));
+                      }} style={{ flex: 1, padding: '4px 0', backgroundColor: '#f23f43', color: 'white', border: 'none', borderRadius: '4px', cursor: 'pointer', fontSize: '11px', fontWeight: 600 }}>{t('reject')}</button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+
             <div className="friend-list">
               {onlineUsers.length === 0 ? (
-                <div style={{ color: 'var(--text-muted)', fontSize: '11px', textAlign: 'center', marginTop: '12px' }}>No friends are currently online.</div>
+                <div style={{ color: 'var(--text-muted)', fontSize: '11px', textAlign: 'center', marginTop: '12px' }}>{t('noFriendsOnline')}</div>
               ) : (
                 onlineUsers.map(user => (
                   <div key={user.discordId} className={`friend-item ${activePartyId === (user.partyId || user.discordId) ? 'active-party' : ''}`}>
-                    <div className="friend-avatar-container">
+                    <div className="friend-avatar-container" style={{ position: 'relative' }}>
                       <img src={user.avatarUrl || `https://ui-avatars.com/api/?name=${user.username}`} alt={user.username} className="friend-avatar" />
-                      <div className="online-indicator"></div>
+                      <div className={`status-dot-avatar status-dot ${user.status || 'online'}`}></div>
                     </div>
                     <div className="friend-info">
                       <div className="friend-name">{user.username}</div>
                       {user.currentSong ? (
                         <>
                           <div className="friend-song" title={user.currentSong.title}>♫ {user.currentSong.title}</div>
-                          {activePartyId !== (user.partyId || user.discordId) && (
-                            <button className="listen-along-btn" onClick={() => {
-                              setActivePartyId(user.partyId || user.discordId);
-                              setIsGuest(true);
-                              showToast(`Listening along with ${user.username}...`, 'success');
-                            }}><Headphones size={12} style={{ marginRight: '4px' }}/> Listen Along</button>
+                          {activePartyId !== (user.partyId || user.discordId) && user.status !== 'dnd' && (
+                            <button className="listen-along-btn" onClick={async () => {
+                              if (user.status === 'idle') {
+                                // Request Join
+                                const success = await (window as any).electronAPI.sendJoinRequest(user.partyId || user.discordId, discordUser.id, discordUser.global_name || discordUser.username);
+                                if (success) {
+                                  showToast(t('joinRequestSent'), 'success');
+                                }
+                              } else {
+                                // Direct Join (Online)
+                                setActivePartyId(user.partyId || user.discordId);
+                                setIsGuest(true);
+                                showToast(`Listening along with ${user.username}...`, 'success');
+                              }
+                            }}><Headphones size={12} style={{ marginRight: '4px' }}/> {user.status === 'idle' ? t('askToJoin') : t('listenAlong')}</button>
+                          )}
+                          {user.status === 'dnd' && activePartyId !== (user.partyId || user.discordId) && (
+                            <button className="listen-along-btn" disabled style={{ opacity: 0.5, cursor: 'not-allowed' }}>
+                              <Headphones size={12} style={{ marginRight: '4px' }}/> {t('joinDisabled')}
+                            </button>
                           )}
                           {activePartyId === (user.partyId || user.discordId) && isGuest && (
                             <button className="listen-along-btn active" onClick={() => {
@@ -2095,7 +2171,7 @@ function App() {
                               setActivePartyId(null);
                               if (audioRef.current) audioRef.current.pause();
                               setIsPlaying(false);
-                            }}>Leave Party</button>
+                            }}>{t('leaveParty')}</button>
                           )}
                         </>
                       ) : (
@@ -2113,9 +2189,21 @@ function App() {
             {showLogoutDropdown && (
               <div className="logout-dropdown">
                 {discordUser ? (
-                  <div className="logout-item" onClick={handleLogout}>
-                    <LogOut size={16} /> {t('logoutDropdown')}
-                  </div>
+                  <>
+                    <div className="dropdown-item" onClick={() => { setUserStatus('online'); localStorage.setItem('donpollo_status', 'online'); setShowLogoutDropdown(false); }}>
+                      <div className="status-dot online"></div> {t('statusOnline')}
+                    </div>
+                    <div className="dropdown-item" onClick={() => { setUserStatus('idle'); localStorage.setItem('donpollo_status', 'idle'); setShowLogoutDropdown(false); }}>
+                      <div className="status-dot idle"></div> {t('statusIdle')}
+                    </div>
+                    <div className="dropdown-item" onClick={() => { setUserStatus('dnd'); localStorage.setItem('donpollo_status', 'dnd'); setShowLogoutDropdown(false); }}>
+                      <div className="status-dot dnd"></div> {t('statusDnd')}
+                    </div>
+                    <div className="dropdown-divider"></div>
+                    <div className="logout-item" onClick={handleLogout}>
+                      <LogOut size={16} /> {t('logoutDropdown')}
+                    </div>
+                  </>
                 ) : (
                   <div className="logout-item" onClick={() => { setShowLogoutDropdown(false); setActivePage('settings'); }} style={{ color: 'var(--text-primary)' }}>
                     <Settings size={16} /> {t('goToSettings')}
@@ -2124,11 +2212,14 @@ function App() {
               </div>
             )}
             <button className="user-profile-btn" onClick={() => setShowLogoutDropdown(!showLogoutDropdown)} title={discordUser ? `${discordUser.global_name || discordUser.username}` : 'Login'}>
-              <div className="user-avatar">
+              <div className="user-avatar" style={{ position: 'relative' }}>
                 {discordUser && getDiscordAvatar(discordUser) ? (
                   <img src={getDiscordAvatar(discordUser)!} alt="avatar" style={{ width: '100%', height: '100%', borderRadius: '50%', objectFit: 'cover' }} />
                 ) : (
                   <span>{discordUser ? (discordUser.global_name || discordUser.username).charAt(0).toUpperCase() : 'DP'}</span>
+                )}
+                {discordUser && (
+                  <div className={`status-dot-avatar status-dot ${userStatus}`}></div>
                 )}
               </div>
               <span className="nav-label" style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
