@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { Home, Library, Plus, Mic2, Settings, Play, Pause, SkipBack, SkipForward, Repeat, Shuffle, Volume2, VolumeX, ListMusic, UserCircle, ChevronRight, Search, AlertCircle, Headset, Loader2, Maximize2, X, ChevronLeft, Music, PanelRight, Trash2, Heart, LogIn, LogOut, Check, FolderPlus, Globe } from 'lucide-react';
+import { Home, Library, Plus, Mic2, Settings, Play, Pause, SkipBack, SkipForward, Repeat, Shuffle, Volume2, VolumeX, ListMusic, UserCircle, ChevronRight, Search, AlertCircle, Headset, Loader2, Maximize2, X, ChevronLeft, Music, PanelRight, Trash2, Heart, LogIn, LogOut, Check, FolderPlus, Globe, Headphones } from 'lucide-react';
 import './index.css';
 import { createTranslator } from './translations';
 import type { Language } from './translations';
@@ -44,6 +44,14 @@ const getHighResImage = (url: string | undefined) => {
   return url;
 };
 
+const getCleanThumbnail = (url: string | undefined) => {
+  if (!url) return '';
+  if (url.includes('i.ytimg.com') && url.includes('hqdefault.jpg')) {
+    return url.replace('hqdefault.jpg', 'mqdefault.jpg');
+  }
+  return url;
+};
+
 function App() {
   // ─── Page Navigation ────────────────────────────────────────
   const [activePage, setActivePage] = useState<Page>('home');
@@ -66,6 +74,11 @@ function App() {
   // ─── Updater State ──────────────────────────────────────────
   const [updateStatus, setUpdateStatus] = useState<'none' | 'available' | 'downloading' | 'downloaded'>('none');
 
+  // ─── Listen Along State ─────────────────────────────────────
+  const [onlineUsers, setOnlineUsers] = useState<any[]>([]);
+  const [activePartyId, setActivePartyId] = useState<string | null>(null);
+  const [isGuest, setIsGuest] = useState(false);
+
   // ─── Real Data ──────────────────────────────────────────────
   const [playHistory, setPlayHistory] = useState<any[]>(() => {
     try { 
@@ -80,6 +93,15 @@ function App() {
   const [discordUser, setDiscordUser] = useState<DiscordUser | null>(() => {
     try { return JSON.parse(localStorage.getItem('donpollo_user') || 'null'); } catch { return null; }
   });
+
+  // ─── Listen Along & Presence Sync ───
+  useEffect(() => {
+    if (!discordUser) return;
+    const presenceInterval = setInterval(() => {
+      setOnlineUsers(prev => prev);
+    }, 5000);
+    return () => clearInterval(presenceInterval);
+  }, [discordUser]);
 
   // ─── Playlists ──────────────────────────────────────────────
   const [playlists, setPlaylists] = useState<Playlist[]>(() => {
@@ -891,11 +913,11 @@ function App() {
             {likedSongs.map((song, i) => (
               <div key={i} className={`library-item ${currentSong?.id === song.id ? 'playing' : ''}`}>
                 <div className="library-item-art" onClick={() => startPlayingFromList(likedSongs, i)}>
-                  <img src={song.thumbnail} alt={song.title} />
+                  <img src={getCleanThumbnail(song.thumbnail)} alt={song.title} />
                   <div className="library-item-play"><Play size={16} fill="currentColor" /></div>
                 </div>
                 <div className="library-item-info" onClick={() => startPlayingFromList(likedSongs, i)}>
-                  <div className="library-item-title">{song.title}</div>
+                  <div className="library-item-title" title={song.title}>{song.title}</div>
                   <div className="library-item-artist">{song.artist}</div>
                 </div>
                 <div className="library-item-duration">{formatTime(song.duration)}</div>
@@ -921,11 +943,11 @@ function App() {
             {playHistory.map((song, i) => (
               <div key={i} className={`library-item ${currentSong?.id === song.id ? 'playing' : ''}`}>
                 <div className="library-item-art" onClick={() => playSingleSong(song)}>
-                  <img src={song.thumbnail} alt={song.title} />
+                  <img src={getCleanThumbnail(song.thumbnail)} alt={song.title} />
                   <div className="library-item-play"><Play size={16} fill="currentColor" /></div>
                 </div>
                 <div className="library-item-info" onClick={() => playSingleSong(song)}>
-                  <div className="library-item-title">{song.title}</div>
+                  <div className="library-item-title" title={song.title}>{song.title}</div>
                   <div className="library-item-artist">{song.artist}</div>
                 </div>
                 <div className="library-item-duration">{formatTime(song.duration)}</div>
@@ -1014,11 +1036,11 @@ function App() {
               {pl.songs.map((song, i) => (
                 <div key={i} className={`library-item ${currentSong?.id === song.id ? 'playing' : ''}`}>
                   <div className="library-item-art" onClick={() => startPlayingFromList(pl.songs, i)}>
-                    <img src={song.thumbnail} alt={song.title} />
+                    <img src={getCleanThumbnail(song.thumbnail)} alt={song.title} />
                     <div className="library-item-play"><Play size={16} fill="currentColor" /></div>
                   </div>
                   <div className="library-item-info" onClick={() => startPlayingFromList(pl.songs, i)}>
-                    <div className="library-item-title">{song.title}</div>
+                    <div className="library-item-title" title={song.title}>{song.title}</div>
                     <div className="library-item-artist">{song.artist}</div>
                   </div>
                   <div className="library-item-duration">{formatTime(song.duration)}</div>
@@ -1058,10 +1080,10 @@ function App() {
                 {playlistSearchResults.map((song, i) => (
                   <div key={i} className="library-item">
                     <div className="library-item-art">
-                      <img src={song.thumbnail} alt={song.title} />
+                      <img src={getCleanThumbnail(song.thumbnail)} alt={song.title} />
                     </div>
                     <div className="library-item-info">
-                      <div className="library-item-title">{song.title}</div>
+                      <div className="library-item-title" title={song.title}>{song.title}</div>
                       <div className="library-item-artist">{song.artist}</div>
                     </div>
                     <div className="library-item-duration">{formatTime(song.duration)}</div>
@@ -1101,7 +1123,7 @@ function App() {
                   {pl.avatar ? (
                     <img src={pl.avatar} alt={pl.name} />
                   ) : pl.songs.length > 0 ? (
-                    <img src={pl.songs[0].thumbnail} alt={pl.name} />
+                    <img src={getCleanThumbnail(pl.songs[0].thumbnail)} alt={pl.name} />
                   ) : (
                     <div className="playlist-card-empty-art"><ListMusic size={32} color="var(--text-muted)" /></div>
                   )}
@@ -1321,7 +1343,7 @@ function App() {
                   onClick={() => startPlayingFromList(dailyMix, 0)}
                   onContextMenu={(e) => handleContextMenu(e, dailyMix[0])}
                 >
-                  <img src={dailyMix[0].thumbnail} alt={dailyMix[0].title} className="bento-img" />
+                  <img src={getCleanThumbnail(dailyMix[0].thumbnail)} alt={dailyMix[0].title} className="bento-img" />
                   <div className="bento-gradient" />
                   <div className={`bento-tag ${dailyMix[0].tagClass}`}>{dailyMix[0].bentoTag}</div>
                   <div className="bento-meta">
@@ -1343,7 +1365,7 @@ function App() {
                     onClick={() => startPlayingFromList(dailyMix, i + 1)}
                     onContextMenu={(e) => handleContextMenu(e, item)}
                   >
-                    <img src={item.thumbnail} alt={item.title} className="bento-img" />
+                    <img src={getCleanThumbnail(item.thumbnail)} alt={item.title} className="bento-img" />
                     <div className="bento-gradient" />
                     <div className={`bento-tag ${item.tagClass}`}>{item.bentoTag}</div>
                     <div className="bento-meta bento-meta-sm">
@@ -1384,7 +1406,7 @@ function App() {
                       onContextMenu={(e) => handleContextMenu(e, item)}
                     >
                       <div className="card-v2-art">
-                        <img src={item.thumbnail} alt={item.title} />
+                        <img src={getCleanThumbnail(item.thumbnail)} alt={item.title} />
                         {currentSong?.id === item.id && isPlaying ? (
                           <div className="card-v2-eq">
                             <div className="eq-bar" /><div className="eq-bar" /><div className="eq-bar" />
@@ -1416,7 +1438,7 @@ function App() {
                         onContextMenu={(e) => handleContextMenu(e, item)}
                       >
                         <div className="card-v2-art">
-                          <img src={item.thumbnail} alt={item.title} />
+                          <img src={getCleanThumbnail(item.thumbnail)} alt={item.title} />
                           {currentSong?.id === item.id && isPlaying ? (
                             <div className="card-v2-eq">
                               <div className="eq-bar" /><div className="eq-bar" /><div className="eq-bar" />
@@ -1478,7 +1500,7 @@ function App() {
                       onContextMenu={(e) => handleContextMenu(e, item)}
                     >
                       <div className="card-circle-art">
-                        <img src={item.thumbnail} alt={item.title} />
+                        <img src={getCleanThumbnail(item.thumbnail)} alt={item.title} />
                         <div className="card-circle-overlay">
                           <button className="card-circle-play">
                             <Play size={18} fill="currentColor" style={{ marginLeft: '2px' }} />
@@ -1506,7 +1528,7 @@ function App() {
                         onContextMenu={(e) => handleContextMenu(e, item)}
                       >
                         <div className="card-circle-art">
-                          <img src={item.thumbnail} alt={item.title} />
+                          <img src={getCleanThumbnail(item.thumbnail)} alt={item.title} />
                           <div className="card-circle-overlay">
                             <button className="card-circle-play">
                               <Play size={18} fill="currentColor" style={{ marginLeft: '2px' }} />
@@ -1550,7 +1572,7 @@ function App() {
                       {songs.map((item, i) => (
                         <div key={i} className={`music-card-v2 ${currentSong?.id === item.id ? 'music-card-v2-playing' : ''}`} onClick={() => playSingleSong(item)} onContextMenu={(e) => handleContextMenu(e, item)}>
                           <div className="card-v2-art">
-                            <img src={item.thumbnail} alt={item.title} />
+                            <img src={getCleanThumbnail(item.thumbnail)} alt={item.title} />
                             {currentSong?.id === item.id && isPlaying ? (
                               <div className="card-v2-eq"><div className="eq-bar" /><div className="eq-bar" /><div className="eq-bar" /></div>
                             ) : (
@@ -1571,7 +1593,7 @@ function App() {
                         {songs.map((item, i) => (
                           <div key={i} className={`music-card-v2 ${currentSong?.id === item.id ? 'music-card-v2-playing' : ''}`} onClick={() => playSingleSong(item)} onContextMenu={(e) => handleContextMenu(e, item)}>
                             <div className="card-v2-art">
-                              <img src={item.thumbnail} alt={item.title} />
+                              <img src={getCleanThumbnail(item.thumbnail)} alt={item.title} />
                               {currentSong?.id === item.id && isPlaying ? (
                                 <div className="card-v2-eq"><div className="eq-bar" /><div className="eq-bar" /><div className="eq-bar" /></div>
                               ) : (
@@ -1612,9 +1634,9 @@ function App() {
             <div className="hero-art-container">
               <div className="hero-glow"></div>
               {currentSong ? (
-                <img src={currentSong.thumbnail} className="hero-art" alt="album art" />
+                <img src={getCleanThumbnail(currentSong.thumbnail)} className="hero-art" alt="album art" />
               ) : searchResults.length > 0 ? (
-                <img src={searchResults[0].thumbnail} className="hero-art" alt="album art" />
+                <img src={getCleanThumbnail(currentSong.thumbnail)} className="hero-art" alt="album art" />
               ) : (
                 <div className="hero-art" style={{ backgroundColor: 'var(--bg-card)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                   <Music size={64} color="var(--text-muted)" />
@@ -1625,7 +1647,7 @@ function App() {
               <div className="hero-tag">ALBUM</div>
               {currentSong ? (
                 <>
-                  <h1 className="hero-title">{currentSong.title}</h1>
+                  <h1 className="hero-title" title={currentSong.title}>{currentSong.title}</h1>
                   <div className="hero-artist-row">
                     <UserCircle size={24} color="var(--accent-primary)" />
                     <span className="hero-artist-name">{currentSong.artist}</span>
@@ -1668,7 +1690,7 @@ function App() {
               {searchResults.map((song, idx) => (
                 <div key={idx} className={`tracklist-item ${currentSong?.id === song.id ? 'playing' : ''}`} onClick={() => playSingleSong(song)} onContextMenu={(e) => handleContextMenu(e, song)}>
                   <div className="track-index">{currentSong?.id === song.id && isPlaying ? <Headset size={16} /> : (idx + 1)}</div>
-                  <div className="track-title">{song.title}</div>
+                  <div className="track-title" title={song.title}>{song.title}</div>
                   <button className={`library-item-action ${isLiked(song.id) ? 'liked' : ''}`} style={{ marginLeft: 'auto', marginRight: '8px' }}
                     onClick={e => { e.stopPropagation(); toggleLike(song); }}>
                     <Heart size={14} fill={isLiked(song.id) ? 'currentColor' : 'none'} />
@@ -1845,7 +1867,7 @@ function App() {
                       {pl.avatar ? (
                         <img src={pl.avatar} alt="" />
                       ) : pl.songs[0] ? (
-                        <img src={pl.songs[0].thumbnail} alt="" />
+                        <img src={getCleanThumbnail(pl.songs[0].thumbnail)} alt="" />
                       ) : (
                         <ListMusic size={16} color="var(--text-muted)" />
                       )}
@@ -1926,7 +1948,7 @@ function App() {
                       <img src={pl.avatar} alt="cover" style={{ width: '100%', height: '100%', objectFit: 'cover', borderRadius: '4px' }} />
                     ) : (
                       pl.songs.length > 0 ? (
-                        <img src={pl.songs[0].thumbnail} alt="cover" style={{ width: '100%', height: '100%', objectFit: 'cover', borderRadius: '4px' }} />
+                        <img src={getCleanThumbnail(pl.songs[0].thumbnail)} alt="cover" style={{ width: '100%', height: '100%', objectFit: 'cover', borderRadius: '4px' }} />
                       ) : (
                         <Music size={24} color="var(--text-secondary)" />
                       )
@@ -1940,6 +1962,55 @@ function App() {
               ))}
             </div>
           </div>
+
+        {/* FRIEND ACTIVITY SIDEBAR */}
+        {discordUser && (
+          <div className="friend-activity-section">
+            <div className="sidebar-header" style={{ padding: '0 0 12px 0', borderBottom: '1px solid rgba(255,255,255,0.05)', marginBottom: '8px' }}>
+              <div className="sidebar-title" style={{ fontSize: '12px' }}>Friend Activity</div>
+              <div className="sidebar-subtitle" style={{ fontSize: '11px' }}>Listen Along with friends</div>
+            </div>
+            <div className="friend-list">
+              {onlineUsers.length === 0 ? (
+                <div style={{ color: 'var(--text-muted)', fontSize: '11px', textAlign: 'center', marginTop: '12px' }}>No friends are currently online.</div>
+              ) : (
+                onlineUsers.map(user => (
+                  <div key={user.discordId} className={`friend-item ${activePartyId === (user.partyId || user.discordId) ? 'active-party' : ''}`}>
+                    <div className="friend-avatar-container">
+                      <img src={user.avatarUrl || `https://ui-avatars.com/api/?name=${user.username}`} alt={user.username} className="friend-avatar" />
+                      <div className="online-indicator"></div>
+                    </div>
+                    <div className="friend-info">
+                      <div className="friend-name">{user.username}</div>
+                      {user.currentSong ? (
+                        <>
+                          <div className="friend-song" title={user.currentSong.title}>♫ {user.currentSong.title}</div>
+                          {activePartyId !== (user.partyId || user.discordId) && (
+                            <button className="listen-along-btn" onClick={() => {
+                              setActivePartyId(user.partyId || user.discordId);
+                              setIsGuest(true);
+                              showToast(`Listening along with ${user.username}...`, 'success');
+                            }}><Headphones size={12} style={{ marginRight: '4px' }}/> Listen Along</button>
+                          )}
+                          {activePartyId === (user.partyId || user.discordId) && isGuest && (
+                            <button className="listen-along-btn active" onClick={() => {
+                              setIsGuest(false);
+                              setActivePartyId(null);
+                              if (audioRef.current) audioRef.current.pause();
+                              setIsPlaying(false);
+                            }}>Leave Party</button>
+                          )}
+                        </>
+                      ) : (
+                        <div className="friend-song" style={{ color: 'var(--text-muted)' }}>Browsing...</div>
+                      )}
+                    </div>
+                  </div>
+                ))
+              )}
+            </div>
+          </div>
+        )}
 
           <div className="nav-bottom" style={{ position: 'relative' }}>
             {showLogoutDropdown && (
@@ -2028,9 +2099,9 @@ function App() {
               <div className="player-left">
                 {currentSong ? (
                   <>
-                    <img src={currentSong.thumbnail} className="player-cover" alt="cover" />
+                    <img src={getCleanThumbnail(currentSong.thumbnail)} className="player-cover" alt="cover" />
                     <div className="player-info">
-                      <span className="player-title" style={{ color: 'white', fontSize: '14px', fontWeight: 'bold' }}>{currentSong.title}</span>
+                      <span className="player-title" title={currentSong.title}>{currentSong.title}</span>
                       <span className="player-artist" style={{ color: 'var(--text-secondary)', fontSize: '12px' }}>{currentSong.artist}</span>
                     </div>
                     <button className={`chat-btn ${isLiked(currentSong.id) ? 'liked' : ''}`} style={{ color: isLiked(currentSong.id) ? '#ff6b9d' : 'var(--text-secondary)', marginLeft: '12px' }} onClick={() => toggleLike(currentSong)}>
@@ -2160,9 +2231,9 @@ function App() {
                   const isPlayingNow = currentSong?.id === song.id;
                   return (
                     <div key={idx} className={`queue-item ${isPlayingNow ? 'playing' : ''}`} onClick={() => { setCurrentIndex(idx); executePlay(song); }}>
-                      <img src={song.thumbnail} alt={song.title} style={{ width: '40px', height: '40px', borderRadius: '6px', objectFit: 'cover' }} />
+                      <img src={getCleanThumbnail(song.thumbnail)} alt={song.title} style={{ width: '40px', height: '40px', borderRadius: '6px', objectFit: 'cover' }} />
                       <div style={{ flex: 1, overflow: 'hidden' }}>
-                        <div style={{ fontSize: '13px', fontWeight: 600, color: isPlayingNow ? 'var(--accent-primary)' : 'var(--text-primary)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{song.title}</div>
+                        <div title={song.title} style={{ fontSize: "13px", fontWeight: 600}}>{song.title}</div>
                         <div style={{ fontSize: '12px', color: 'var(--text-secondary)' }}>{song.artist}</div>
                       </div>
                       <div style={{ fontSize: '12px', color: 'var(--text-muted)' }}>{formatTime(song.duration)}</div>
@@ -2246,7 +2317,7 @@ function App() {
               </div>
 
               <div className="fs-info">
-                <div className="fs-title">{currentSong ? currentSong.title : 'No Music Playing'}</div>
+                <div className="fs-title" title={currentSong ? currentSong.title : ""}>{currentSong ? currentSong.title : "No Music Playing"}</div>
                 <div className="fs-artist">{currentSong ? currentSong.artist : 'Select a song'}</div>
               </div>
             </div>

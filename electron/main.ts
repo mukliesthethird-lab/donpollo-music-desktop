@@ -4,6 +4,7 @@ import * as fs from 'fs';
 import mysql from 'mysql2/promise';
 import dotenv from 'dotenv';
 import { autoUpdater } from 'electron-updater';
+import DiscordRPC from 'discord-rpc';
 
 const isDev = !app.isPackaged;
 dotenv.config({ path: path.join(__dirname, '../.env') });
@@ -29,6 +30,28 @@ async function initDB() {
         avatar LONGTEXT,
         songs LONGTEXT,
         discord_id VARCHAR(255)
+      )
+    `);
+    
+    await db.execute(`
+      CREATE TABLE IF NOT EXISTS online_users (
+        discord_id VARCHAR(255) PRIMARY KEY,
+        username VARCHAR(255),
+        avatar_url VARCHAR(255),
+        current_song LONGTEXT,
+        party_id VARCHAR(255),
+        last_seen TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+      )
+    `);
+
+    await db.execute(`
+      CREATE TABLE IF NOT EXISTS listen_parties (
+        id VARCHAR(255) PRIMARY KEY,
+        host_discord_id VARCHAR(255),
+        song_data LONGTEXT,
+        current_time FLOAT,
+        is_playing BOOLEAN,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
       )
     `);
     console.log('MySQL connected and table initialized');
@@ -204,6 +227,149 @@ ipcMain.handle('delete-playlist', async (event, id) => {
   } catch (error) {
     console.error(error);
     return false;
+  }
+});
+
+// PRESENCE & PARTY IPC HANDLERS
+ipcMain.handle('update-presence', async (event, data) => {
+  if (!db) return false;
+  try {
+    const { discordId, username, avatarUrl, currentSong, partyId } = data;
+    const songDataStr = currentSong ? JSON.stringify(currentSong) : '';
+    await db.execute(
+      `INSERT INTO online_users (discord_id, username, avatar_url, current_song, party_id, last_seen) 
+       VALUES (?, ?, ?, ?, ?, NOW()) 
+       ON DUPLICATE KEY UPDATE username = ?, avatar_url = ?, current_song = ?, party_id = ?, last_seen = NOW()`,
+      [discordId, username, avatarUrl, songDataStr, partyId || '', username, avatarUrl, songDataStr, partyId || '']
+    );
+    return true;
+  } catch (error) {
+    console.error(error);
+    return false;
+  }
+});
+
+ipcMain.handle('get-online-users', async (event, currentUserId) => {
+  if (!db) return [];
+  try {
+    // Delete users older than 30 seconds to clean up
+    await db.execute('DELETE FROM online_users WHERE last_seen < DATE_SUB(NOW(), INTERVAL 30 SECOND)');
+    
+    const [rows] = await db.execute('SELECT * FROM online_users WHERE discord_id != ?', [currentUserId || '']);
+    return (rows as any[]).map(row => ({
+      discordId: row.discord_id,
+      username: row.username,
+      avatarUrl: row.avatar_url,
+      currentSong: row.current_song ? JSON.parse(row.current_song) : null,
+      partyId: row.party_id
+    }));
+  } catch (error) {
+    console.error(error);
+    return [];
+  }
+});
+
+ipcMain.handle('host-party', async (event, partyId, hostDiscordId, song, currentTime, isPlaying) => {
+  if (!db) return false;
+  try {
+    await db.execute(
+      `INSERT INTO listen_parties (id, host_discord_id, song_data, current_time, is_playing, updated_at) 
+       VALUES (?, ?, ?, ?, ?, NOW()) 
+       ON DUPLICATE KEY UPDATE song_data = ?, current_time = ?, is_playing = ?, updated_at = NOW()`,
+      [partyId, hostDiscordId, JSON.stringify(song), currentTime, isPlaying ? 1 : 0, JSON.stringify(song), currentTime, isPlaying ? 1 : 0]
+    );
+    return true;
+  } catch (error) {
+    console.error(error);
+    return false;
+  }
+});
+
+ipcMain.handle('get-party-state', async (event, partyId) => {
+  if (!db) return null;
+  try {
+    const [rows] = await db.execute('SELECT * FROM listen_parties WHERE id = ?', [partyId]);
+    if ((rows as any[]).length > 0) {
+      const row = (rows as any[])[0];
+      return {
+        song: JSON.parse(row.song_data),
+        currentTime: row.current_time,
+        isPlaying: !!row.is_playing,
+        updatedAt: row.updated_at
+      };
+    }
+    return null;
+  } catch (error) {
+    console.error(error);
+    return null;
+  }
+});
+
+ipcMain.handle('delete-party', async (event, partyId) => {
+  if (!db) return false;
+  try {
+    await db.execute('DELETE FROM listen_parties WHERE id = ?', [partyId]);
+    return true;
+  } catch (error) {
+    return false;
+  }
+});
+
+// DISCORD RPC
+const clientId = process.env.VITE_DISCORD_CLIENT_ID || '1257064052203458712';
+DiscordRPC.register(clientId);
+const rpc = new DiscordRPC.Client({ transport: 'ipc' });
+
+let rpcReady = false;
+let currentActivity: any = null;
+
+rpc.on('ready', () => {
+  rpcReady = true;
+  if (currentActivity) {
+    rpc.setActivity(currentActivity).catch(console.error);
+  }
+});
+
+rpc.login({ clientId }).catch(console.error);
+
+function cleanSongTitle(title: string): string {
+  if (!title) return '';
+  let cleaned = title.replace(/\\s*\\(.*?\\b(official|music video|mv|lyric|audio|live|performance|vizualizer|visualizer)\\b.*?\\)/ig, '');
+  cleaned = cleaned.replace(/\\s*\\[.*?\\b(official|music video|mv|lyric|audio|live|performance|vizualizer|visualizer)\\b.*?\\]/ig, '');
+  cleaned = cleaned.replace(/\\s*(official|music video|mv|lyric video|lyric|audio|live|performance|vizualizer|visualizer)\\s*/ig, '');
+  cleaned = cleaned.replace(/【.*?】/g, '');
+  return cleaned.trim();
+}
+
+ipcMain.on('set-activity', (event, song, progressStr) => {
+  if (!song) {
+    currentActivity = {
+      details: 'Browsing DonPollo Music',
+      state: 'Looking for a song',
+      startTimestamp: new Date(),
+      largeImageKey: 'logo',
+      largeImageText: 'DonPollo Music',
+      instance: false,
+    };
+  } else {
+    const cleanTitle = cleanSongTitle(song.title);
+    currentActivity = {
+      details: `Listening to ${cleanTitle}`,
+      state: `by ${song.artist || 'Unknown'}`,
+      largeImageKey: 'logo',
+      largeImageText: cleanTitle,
+      instance: false,
+    };
+  }
+
+  if (rpcReady) {
+    rpc.setActivity(currentActivity).catch(console.error);
+  }
+});
+
+ipcMain.on('clear-activity', () => {
+  if (rpcReady) {
+    rpc.clearActivity().catch(console.error);
   }
 });
 

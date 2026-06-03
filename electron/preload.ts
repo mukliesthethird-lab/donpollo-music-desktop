@@ -13,4 +13,11 @@ contextBridge.exposeInMainWorld('electronAPI', {
   onUpdateDownloaded: (callback: (event: any, info: any) => void) => ipcRenderer.on('update-downloaded', callback),
   downloadUpdate: () => ipcRenderer.send('download-update'),
   installUpdate: () => ipcRenderer.send('install-update'),
+  updatePresence: (data: any) => ipcRenderer.invoke('update-presence', data),
+  getOnlineUsers: (currentUserId: string) => ipcRenderer.invoke('get-online-users', currentUserId),
+  hostParty: (partyId: string, hostDiscordId: string, song: any, currentTime: number, isPlaying: boolean) => ipcRenderer.invoke('host-party', partyId, hostDiscordId, song, currentTime, isPlaying),
+  getPartyState: (partyId: string) => ipcRenderer.invoke('get-party-state', partyId),
+  deleteParty: (partyId: string) => ipcRenderer.invoke('delete-party', partyId),
+  setActivity: (song: any, progressStr?: string) => ipcRenderer.send('set-activity', song, progressStr),
+  clearActivity: () => ipcRenderer.send('clear-activity'),
 });
