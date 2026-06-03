@@ -43,6 +43,14 @@ async function initDB() {
       database: process.env.DB_NAME,
       port: Number(process.env.DB_PORT) || 3306,
     });
+
+    db.on('error', (err: any) => {
+      console.error('MySQL database error:', err);
+      if (err.code === 'PROTOCOL_CONNECTION_LOST' || err.code === 'ECONNRESET') {
+        console.log('Reconnecting to MySQL...');
+        initDB();
+      }
+    });
     
     await db.execute(`
       CREATE TABLE IF NOT EXISTS playlists (

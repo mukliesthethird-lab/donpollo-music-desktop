@@ -65,6 +65,7 @@ body {
   padding: 24px 16px 12px 16px;
   display: flex;
   flex-direction: column;
+  flex-shrink: 0;
 }
 
 .nav-logo-container {
@@ -353,8 +354,10 @@ body {
   flex-direction: column;
   position: relative;
   overflow: hidden;
-  background-color: var(--bg-sidebar);
-  border-radius: 8px;
+  background-color: var(--bg-main);
+  border-radius: 8px 0 0 0;
+  container-type: inline-size;
+  container-name: mainarea;
 }
 
 .top-bar {
@@ -386,6 +389,7 @@ body {
 .search-container {
   flex: 1;
   max-width: 480px;
+  min-width: 280px;
   margin: 0 40px;
   position: relative;
 }
@@ -1195,9 +1199,10 @@ body {
   padding: 16px;
   background-color: var(--bg-sidebar);
   border-radius: 8px;
-  min-height: 200px;
-  max-height: 350px;
+  min-height: 180px;
+  max-height: 300px;
   overflow-y: auto;
+  flex-shrink: 0;
 }
 
 .friend-item {
@@ -1683,8 +1688,8 @@ body {
 .player-left {
   display: flex;
   align-items: center;
-  width: 30%;
-  min-width: 200px;
+  flex: 1;
+  min-width: 0;
 }
 
 .player-cover {
@@ -1699,6 +1704,7 @@ body {
 .player-info {
   display: flex;
   flex-direction: column;
+  min-width: 0;
 }
 
 .player-title {
@@ -1723,9 +1729,10 @@ body {
   display: flex;
   flex-direction: column;
   align-items: center;
-  flex: 1;
+  flex: 2;
   max-width: 640px;
-  margin: 0 24px;
+  margin: 0 12px;
+  min-width: 0;
 }
 
 .player-controls {
@@ -1747,9 +1754,9 @@ body {
   display: flex;
   align-items: center;
   justify-content: flex-end;
-  width: 30%;
-  gap: 16px;
-  min-width: 200px;
+  flex: 1;
+  gap: 12px;
+  min-width: 0;
 }
 
 .chat-progress-bar {
@@ -1789,6 +1796,40 @@ body {
 
 .chat-progress-bar:hover .chat-progress-thumb {
   opacity: 1;
+}
+
+/* ─── Player Bar Responsive Container Queries ─── */
+@container mainarea (max-width: 600px) {
+  .player-volume-container {
+    display: none !important;
+  }
+  .player-controls {
+    gap: 12px;
+  }
+  .player-right {
+    gap: 8px;
+    flex: 0 0 auto;
+  }
+}
+
+@container mainarea (max-width: 450px) {
+  .player-left {
+    flex: 0 0 auto;
+    margin-right: 8px;
+  }
+  .player-cover {
+    display: none;
+  }
+  .player-center {
+    margin: 0 8px;
+  }
+  .player-controls {
+    gap: 8px;
+  }
+  .bottom-player-bar {
+    padding: 0 12px;
+    width: calc(100% - 24px);
+  }
 }
 
 .chat-time {
@@ -3198,7 +3239,8 @@ body {
   position: absolute;
   top: calc(100% + 8px);
   left: 0;
-  right: 0;
+  width: 100%;
+  min-width: 400px;
   background: rgba(18, 18, 30, 0.97);
   backdrop-filter: blur(20px);
   border: 1px solid rgba(255, 255, 255, 0.08);
@@ -3330,4 +3372,48 @@ body {
 
 .spin-icon {
   animation: spin 1s linear infinite;
+}
+
+.suggestion-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  opacity: 0;
+  transition: opacity 0.2s;
+}
+
+.suggestion-item:hover .suggestion-actions {
+  opacity: 1;
+}
+
+.suggestion-btn {
+  background: rgba(255, 255, 255, 0.05);
+  border: none;
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--text-secondary);
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.suggestion-btn:hover {
+  background: rgba(255, 255, 255, 0.15);
+  color: white;
+  transform: scale(1.1);
+}
+
+.suggestion-btn.liked {
+  color: #ff6b9d;
+}
+
+.no-hover-play {
+  cursor: default;
+}
+
+.no-hover-play:hover {
+  background: rgba(255, 255, 255, 0.03);
 }

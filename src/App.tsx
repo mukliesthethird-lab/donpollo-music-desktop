@@ -71,7 +71,7 @@ function App() {
   // ─── Search ─────────────────────────────────────────────────
   const [searchQuery, setSearchQuery] = useState('');
   const [searchResults, setSearchResults] = useState<any[]>([]);
-  const [isLoading, setIsLoading] = useState(false);
+
   const [toastData, setToastData] = useState<{ msg: string; icon: React.ReactNode; type: 'success' | 'error' } | null>(null);
   const [suggestions, setSuggestions] = useState<any[]>([]);
   const [showSuggestions, setShowSuggestions] = useState(false);
@@ -79,17 +79,27 @@ function App() {
   const searchContainerRef = useRef<HTMLDivElement>(null);
 
   // ─── Debounced Search ───────────────────────────────────────
+  const searchCacheRef = useRef<Record<string, any[]>>({});
+
   useEffect(() => {
     if (searchQuery.length < 2) {
       setSuggestions([]);
       return;
     }
+
+    if (searchCacheRef.current[searchQuery]) {
+      setSuggestions(searchCacheRef.current[searchQuery]);
+      return;
+    }
+
     const handler = setTimeout(async () => {
       setIsFetchingSuggestions(true);
       try {
         const res = await fetch(`${API_BASE_URL}/api/search?q=${encodeURIComponent(searchQuery)}`);
         const data = await res.json();
-        setSuggestions(data.results?.slice(0, 5) || []);
+        const results = data.results?.slice(0, 5) || [];
+        setSuggestions(results);
+        searchCacheRef.current[searchQuery] = results;
       } catch (e) {
         setSuggestions([]);
       } finally {
@@ -756,23 +766,6 @@ function App() {
       }
     }
     return result;
-  };
-
-  const handleSearch = async (e?: React.FormEvent, customQuery?: string) => {
-    if (e) e.preventDefault();
-    const query = customQuery || searchQuery;
-    if (!query.trim()) return;
-    if (activePage !== 'home') setActivePage('home');
-    setIsLoading(true);
-    try {
-      const response = await fetch(`${API_BASE_URL}/api/search?q=${encodeURIComponent(query + ' official audio')}`);
-      const data = await response.json();
-      if (data.results) setSearchResults(data.results);
-    } catch {
-      showToast(t('toastSearchFail'));
-    } finally {
-      setIsLoading(false);
-    }
   };
 
   const fetchLyrics = async (title: string, artist: string, songDuration = 0) => {
@@ -1768,8 +1761,7 @@ function App() {
               ) : null}
             </div>
           </div>
-          {isLoading && <div style={{ display: 'flex', justifyContent: 'center', padding: '40px' }}><Loader2 size={32} className="spin" color="var(--accent-primary)" /></div>}
-          {!isLoading && searchResults.length > 0 && (
+          {searchResults.length > 0 && (
             <div className="tracklist-container">
               {searchResults.map((song, idx) => (
                 <div key={idx} className={`tracklist-item ${currentSong?.id === song.id ? 'playing' : ''}`} onClick={() => playSingleSong(song)} onContextMenu={(e) => handleContextMenu(e, song)}>
@@ -2134,7 +2126,7 @@ function App() {
               <button className="arrow-btn"><ChevronRight size={20} /></button>
             </div>
             <div className="search-container" ref={searchContainerRef} style={{ position: 'relative' }}>
-              <form onSubmit={handleSearch}>
+              <form onSubmit={e => e.preventDefault()}>
                 <Search size={16} className="search-icon" />
                 <input
                   type="text"
@@ -2159,34 +2151,56 @@ function App() {
                   ) : (
                     <>
                       {suggestions.map((song, i) => (
-                        <button
+                        <div
                           key={i}
-                          className="suggestion-item"
-                          onMouseDown={e => {
-                            e.preventDefault();
-                            playSingleSong(song);
-                            setSearchQuery(song.title);
-                            setShowSuggestions(false);
-                          }}
+                          className="suggestion-item no-hover-play"
+                          onMouseDown={e => e.preventDefault()}
                         >
                           <div className="suggestion-thumb">
                             <img src={getCleanThumbnail(song.thumbnail)} alt={song.title} />
-                            <div className="suggestion-play-overlay"><Play size={10} fill="currentColor" /></div>
                           </div>
                           <div className="suggestion-info">
                             <div className="suggestion-title">{song.title}</div>
                             <div className="suggestion-artist">{song.artist}</div>
                           </div>
+                          <div className="suggestion-actions">
+                            <button
+                              className="suggestion-btn"
+                              title="Putar Lagu"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                playSingleSong(song);
+                                setSearchQuery(song.title);
+                                setShowSuggestions(false);
+                              }}
+                            >
+                              <Play size={15} fill="currentColor" />
+                            </button>
+                            <button
+                              className={`suggestion-btn ${isLiked(song.id) ? 'liked' : ''}`}
+                              title={isLiked(song.id) ? "Hapus dari Disukai" : "Sukai"}
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                toggleLike(song);
+                              }}
+                            >
+                              <Heart size={15} fill={isLiked(song.id) ? 'currentColor' : 'none'} />
+                            </button>
+                            <button
+                              className="suggestion-btn"
+                              title="Tambah ke Playlist"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setAddToPlaylistSong(song);
+                                setShowSuggestions(false);
+                              }}
+                            >
+                              <Plus size={16} />
+                            </button>
+                          </div>
                           <div className="suggestion-duration">{formatTime(song.duration)}</div>
-                        </button>
+                        </div>
                       ))}
-                      <button
-                        className="suggestion-see-all"
-                        onMouseDown={e => { e.preventDefault(); handleSearch(); setShowSuggestions(false); }}
-                      >
-                        <Search size={13} />
-                        Lihat semua hasil untuk "{searchQuery}"
-                      </button>
                     </>
                   )}
                 </div>
@@ -2273,7 +2287,7 @@ function App() {
                   <PanelRight size={20} />
                 </button>
                 <button className="chat-btn" onClick={() => setIsWidgetMode(true)} title="Full Screen"><Maximize2 size={16} /></button>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginLeft: '16px' }}>
+                <div className="player-volume-container" style={{ display: 'flex', alignItems: 'center', gap: '8px', marginLeft: '16px' }}>
                   <button className="chat-btn" onClick={() => setIsMuted(!isMuted)}>
                     {isMuted || volume === 0 ? <VolumeX size={18} /> : <Volume2 size={18} />}
                   </button>
