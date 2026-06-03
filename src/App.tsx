@@ -646,10 +646,32 @@ function App() {
   };
 
   // ─── Discord Auth Functions ──────────────────────────────────
-  const loginWithDiscord = () => {
-    const scope = encodeURIComponent('identify');
-    const url = `https://discord.com/api/oauth2/authorize?client_id=${DISCORD_CLIENT_ID}&redirect_uri=${encodeURIComponent(DISCORD_REDIRECT_URI)}&response_type=token&scope=${scope}`;
-    window.location.href = url;
+  const loginWithDiscord = async () => {
+    const api = (window as any).electronAPI;
+    if (api && api.discordLogin) {
+      // Electron: open a popup window, never navigate away from main window
+      const token = await api.discordLogin();
+      if (token) {
+        try {
+          const res = await fetch('https://discord.com/api/users/@me', {
+            headers: { Authorization: `Bearer ${token}` },
+          });
+          if (!res.ok) { showToast('Gagal mengambil info Discord.', 'error'); return; }
+          const user = await res.json();
+          localStorage.setItem('donpollo_user', JSON.stringify(user));
+          localStorage.setItem('donpollo_discord_token', token);
+          setDiscordUser(user);
+          showToast(`Selamat datang, ${user.global_name || user.username}! 🎉`, 'success');
+        } catch (e) {
+          showToast('Login gagal, coba lagi.', 'error');
+        }
+      }
+    } else {
+      // Browser fallback (dev without Electron)
+      const scope = encodeURIComponent('identify');
+      const url = `https://discord.com/api/oauth2/authorize?client_id=${DISCORD_CLIENT_ID}&redirect_uri=${encodeURIComponent(DISCORD_REDIRECT_URI)}&response_type=token&scope=${scope}`;
+      window.location.href = url;
+    }
   };
 
   const logoutDiscord = () => {

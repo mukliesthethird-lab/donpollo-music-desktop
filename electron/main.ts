@@ -70,7 +70,7 @@ async function initDB() {
         id VARCHAR(255) PRIMARY KEY,
         host_discord_id VARCHAR(255),
         song_data LONGTEXT,
-        current_time FLOAT,
+        playback_time FLOAT,
         is_playing BOOLEAN,
         updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
       )
@@ -186,6 +186,76 @@ function createMiniPlayerWindow() {
 }
 
 // IPC HANDLERS
+
+// Discord OAuth - opens a popup, never navigates the main window
+ipcMain.handle('discord-login', async () => {
+  const clientId = process.env.VITE_DISCORD_CLIENT_ID || '';
+  const redirectUri = encodeURIComponent('https://donpollo-music-desktop.vercel.app/callback');
+  const scope = encodeURIComponent('identify');
+  const authUrl = `https://discord.com/api/oauth2/authorize?client_id=${clientId}&redirect_uri=${redirectUri}&response_type=token&scope=${scope}`;
+
+  return new Promise<string | null>((resolve) => {
+    const popup = new BrowserWindow({
+      width: 500,
+      height: 700,
+      title: 'Login dengan Discord',
+      autoHideMenuBar: true,
+      parent: mainWindow || undefined,
+      modal: false,
+      webPreferences: {
+        nodeIntegration: false,
+        contextIsolation: true,
+      },
+    });
+
+    popup.loadURL(authUrl);
+
+    // Watch every URL change inside the popup
+    const handleRedirect = (url: string) => {
+      // Discord redirects to the Vercel callback page which then tries donpollo://
+      // But we intercept the Vercel callback URL here before it can do anything
+      if (url.startsWith('https://donpollo-music-desktop.vercel.app/callback')) {
+        // The token is in the hash fragment - but webContents URL won't include hash
+        // So we also watch for the donpollo:// deep link
+      }
+      if (url.startsWith('donpollo://callback')) {
+        const hash = url.split('#')[1] || '';
+        const params = new URLSearchParams(hash);
+        const token = params.get('access_token');
+        resolve(token || null);
+        popup.close();
+      }
+    };
+
+    popup.webContents.on('will-navigate', (_e, url) => handleRedirect(url));
+    popup.webContents.on('will-redirect', (_e, url) => handleRedirect(url));
+
+    // Also intercept when the callback page tries to redirect to donpollo://
+    // by intercepting the navigation before it goes external
+    popup.webContents.on('did-navigate', (_e, url) => {
+      if (url.startsWith('https://donpollo-music-desktop.vercel.app/callback')) {
+        // Inject JS to read hash and send it back
+        popup.webContents.executeJavaScript(`
+          (() => {
+            const hash = window.location.hash.substring(1);
+            const params = new URLSearchParams(hash);
+            return params.get('access_token');
+          })()
+        `).then((token: string | null) => {
+          if (token) {
+            resolve(token);
+            popup.close();
+          }
+        }).catch(() => {});
+      }
+    });
+
+    popup.on('closed', () => {
+      resolve(null);
+    });
+  });
+});
+
 ipcMain.on('enter-mini-player', () => {
   if (mainWindow) mainWindow.minimize();
   createMiniPlayerWindow();
@@ -294,9 +364,9 @@ ipcMain.handle('host-party', async (event, partyId, hostDiscordId, song, current
   if (!db) return false;
   try {
     await db.execute(
-      `INSERT INTO listen_parties (id, host_discord_id, song_data, current_time, is_playing, updated_at) 
+      `INSERT INTO listen_parties (id, host_discord_id, song_data, playback_time, is_playing, updated_at) 
        VALUES (?, ?, ?, ?, ?, NOW()) 
-       ON DUPLICATE KEY UPDATE song_data = ?, current_time = ?, is_playing = ?, updated_at = NOW()`,
+       ON DUPLICATE KEY UPDATE song_data = ?, playback_time = ?, is_playing = ?, updated_at = NOW()`,
       [partyId, hostDiscordId, JSON.stringify(song), currentTime, isPlaying ? 1 : 0, JSON.stringify(song), currentTime, isPlaying ? 1 : 0]
     );
     return true;
@@ -314,7 +384,7 @@ ipcMain.handle('get-party-state', async (event, partyId) => {
       const row = (rows as any[])[0];
       return {
         song: JSON.parse(row.song_data),
-        currentTime: row.current_time,
+        currentTime: row.playback_time,
         isPlaying: !!row.is_playing,
         updatedAt: row.updated_at
       };
