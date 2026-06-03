@@ -73,6 +73,31 @@ function App() {
   const [searchResults, setSearchResults] = useState<any[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [toastData, setToastData] = useState<{ msg: string; icon: React.ReactNode; type: 'success' | 'error' } | null>(null);
+  const [suggestions, setSuggestions] = useState<any[]>([]);
+  const [showSuggestions, setShowSuggestions] = useState(false);
+  const [isFetchingSuggestions, setIsFetchingSuggestions] = useState(false);
+  const searchContainerRef = useRef<HTMLDivElement>(null);
+
+  // ─── Debounced Search ───────────────────────────────────────
+  useEffect(() => {
+    if (searchQuery.length < 2) {
+      setSuggestions([]);
+      return;
+    }
+    const handler = setTimeout(async () => {
+      setIsFetchingSuggestions(true);
+      try {
+        const res = await fetch(`${API_BASE_URL}/api/search?q=${encodeURIComponent(searchQuery)}`);
+        const data = await res.json();
+        setSuggestions(data.results?.slice(0, 5) || []);
+      } catch (e) {
+        setSuggestions([]);
+      } finally {
+        setIsFetchingSuggestions(false);
+      }
+    }, 500);
+    return () => clearTimeout(handler);
+  }, [searchQuery]);
 
   // ─── Updater State ──────────────────────────────────────────
   const [updateStatus, setUpdateStatus] = useState<'none' | 'available' | 'downloading' | 'downloaded'>('none');
@@ -237,6 +262,17 @@ function App() {
         }
       });
     }
+  }, []);
+
+  // Close suggestions when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (e: MouseEvent) => {
+      if (searchContainerRef.current && !searchContainerRef.current.contains(e.target as Node)) {
+        setShowSuggestions(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
 
   useEffect(() => {
@@ -2097,12 +2133,64 @@ function App() {
               <button className="arrow-btn" onClick={goHome}><ChevronLeft size={20} /></button>
               <button className="arrow-btn"><ChevronRight size={20} /></button>
             </div>
-            <div className="search-container">
+            <div className="search-container" ref={searchContainerRef} style={{ position: 'relative' }}>
               <form onSubmit={handleSearch}>
                 <Search size={16} className="search-icon" />
-                <input type="text" className="search-input" placeholder={t('searchPlaceholder')}
-                  value={searchQuery} onChange={e => setSearchQuery(e.target.value)} />
+                <input
+                  type="text"
+                  className="search-input"
+                  placeholder={t('searchPlaceholder')}
+                  value={searchQuery}
+                  onChange={e => { setSearchQuery(e.target.value); setShowSuggestions(true); }}
+                  onFocus={() => { if (searchQuery.length >= 2) setShowSuggestions(true); }}
+                />
               </form>
+
+              {/* Live Search Dropdown */}
+              {showSuggestions && searchQuery.length >= 2 && (
+                <div className="search-suggestions-dropdown">
+                  {isFetchingSuggestions ? (
+                    <div className="suggestion-loading">
+                      <Loader2 size={14} className="spin-icon" />
+                      <span>Mencari...</span>
+                    </div>
+                  ) : suggestions.length === 0 ? (
+                    <div className="suggestion-empty">Tidak ada hasil untuk "{searchQuery}"</div>
+                  ) : (
+                    <>
+                      {suggestions.map((song, i) => (
+                        <button
+                          key={i}
+                          className="suggestion-item"
+                          onMouseDown={e => {
+                            e.preventDefault();
+                            playSingleSong(song);
+                            setSearchQuery(song.title);
+                            setShowSuggestions(false);
+                          }}
+                        >
+                          <div className="suggestion-thumb">
+                            <img src={getCleanThumbnail(song.thumbnail)} alt={song.title} />
+                            <div className="suggestion-play-overlay"><Play size={10} fill="currentColor" /></div>
+                          </div>
+                          <div className="suggestion-info">
+                            <div className="suggestion-title">{song.title}</div>
+                            <div className="suggestion-artist">{song.artist}</div>
+                          </div>
+                          <div className="suggestion-duration">{formatTime(song.duration)}</div>
+                        </button>
+                      ))}
+                      <button
+                        className="suggestion-see-all"
+                        onMouseDown={e => { e.preventDefault(); handleSearch(); setShowSuggestions(false); }}
+                      >
+                        <Search size={13} />
+                        Lihat semua hasil untuk "{searchQuery}"
+                      </button>
+                    </>
+                  )}
+                </div>
+              )}
             </div>
             <div className="topbar-right-actions" style={{ display: 'flex', alignItems: 'center', gap: '12px', minWidth: '60px', justifyContent: 'flex-end' }}>
               {updateStatus !== 'none' && (
