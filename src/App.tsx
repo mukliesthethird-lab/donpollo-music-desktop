@@ -63,6 +63,9 @@ function App() {
   const [isLoading, setIsLoading] = useState(false);
   const [toastData, setToastData] = useState<{ msg: string; icon: React.ReactNode; type: 'success' | 'error' } | null>(null);
 
+  // ─── Updater State ──────────────────────────────────────────
+  const [updateStatus, setUpdateStatus] = useState<'none' | 'available' | 'downloading' | 'downloaded'>('none');
+
   // ─── Real Data ──────────────────────────────────────────────
   const [playHistory, setPlayHistory] = useState<any[]>(() => {
     try { 
@@ -173,6 +176,22 @@ function App() {
     };
     fetchHits();
   }, []);
+
+  useEffect(() => {
+    if ((window as any).electronAPI) {
+      if ((window as any).electronAPI.onUpdateAvailable) {
+        (window as any).electronAPI.onUpdateAvailable(() => {
+          setUpdateStatus('available');
+        });
+      }
+      if ((window as any).electronAPI.onUpdateDownloaded) {
+        (window as any).electronAPI.onUpdateDownloaded(() => {
+          setUpdateStatus('downloaded');
+        });
+      }
+    }
+  }, []);
+
   useEffect(() => {
     const fetchPlaylists = async () => {
       try {
@@ -1966,7 +1985,29 @@ function App() {
                   value={searchQuery} onChange={e => setSearchQuery(e.target.value)} />
               </form>
             </div>
-            <div style={{ width: '60px' }}></div> {/* Spacer untuk menjaga search bar tetap di tengah */}
+            <div className="topbar-right-actions" style={{ display: 'flex', alignItems: 'center', gap: '12px', minWidth: '60px', justifyContent: 'flex-end' }}>
+              {updateStatus !== 'none' && (
+                <button 
+                  className={`update-badge ${updateStatus === 'downloaded' ? 'ready' : ''}`}
+                  onClick={() => {
+                    if (updateStatus === 'available') {
+                      setUpdateStatus('downloading');
+                      if ((window as any).electronAPI.downloadUpdate) (window as any).electronAPI.downloadUpdate();
+                    } else if (updateStatus === 'downloaded') {
+                      if ((window as any).electronAPI.installUpdate) (window as any).electronAPI.installUpdate();
+                    }
+                  }}
+                  disabled={updateStatus === 'downloading'}
+                >
+                  <div className={`update-dot ${updateStatus === 'downloaded' ? 'pulse' : ''}`} />
+                  <span>
+                    {updateStatus === 'available' ? t('updateAvailable') : 
+                     updateStatus === 'downloading' ? t('updateDownloading') : 
+                     t('updateReady')}
+                  </span>
+                </button>
+              )}
+            </div>
           </div>
 
           {/* Page Router */}

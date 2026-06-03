@@ -14,6 +14,13 @@
   "build": {
     "appId": "com.donpollo.music",
     "productName": "DonPollo Music",
+    "publish": [
+      {
+        "provider": "github",
+        "owner": "mukliesthethird-lab",
+        "repo": "donpollo-music-desktop"
+      }
+    ],
     "directories": {
       "output": "release"
     },
@@ -58,6 +65,7 @@
   },
   "dependencies": {
     "dotenv": "^17.4.2",
+    "electron-updater": "^6.8.3",
     "lucide-react": "^1.17.0",
     "mysql2": "^3.22.4",
     "react": "^19.2.7",

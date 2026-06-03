@@ -3,6 +3,7 @@ import * as path from 'path';
 import * as fs from 'fs';
 import mysql from 'mysql2/promise';
 import dotenv from 'dotenv';
+import { autoUpdater } from 'electron-updater';
 
 const isDev = !app.isPackaged;
 dotenv.config({ path: path.join(__dirname, '../.env') });
@@ -206,11 +207,38 @@ ipcMain.handle('delete-playlist', async (event, id) => {
   }
 });
 
+// AUTO UPDATER
+autoUpdater.autoDownload = false; // We want to ask the user to download or we can download automatically and notify
+autoUpdater.autoInstallOnAppQuit = true;
+
+autoUpdater.on('update-available', (info) => {
+  if (mainWindow) mainWindow.webContents.send('update-available', info);
+});
+
+autoUpdater.on('update-downloaded', (info) => {
+  if (mainWindow) mainWindow.webContents.send('update-downloaded', info);
+});
+
+ipcMain.on('download-update', () => {
+  autoUpdater.downloadUpdate();
+});
+
+ipcMain.on('install-update', () => {
+  autoUpdater.quitAndInstall();
+});
+
 // APP LIFECYCLE
 app.whenReady().then(async () => {
   Menu.setApplicationMenu(null);
   await initDB();
   createWindow();
+
+  // Check for updates after a short delay
+  setTimeout(() => {
+    if (!isDev) {
+      autoUpdater.checkForUpdatesAndNotify();
+    }
+  }, 3000);
 
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) {

@@ -13,6 +13,9 @@ type TranslationKeys = {
 
   // Nav / Sidebar
   home: string;
+  updateAvailable: string;
+  updateDownloading: string;
+  updateReady: string;
   settings: string;
   yourLibrary: string;
   liked: string;
@@ -152,6 +155,9 @@ const translations: Record<Language, TranslationKeys> = {
     loginBtn: 'Login dengan Discord',
     // Nav / Sidebar
     home: 'Beranda',
+    updateAvailable: 'Pembaruan Tersedia',
+    updateDownloading: 'Mengunduh Pembaruan...',
+    updateReady: 'Pembaruan Siap. Klik untuk Instal',
     settings: 'Pengaturan',
     yourLibrary: 'Koleksi Kamu',
     liked: 'Disukai',
@@ -290,6 +296,9 @@ const translations: Record<Language, TranslationKeys> = {
     loginBtn: 'Login with Discord',
     // Nav / Sidebar
     home: 'Home',
+    updateAvailable: 'Update Available',
+    updateDownloading: 'Downloading Update...',
+    updateReady: 'Update Ready. Click to Install',
     settings: 'Settings',
     yourLibrary: 'Your Library',
     liked: 'Liked',
@@ -428,6 +437,9 @@ const translations: Record<Language, TranslationKeys> = {
     loginBtn: 'Discordでログイン',
     // Nav / Sidebar
     home: 'ホーム',
+    updateAvailable: 'アップデートが利用可能',
+    updateDownloading: 'アップデートをダウンロード中...',
+    updateReady: '準備完了。クリックしてインストール',
     settings: '設定',
     yourLibrary: 'マイライブラリ',
     liked: 'お気に入り',

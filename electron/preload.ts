@@ -9,4 +9,8 @@ contextBridge.exposeInMainWorld('electronAPI', {
   getPlaylists: (discordId?: string) => ipcRenderer.invoke('get-playlists', discordId),
   savePlaylist: (playlist: any) => ipcRenderer.invoke('save-playlist', playlist),
   deletePlaylist: (id: string) => ipcRenderer.invoke('delete-playlist', id),
+  onUpdateAvailable: (callback: (event: any, info: any) => void) => ipcRenderer.on('update-available', callback),
+  onUpdateDownloaded: (callback: (event: any, info: any) => void) => ipcRenderer.on('update-downloaded', callback),
+  downloadUpdate: () => ipcRenderer.send('download-update'),
+  installUpdate: () => ipcRenderer.send('install-update'),
 });
