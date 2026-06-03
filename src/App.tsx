@@ -28,10 +28,34 @@ interface DiscordUser {
   global_name: string | null;
 }
 
+const getHighResImage = (url: string | undefined) => {
+  if (!url) return 'https://images.unsplash.com/photo-1614680376573-df3480f0c6ff?auto=format&fit=crop&w=500&q=80';
+  if (url.includes('i.ytimg.com')) {
+    return url.replace('hqdefault.jpg', 'maxresdefault.jpg').replace('default.jpg', 'maxresdefault.jpg');
+  }
+  if (url.includes('mzstatic.com')) {
+    // Apple Music/iTunes covers
+    return url.replace(/\d+x\d+([a-zA-Z]*)\.jpg/i, '1000x1000$1.jpg');
+  }
+  if (url.includes('lh3.googleusercontent.com')) {
+    // YouTube Music covers
+    return url.replace(/=w\d+-h\d+/i, '=w1000-h1000').replace(/=s\d+/i, '=s1000');
+  }
+  return url;
+};
+
 function App() {
   // ─── Page Navigation ────────────────────────────────────────
   const [activePage, setActivePage] = useState<Page>('home');
   const [activePlaylistId, setActivePlaylistId] = useState<string | null>(null);
+  const [isRecentExpanded, setIsRecentExpanded] = useState(false);
+  const [isRecsExpanded, setIsRecsExpanded] = useState(false);
+  const [isIntExpanded, setIsIntExpanded] = useState(false);
+  const [isIdExpanded, setIsIdExpanded] = useState(false);
+  const [isJpExpanded, setIsJpExpanded] = useState(false);
+  const [isKrExpanded, setIsKrExpanded] = useState(false);
+  const [isLatinExpanded, setIsLatinExpanded] = useState(false);
+  const [isLocalExpanded, setIsLocalExpanded] = useState(false);
 
   // ─── Search ─────────────────────────────────────────────────
   const [searchQuery, setSearchQuery] = useState('');
@@ -41,7 +65,11 @@ function App() {
 
   // ─── Real Data ──────────────────────────────────────────────
   const [playHistory, setPlayHistory] = useState<any[]>(() => {
-    try { return JSON.parse(localStorage.getItem('donpollo_history') || '[]'); } catch { return []; }
+    try { 
+      const user = JSON.parse(localStorage.getItem('donpollo_user') || 'null');
+      const suffix = user ? `_${user.id}` : '';
+      return JSON.parse(localStorage.getItem(`donpollo_history${suffix}`) || '[]'); 
+    } catch { return []; }
   });
   const [recommendations, setRecommendations] = useState<any[]>([]);
 
@@ -51,20 +79,114 @@ function App() {
   });
 
   // ─── Playlists ──────────────────────────────────────────────
-  const [playlists, setPlaylists] = useState<Playlist[]>([]);
+  const [playlists, setPlaylists] = useState<Playlist[]>(() => {
+    try { 
+      const user = JSON.parse(localStorage.getItem('donpollo_user') || 'null');
+      const suffix = user ? `_${user.id}` : '';
+      return JSON.parse(localStorage.getItem(`donpollo_playlists${suffix}`) || '[]'); 
+    } catch { return []; }
+  });
+  const [hitsInternational, setHitsInternational] = useState<any[]>([]);
+  const [hitsIndonesia, setHitsIndonesia] = useState<any[]>([]);
+  const [hitsJapan, setHitsJapan] = useState<any[]>([]);
+  const [hitsKorean, setHitsKorean] = useState<any[]>([]);
+  const [hitsLatin, setHitsLatin] = useState<any[]>([]);
+  const [hitsLocal, setHitsLocal] = useState<any[]>([]);
+  const [localCountry, setLocalCountry] = useState<{name: string, code: string, flag: string} | null>(null);
+  const intScrollRef = useRef<HTMLDivElement>(null);
+  const idScrollRef = useRef<HTMLDivElement>(null);
+  const jpScrollRef = useRef<HTMLDivElement>(null);
+  const krScrollRef = useRef<HTMLDivElement>(null);
+  const latinScrollRef = useRef<HTMLDivElement>(null);
+  const localScrollRef = useRef<HTMLDivElement>(null);
 
+  useEffect(() => {
+    const fetchHits = async () => {
+      try {
+        const fetchCategory = async (queries: string[]) => {
+          const responses = await Promise.all(queries.map(q => fetch(`${API_BASE_URL}/api/search?q=${encodeURIComponent(q)}`).catch(() => null)));
+          const dataArrays = await Promise.all(responses.map(r => r ? r.json().catch(() => ({})) : {}));
+          let combined: any[] = [];
+          dataArrays.forEach((data: any) => {
+            if (data && data.results) combined = [...combined, ...data.results];
+          });
+          
+          // Filter: duration must be between 1.5 mins and 7 mins (avoids compilations and shorts)
+          const filtered = combined.filter(item => item.duration && item.duration > 90 && item.duration < 420);
+          
+          // Remove duplicates by ID
+          const unique = filtered.filter((item, index, self) => index === self.findIndex((t) => t.id === item.id));
+          
+          // Shuffle slightly
+          const shuffled = unique.sort(() => 0.5 - Math.random());
+          return shuffled.slice(0, 20);
+        };
+
+        let localQueries: string[] = [];
+        try {
+          const ipRes = await fetch('http://ip-api.com/json/');
+          const ipData = await ipRes.json();
+          if (ipData && ipData.country && ipData.countryCode) {
+            const getFlagEmoji = (countryCode: string) => {
+              const codePoints = countryCode.toUpperCase().split('').map(char => 127397 + char.charCodeAt(0));
+              return String.fromCodePoint(...codePoints);
+            };
+            setLocalCountry({
+              name: ipData.country,
+              code: ipData.countryCode,
+              flag: getFlagEmoji(ipData.countryCode)
+            });
+            localQueries = [
+              `Trending music in ${ipData.country} official audio`,
+              `Top Hits ${ipData.country} official audio`,
+              `Popular songs in ${ipData.country} official audio`
+            ];
+          }
+        } catch (err) {}
+
+        const intQueries = ['The Weeknd official audio', 'Taylor Swift official audio', 'Ariana Grande official audio', 'Bruno Mars official audio', 'Post Malone official audio'];
+        const idQueries = ['Mahalini official audio', 'Tiara Andini official audio', 'Tulus official audio', 'Nadin Amizah official audio', 'Hindia official audio'];
+        const jpQueries = ['YOASOBI official audio', 'Kenshi Yonezu official audio', 'Ado official audio', 'Fujii Kaze official audio', 'Vaundy official audio'];
+        const krQueries = ['BTS official audio', 'BLACKPINK official audio', 'NewJeans official audio', 'TWICE official audio', 'Stray Kids official audio'];
+        const latinQueries = ['Bad Bunny official audio', 'Karol G official audio', 'J Balvin official audio', 'Shakira official audio', 'Maluma official audio'];
+
+        const loadCategory = (queries: string[], setter: (val: any[]) => void) => {
+          fetchCategory(queries).then(res => {
+            if (res.length > 0) setter(res);
+          }).catch(() => {});
+        };
+
+        if (localQueries.length > 0) loadCategory(localQueries, setHitsLocal);
+        loadCategory(intQueries, setHitsInternational);
+
+        // Beri sedikit jeda agar backend (API YouTube) tidak kebanjiran request sekaligus
+        setTimeout(() => {
+          loadCategory(idQueries, setHitsIndonesia);
+          loadCategory(jpQueries, setHitsJapan);
+        }, 1000);
+
+        setTimeout(() => {
+          loadCategory(krQueries, setHitsKorean);
+          loadCategory(latinQueries, setHitsLatin);
+        }, 2000);
+      } catch (e) {}
+    };
+    fetchHits();
+  }, []);
   useEffect(() => {
     const fetchPlaylists = async () => {
       try {
         if ((window as any).electronAPI) {
           const dbPlaylists = await (window as any).electronAPI.getPlaylists(discordUser?.id);
-          setPlaylists(dbPlaylists || []);
+          if (dbPlaylists && dbPlaylists.length > 0) {
+            setPlaylists(dbPlaylists);
+          }
         }
       } catch (e) {
         console.error("Gagal mengambil playlist dari database", e);
       }
     };
-    fetchPlaylists();
+    if (discordUser) fetchPlaylists();
   }, [discordUser]);
   const [showCreatePlaylist, setShowCreatePlaylist] = useState(false);
   const [newPlaylistName, setNewPlaylistName] = useState('');
@@ -80,7 +202,11 @@ function App() {
   const [playlistSearchResults, setPlaylistSearchResults] = useState<any[]>([]);
   const [isPlaylistSearching, setIsPlaylistSearching] = useState(false);
   const [likedSongs, setLikedSongs] = useState<any[]>(() => {
-    try { return JSON.parse(localStorage.getItem('donpollo_liked') || '[]'); } catch { return []; }
+    try { 
+      const user = JSON.parse(localStorage.getItem('donpollo_user') || 'null');
+      const suffix = user ? `_${user.id}` : '';
+      return JSON.parse(localStorage.getItem(`donpollo_liked${suffix}`) || '[]'); 
+    } catch { return []; }
   });
 
   // ─── Language ─────────────────────────────────────────────────
@@ -129,6 +255,15 @@ function App() {
   const [isShuffled, setIsShuffled] = useState(false);
 
   const audioRef = useRef<HTMLAudioElement | null>(null);
+  const recentScrollRef = useRef<HTMLDivElement>(null);
+  const recsScrollRef = useRef<HTMLDivElement>(null);
+
+  const scrollSlider = (ref: React.RefObject<HTMLDivElement | null>, direction: 'left' | 'right') => {
+    if (ref.current) {
+      const amount = direction === 'right' ? 480 : -480;
+      ref.current.scrollBy({ left: amount, behavior: 'smooth' });
+    }
+  };
 
   // ─── Context Menu ──────────────────────────────────────────────
   const [contextMenu, setContextMenu] = useState<{ x: number, y: number, song: any } | null>(null);
@@ -140,16 +275,22 @@ function App() {
   }, []);
 
   // ─── Persist Data ────────────────────────────────────────────
+  const userRef = useRef(discordUser);
+  userRef.current = discordUser;
+
   useEffect(() => {
-    localStorage.setItem('donpollo_history', JSON.stringify(playHistory));
+    const suffix = userRef.current ? `_${userRef.current.id}` : '';
+    localStorage.setItem(`donpollo_history${suffix}`, JSON.stringify(playHistory));
   }, [playHistory]);
 
   useEffect(() => {
-    // MySQL handles playlists, no local storage syncing needed.
+    const suffix = userRef.current ? `_${userRef.current.id}` : '';
+    localStorage.setItem(`donpollo_playlists${suffix}`, JSON.stringify(playlists));
   }, [playlists]);
 
   useEffect(() => {
-    localStorage.setItem('donpollo_liked', JSON.stringify(likedSongs));
+    const suffix = userRef.current ? `_${userRef.current.id}` : '';
+    localStorage.setItem(`donpollo_liked${suffix}`, JSON.stringify(likedSongs));
   }, [likedSongs]);
 
   useEffect(() => {
@@ -160,11 +301,33 @@ function App() {
   useEffect(() => {
     const fetchRecs = async () => {
       let query = 'Pop Hits 2024';
-      if (playHistory.length > 0) query = playHistory[0].artist || playHistory[0].title;
+      if (playHistory.length > 0) {
+        const item = playHistory[0];
+        let realArtist = item.artist || '';
+        if (item.title && item.title.includes(' - ')) {
+          realArtist = item.title.split(' - ')[0].trim();
+        }
+        query = realArtist || item.title;
+      }
       try {
-        const response = await fetch(`${API_BASE_URL}/api/search?q=${encodeURIComponent(query + ' official audio')}`);
-        const data = await response.json();
-        if (data.results) setRecommendations(data.results.slice(0, 10));
+        const queries = [
+          `${query} official audio`,
+          `${query} popular songs`,
+          `${query} best hits`,
+          `${query} music video`,
+          `${query} acoustic`
+        ];
+        const responses = await Promise.all(queries.map(q => fetch(`${API_BASE_URL}/api/search?q=${encodeURIComponent(q)}`).catch(() => null)));
+        const dataArrays = await Promise.all(responses.filter(r => r !== null).map((r: any) => r.json().catch(() => ({}))));
+        
+        let combined: any[] = [];
+        dataArrays.forEach(data => {
+          if (data && data.results) combined = [...combined, ...data.results];
+        });
+        
+        // Remove duplicates by id
+        const unique = combined.filter((item, index, self) => index === self.findIndex((t) => t.id === item.id));
+        setRecommendations(unique.slice(0, 25));
       } catch { }
     };
     fetchRecs();
@@ -185,6 +348,12 @@ function App() {
             setDiscordUser(user);
             localStorage.setItem('donpollo_user', JSON.stringify(user));
             localStorage.setItem('donpollo_discord_token', token);
+            // Muat data untuk user ini
+            try {
+              setPlayHistory(JSON.parse(localStorage.getItem(`donpollo_history_${user.id}`) || '[]'));
+              setLikedSongs(JSON.parse(localStorage.getItem(`donpollo_liked_${user.id}`) || '[]'));
+              setPlaylists(JSON.parse(localStorage.getItem(`donpollo_playlists_${user.id}`) || '[]'));
+            } catch (e) {}
             showToast(`${t('toastWelcome')}, ${user.global_name || user.username}!`, 'user');
             window.history.replaceState(null, '', window.location.pathname);
             setActivePage('home');
@@ -421,6 +590,12 @@ function App() {
     setDiscordUser(null);
     localStorage.removeItem('donpollo_user');
     localStorage.removeItem('donpollo_discord_token');
+    // Kembalikan ke data tamu
+    try {
+      setPlayHistory(JSON.parse(localStorage.getItem(`donpollo_history`) || '[]'));
+      setLikedSongs(JSON.parse(localStorage.getItem(`donpollo_liked`) || '[]'));
+      setPlaylists(JSON.parse(localStorage.getItem(`donpollo_playlists`) || '[]'));
+    } catch (e) {}
     showToast(t('toastLogout'));
   };
 
@@ -476,43 +651,72 @@ function App() {
   };
 
   const fetchLyrics = async (title: string, artist: string, songDuration = 0) => {
-    setPlainLyrics('Sedang mencari lirik...');
+    setPlainLyrics(t('lyricsSearching'));
     setLyricsData(null);
     try {
-      let cleanTitle = title.replace(/\(.*?\)|\[.*?\]|【.*?】/g, '').replace(/(official|music|video|audio|lyric|lyrics|remastered|remaster|hd|hq)/gi, '').replace(/\|/g, '').trim();
+      let cleanTitle = title.replace(/\(.*?\)|\[.*?\]|【.*?】/g, '').replace(/(official|music|video|audio|lyric|lyrics|remastered|remaster|hd|hq|m\/v|mv|live|performance|teaser|dance|practice)/gi, '').replace(/\|/g, '').trim();
       let finalArtist = artist.replace(/VEVO|Official|Topic/gi, '').trim();
       if (cleanTitle.includes('-')) {
         const parts = cleanTitle.split('-');
         finalArtist = parts[0].trim();
         cleanTitle = parts[1].trim();
+      } else {
+        const quoteMatch = cleanTitle.match(/(.+?)\s*['"“”‘’](.+?)['"“”‘’]/);
+        if (quoteMatch) {
+          finalArtist = quoteMatch[1].trim();
+          cleanTitle = quoteMatch[2].trim();
+        }
       }
+      cleanTitle = cleanTitle.replace(/['"“”‘’]/g, '').trim();
+      if (!cleanTitle) cleanTitle = title.replace(/['"“”‘’]/g, '').trim();
       const query = encodeURIComponent(`${cleanTitle} ${finalArtist}`);
       const data = await (await fetch(`https://lrclib.net/api/search?q=${query}`)).json();
       if (data && data.length > 0) {
         const syncedMatches = data.filter((item: any) => item.syncedLyrics);
-        let bestMatch = syncedMatches[0] || data[0];
-        if (songDuration > 0 && syncedMatches.length > 0) {
-          syncedMatches.sort((a: any, b: any) => Math.abs((a.duration || 0) - songDuration) - Math.abs((b.duration || 0) - songDuration));
-          bestMatch = syncedMatches[0];
+        
+        // 1. Filter by Artist Name
+        let artistMatches = syncedMatches.filter((item: any) => {
+          if (!item.artistName) return false;
+          const apiArtist = item.artistName.toLowerCase();
+          const qArtist = finalArtist.toLowerCase();
+          return apiArtist.includes(qArtist) || qArtist.includes(apiArtist);
+        });
+
+        // 2. Filter by Title Match
+        let titleMatches = artistMatches.filter((item: any) => {
+          if (!item.trackName) return false;
+          const apiTitle = item.trackName.toLowerCase();
+          const qTitle = cleanTitle.toLowerCase();
+          return apiTitle.includes(qTitle) || qTitle.includes(apiTitle);
+        });
+
+        // 3. Fallback hierarchy
+        let candidateMatches = titleMatches.length > 0 ? titleMatches : (artistMatches.length > 0 ? artistMatches : (syncedMatches.length > 0 ? syncedMatches : data));
+
+        let bestMatch = candidateMatches[0];
+        if (songDuration > 0 && candidateMatches.length > 0) {
+          candidateMatches.sort((a: any, b: any) => Math.abs((a.duration || 0) - songDuration) - Math.abs((b.duration || 0) - songDuration));
+          bestMatch = candidateMatches[0];
           if (bestMatch.duration) {
             const diff = songDuration - bestMatch.duration;
             if (diff > 4 && diff < 30) setLyricsOffset(diff);
           }
         }
-        if (bestMatch.syncedLyrics) {
+        
+        if (bestMatch && bestMatch.syncedLyrics) {
           const parsed = parseLRC(bestMatch.syncedLyrics);
           if (parsed) setLyricsData(parsed);
-          else setPlainLyrics(bestMatch.plainLyrics || 'Lirik tidak berformat LRC.');
-        } else if (bestMatch.plainLyrics) {
+          else setPlainLyrics(bestMatch.plainLyrics || t('lyricsNotLRC'));
+        } else if (bestMatch && bestMatch.plainLyrics) {
           setPlainLyrics(bestMatch.plainLyrics);
         } else {
-          setPlainLyrics('Lirik tidak ditemukan.');
+          setPlainLyrics(t('lyricsNotFound'));
         }
       } else {
-        setPlainLyrics('Lirik tidak ditemukan.');
+        setPlainLyrics(t('lyricsNotFound'));
       }
     } catch {
-      setPlainLyrics('Gagal mengambil lirik.');
+      setPlainLyrics(t('lyricsFailed'));
     }
   };
 
@@ -551,22 +755,28 @@ function App() {
     }
   };
 
+  const addToHistory = (song: any) => {
+    if (!song || !song.id) return;
+    const cleanSong = { id: song.id, title: song.title, artist: song.artist, thumbnail: song.thumbnail, duration: song.duration };
+    setPlayHistory(prev => {
+      const filtered = prev.filter(item => item.id !== cleanSong.id);
+      return [cleanSong, ...filtered].slice(0, 20);
+    });
+  };
+
   const startPlayingFromList = (list: any[], startIndex: number) => {
+    if (!list || list.length === 0) return;
     const song = list[startIndex];
-    setOriginalQueue([...list]);
+    setQueue(list);
+    setOriginalQueue(list);
     if (isShuffled) {
-      const others = list.filter((_, i) => i !== startIndex);
-      for (let i = others.length - 1; i > 0; i--) {
-        const j = Math.floor(Math.random() * (i + 1));
-        [others[i], others[j]] = [others[j], others[i]];
-      }
-      setQueue([song, ...others]);
+      const shuffled = [...list].sort(() => Math.random() - 0.5);
+      setQueue(shuffled);
       setCurrentIndex(0);
     } else {
-      setQueue([...list]);
       setCurrentIndex(startIndex);
     }
-    setPlayHistory(prev => [song, ...prev.filter(item => item.id !== song.id)].slice(0, 20));
+    addToHistory(song);
     executePlay(song);
   };
 
@@ -585,7 +795,7 @@ function App() {
     setQueue([song]);
     setOriginalQueue([song]);
     setCurrentIndex(0);
-    setPlayHistory(prev => [song, ...prev.filter(item => item.id !== song.id)].slice(0, 20));
+    addToHistory(song);
     executePlay(song);
   };
 
@@ -691,11 +901,11 @@ function App() {
           <div className="library-list">
             {playHistory.map((song, i) => (
               <div key={i} className={`library-item ${currentSong?.id === song.id ? 'playing' : ''}`}>
-                <div className="library-item-art" onClick={() => startPlayingFromList(playHistory, i)}>
+                <div className="library-item-art" onClick={() => playSingleSong(song)}>
                   <img src={song.thumbnail} alt={song.title} />
                   <div className="library-item-play"><Play size={16} fill="currentColor" /></div>
                 </div>
-                <div className="library-item-info" onClick={() => startPlayingFromList(playHistory, i)}>
+                <div className="library-item-info" onClick={() => playSingleSong(song)}>
                   <div className="library-item-title">{song.title}</div>
                   <div className="library-item-artist">{song.artist}</div>
                 </div>
@@ -912,7 +1122,7 @@ function App() {
             )}
             <div className="settings-account-info">
               <div className="settings-account-name">{discordUser.global_name || discordUser.username}</div>
-              <div className="settings-account-sub">@{discordUser.username}#{discordUser.discriminator} • Login dengan Discord</div>
+              <div className="settings-account-sub">@{discordUser.username}#{discordUser.discriminator} • Disocrd</div>
             </div>
             <button className="btn-secondary" onClick={logoutDiscord} style={{ marginLeft: 'auto' }}>
               <LogOut size={16} /> {t('logout')}
@@ -951,7 +1161,8 @@ function App() {
                 className={`lang-btn ${language === lang ? 'active' : ''}`}
                 onClick={() => setLanguage(lang)}
               >
-                {lang === 'id' ? '🇮🇩 Indonesia' : lang === 'en' ? '🇬🇧 English' : '🇯🇵 日本語'}
+                <img src={lang === 'id' ? 'https://flagcdn.com/id.svg' : lang === 'en' ? 'https://flagcdn.com/us.svg' : 'https://flagcdn.com/jp.svg'} alt={lang} />
+                {lang === 'id' ? 'Indonesia' : lang === 'en' ? 'English' : '日本語'}
               </button>
             ))}
           </div>
@@ -1050,61 +1261,331 @@ function App() {
     <div className="main-scroll">
       {searchResults.length === 0 ? (
         <div className="home-dashboard">
-          <div style={{ fontSize: '32px', fontWeight: 800, marginTop: '16px' }}>{getGreeting()}</div>
 
-          {playHistory.length > 0 && (
-            <div className="quick-picks-grid" style={{ marginTop: '16px' }}>
-              {playHistory.slice(0, 6).map((item, i) => (
-                <div key={i} className="quick-pick-card" onClick={() => startPlayingFromList(playHistory, i)} onContextMenu={(e) => handleContextMenu(e, item)}>
-                  <img src={item.thumbnail} alt={item.title} />
-                  <span className="quick-pick-title">{item.title}</span>
-                  <button className="quick-play-btn"><Play size={20} fill="currentColor" style={{ marginLeft: '2px' }} /></button>
+          {/* ── Greeting ─────────────────────────────── */}
+          <div className="home-greeting">
+            <span className="greeting-text">{getGreeting()}</span>
+            <span className="greeting-date">
+              {new Date().toLocaleDateString(language === 'en' ? 'en-US' : language === 'ja' ? 'ja-JP' : 'id-ID', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })}
+            </span>
+          </div>
+
+          {/* ── Bento Featured Grid (Daily Mix) ──────── */}
+          {(() => {
+            const getDailyMix = () => {
+              const mix: any[] = [];
+              if (playHistory.length > 0) mix.push({ ...playHistory[0], bentoTag: 'JUMP BACK IN', tagClass: 'tag-hero' });
+              else if (hitsInternational.length > 0) mix.push({ ...hitsInternational[0], bentoTag: 'TOP PICK', tagClass: 'tag-hero' });
+
+              const favs = likedSongs.filter(s => s.id !== mix[0]?.id).slice(0, 2);
+              favs.forEach(s => mix.push({ ...s, bentoTag: 'FAVORITE', tagClass: 'tag-fav' }));
+
+              const recs = playHistory.length > 0 ? recommendations : hitsInternational;
+              const usableRecs = recs.filter(s => !mix.some(m => m.id === s.id)).slice(0, 2);
+              usableRecs.forEach(s => mix.push({ ...s, bentoTag: 'SUGGESTED', tagClass: 'tag-sug' }));
+
+              const historyFill = playHistory.length > 0 ? playHistory.filter(s => !mix.some(m => m.id === s.id)) : hitsInternational.filter(s => !mix.some(m => m.id === s.id));
+              while (mix.length < 5 && historyFill.length > 0) {
+                mix.push({ ...historyFill.shift(), bentoTag: playHistory.length > 0 ? 'RECENTLY PLAYED' : 'TRENDING', tagClass: 'tag-recent' });
+              }
+              return mix;
+            };
+
+            const dailyMix = getDailyMix();
+            if (dailyMix.length === 0) return null;
+
+            return (
+              <div className="bento-grid">
+                {/* Hero card */}
+                <div
+                  className={`bento-card bento-hero ${currentSong?.id === dailyMix[0].id ? 'bento-active' : ''}`}
+                  onClick={() => startPlayingFromList(dailyMix, 0)}
+                  onContextMenu={(e) => handleContextMenu(e, dailyMix[0])}
+                >
+                  <img src={dailyMix[0].thumbnail} alt={dailyMix[0].title} className="bento-img" />
+                  <div className="bento-gradient" />
+                  <div className={`bento-tag ${dailyMix[0].tagClass}`}>{dailyMix[0].bentoTag}</div>
+                  <div className="bento-meta">
+                    <div className="bento-title-lg">{dailyMix[0].title}</div>
+                    <div className="bento-artist-lg">{dailyMix[0].artist}</div>
+                  </div>
+                  <button className="bento-play-btn" onClick={(e) => { e.stopPropagation(); startPlayingFromList(dailyMix, 0); }}>
+                    {currentSong?.id === dailyMix[0].id && isPlaying
+                      ? <Pause size={20} fill="currentColor" />
+                      : <Play size={20} fill="currentColor" style={{ marginLeft: '2px' }} />}
+                  </button>
                 </div>
-              ))}
-            </div>
-          )}
 
+                {/* Mini cards */}
+                {dailyMix.slice(1, 5).map((item, i) => (
+                  <div
+                    key={i}
+                    className={`bento-card bento-mini ${currentSong?.id === item.id ? 'bento-active' : ''}`}
+                    onClick={() => startPlayingFromList(dailyMix, i + 1)}
+                    onContextMenu={(e) => handleContextMenu(e, item)}
+                  >
+                    <img src={item.thumbnail} alt={item.title} className="bento-img" />
+                    <div className="bento-gradient" />
+                    <div className={`bento-tag ${item.tagClass}`}>{item.bentoTag}</div>
+                    <div className="bento-meta bento-meta-sm">
+                      <div className="bento-title-sm">{item.title}</div>
+                      <div className="bento-artist-sm">{item.artist}</div>
+                    </div>
+                    {currentSong?.id === item.id && isPlaying && (
+                      <div className="bento-eq-badge">
+                        <div className="eq-bar" /><div className="eq-bar" /><div className="eq-bar" />
+                      </div>
+                    )}
+                  </div>
+                ))}
+              </div>
+            );
+          })()}
+
+          {/* ── Recently Played ──────────────────────── */}
           {playHistory.length > 0 && (
             <section className="home-section">
-              <div className="section-header">
-                <h2>{t('recentlyPlayed')}</h2>
-                <span className="show-all" onClick={() => setActivePage('library')}>{t('playAll')}</span>
+              <div className="section-header-v2">
+                <div className="section-header-left">
+                  <div className="section-dot" />
+                  <h2 className="section-title-v2">{t('recentlyPlayed')}</h2>
+                </div>
+                <span className="show-all" onClick={() => setIsRecentExpanded(!isRecentExpanded)}>
+                  {isRecentExpanded ? t('showLess') : t('viewAll')}
+                </span>
               </div>
-              <div className="card-scroll-container">
-                {playHistory.map((item, i) => (
-                  <div key={i} className="music-card" onClick={() => startPlayingFromList(playHistory, i)} onContextMenu={(e) => handleContextMenu(e, item)}>
-                    <div className="card-image-container">
-                      <img src={item.thumbnail} alt={item.title} />
-                      <button className="card-play-btn"><Play size={24} fill="currentColor" style={{ marginLeft: '4px' }} /></button>
+              
+              {isRecentExpanded ? (
+                <div className="card-expanded-grid">
+                  {playHistory.map((item, i) => (
+                    <div
+                      key={i}
+                      className={`music-card-v2 ${currentSong?.id === item.id ? 'music-card-v2-playing' : ''}`}
+                      onClick={() => playSingleSong(item)}
+                      onContextMenu={(e) => handleContextMenu(e, item)}
+                    >
+                      <div className="card-v2-art">
+                        <img src={item.thumbnail} alt={item.title} />
+                        {currentSong?.id === item.id && isPlaying ? (
+                          <div className="card-v2-eq">
+                            <div className="eq-bar" /><div className="eq-bar" /><div className="eq-bar" />
+                          </div>
+                        ) : (
+                          <button className="card-v2-play-btn">
+                            <Play size={18} fill="currentColor" style={{ marginLeft: '2px' }} />
+                          </button>
+                        )}
+                      </div>
+                      <div className="card-v2-info">
+                        <div className="card-v2-title" title={item.title}>{item.title}</div>
+                        <div className="card-v2-artist">{item.artist}</div>
+                      </div>
                     </div>
-                    <div className="card-title">{item.title}</div>
-                    <div className="card-subtitle">{item.artist}</div>
+                  ))}
+                </div>
+              ) : (
+                <div className="slider-wrapper">
+                  <button className="slider-nav-btn slider-nav-left" onClick={() => scrollSlider(recentScrollRef, 'left')} aria-label="Scroll left">
+                    <ChevronLeft size={20} />
+                  </button>
+                  <div className="card-scroll-container" ref={recentScrollRef}>
+                    {playHistory.map((item, i) => (
+                      <div
+                        key={i}
+                        className={`music-card-v2 ${currentSong?.id === item.id ? 'music-card-v2-playing' : ''}`}
+                        onClick={() => playSingleSong(item)}
+                        onContextMenu={(e) => handleContextMenu(e, item)}
+                      >
+                        <div className="card-v2-art">
+                          <img src={item.thumbnail} alt={item.title} />
+                          {currentSong?.id === item.id && isPlaying ? (
+                            <div className="card-v2-eq">
+                              <div className="eq-bar" /><div className="eq-bar" /><div className="eq-bar" />
+                            </div>
+                          ) : (
+                            <button className="card-v2-play-btn">
+                              <Play size={18} fill="currentColor" style={{ marginLeft: '2px' }} />
+                            </button>
+                          )}
+                        </div>
+                        <div className="card-v2-info">
+                          <div className="card-v2-title" title={item.title}>{item.title}</div>
+                          <div className="card-v2-artist">{item.artist}</div>
+                        </div>
+                      </div>
+                    ))}
                   </div>
-                ))}
-              </div>
+                  <button className="slider-nav-btn slider-nav-right" onClick={() => scrollSlider(recentScrollRef, 'right')} aria-label="Scroll right">
+                    <ChevronRight size={20} />
+                  </button>
+                </div>
+              )}
             </section>
           )}
 
-          {recommendations.length > 0 && (
+          {/* ── Discover / Recommendations ───────────── */}
+          {playHistory.length > 0 && recommendations.length > 0 && (
             <section className="home-section">
-              <div className="section-header">
-                <h2>{playHistory.length > 0 ? `${t('recommendations')} ${playHistory[0].artist}` : t('recommendations')}</h2>
-                <span className="show-all">{t('playAll')}</span>
+              <div className="section-header-v2">
+                <div className="section-header-left">
+                  <div className="section-dot section-dot-cyan" />
+                  <h2 className="section-title-v2">
+                    {(() => {
+                      if (playHistory.length === 0) return t('recommendations');
+                      const item = playHistory[0];
+                      let realArtist = item.artist || '';
+                      if (item.title && item.title.includes(' - ')) {
+                        realArtist = item.title.split(' - ')[0].trim();
+                      }
+                      return `${t('recommendations')} ${realArtist}`;
+                    })()}
+                  </h2>
+                </div>
+                <div style={{ display: 'flex', gap: '16px', alignItems: 'center' }}>
+                  <span className="show-all" onClick={() => setIsRecsExpanded(!isRecsExpanded)}>
+                    {isRecsExpanded ? t('showLess') : t('viewAll')}
+                  </span>
+                  <span className="show-all" onClick={() => startPlayingFromList(recommendations, 0)}>{t('playAll')}</span>
+                </div>
               </div>
-              <div className="card-scroll-container">
-                {recommendations.map((item, i) => (
-                  <div key={i} className="music-card" onClick={() => startPlayingFromList(recommendations, i)} onContextMenu={(e) => handleContextMenu(e, item)}>
-                    <div className="card-image-container">
-                      <img src={item.thumbnail} alt={item.title} />
-                      <button className="card-play-btn"><Play size={24} fill="currentColor" style={{ marginLeft: '4px' }} /></button>
+              
+              {isRecsExpanded ? (
+                <div className="card-expanded-grid">
+                  {recommendations.map((item, i) => (
+                    <div
+                      key={i}
+                      className="music-card-circle"
+                      onClick={() => startPlayingFromList(recommendations, i)}
+                      onContextMenu={(e) => handleContextMenu(e, item)}
+                    >
+                      <div className="card-circle-art">
+                        <img src={item.thumbnail} alt={item.title} />
+                        <div className="card-circle-overlay">
+                          <button className="card-circle-play">
+                            <Play size={18} fill="currentColor" style={{ marginLeft: '2px' }} />
+                          </button>
+                        </div>
+                      </div>
+                      <div className="card-v2-info" style={{ textAlign: 'center' }}>
+                        <div className="card-v2-title" style={{ justifyContent: 'center' }} title={item.title}>{item.title}</div>
+                        <div className="card-v2-artist">{item.artist}</div>
+                      </div>
                     </div>
-                    <div className="card-title">{item.title}</div>
-                    <div className="card-subtitle">{item.artist}</div>
+                  ))}
+                </div>
+              ) : (
+                <div className="slider-wrapper">
+                  <button className="slider-nav-btn slider-nav-left" onClick={() => scrollSlider(recsScrollRef, 'left')} aria-label="Scroll left">
+                    <ChevronLeft size={20} />
+                  </button>
+                  <div className="card-scroll-container" ref={recsScrollRef}>
+                    {recommendations.map((item, i) => (
+                      <div
+                        key={i}
+                        className="music-card-circle"
+                        onClick={() => startPlayingFromList(recommendations, i)}
+                        onContextMenu={(e) => handleContextMenu(e, item)}
+                      >
+                        <div className="card-circle-art">
+                          <img src={item.thumbnail} alt={item.title} />
+                          <div className="card-circle-overlay">
+                            <button className="card-circle-play">
+                              <Play size={18} fill="currentColor" style={{ marginLeft: '2px' }} />
+                            </button>
+                          </div>
+                        </div>
+                        <div className="card-v2-info" style={{ textAlign: 'center' }}>
+                          <div className="card-v2-title" style={{ justifyContent: 'center' }} title={item.title}>{item.title}</div>
+                          <div className="card-v2-artist">{item.artist}</div>
+                        </div>
+                      </div>
+                    ))}
                   </div>
-                ))}
-              </div>
+                  <button className="slider-nav-btn slider-nav-right" onClick={() => scrollSlider(recsScrollRef, 'right')} aria-label="Scroll right">
+                    <ChevronRight size={20} />
+                  </button>
+                </div>
+              )}
             </section>
           )}
+
+          {/* ── Hits Sections ───────────── */}
+          {(() => {
+            const renderHitsSection = (title: string, songs: any[], ref: React.RefObject<HTMLDivElement | null>, dotClass: string, isExpanded: boolean, setIsExpanded: (val: boolean) => void) => {
+              if (songs.length === 0) return null;
+              return (
+                <section className="home-section">
+                  <div className="section-header-v2">
+                    <div className="section-header-left">
+                      <div className={`section-dot ${dotClass}`} />
+                      <h2 className="section-title-v2">{title}</h2>
+                    </div>
+                    <div style={{ display: 'flex', gap: '16px', alignItems: 'center' }}>
+                      <span className="show-all" onClick={() => setIsExpanded(!isExpanded)}>{isExpanded ? t('showLess') : t('viewAll')}</span>
+                      <span className="show-all" onClick={() => startPlayingFromList(songs, 0)}>{t('playAll')}</span>
+                    </div>
+                  </div>
+                  
+                  {isExpanded ? (
+                    <div className="card-expanded-grid">
+                      {songs.map((item, i) => (
+                        <div key={i} className={`music-card-v2 ${currentSong?.id === item.id ? 'music-card-v2-playing' : ''}`} onClick={() => playSingleSong(item)} onContextMenu={(e) => handleContextMenu(e, item)}>
+                          <div className="card-v2-art">
+                            <img src={item.thumbnail} alt={item.title} />
+                            {currentSong?.id === item.id && isPlaying ? (
+                              <div className="card-v2-eq"><div className="eq-bar" /><div className="eq-bar" /><div className="eq-bar" /></div>
+                            ) : (
+                              <button className="card-v2-play-btn"><Play size={18} fill="currentColor" style={{ marginLeft: '2px' }} /></button>
+                            )}
+                          </div>
+                          <div className="card-v2-info">
+                            <div className="card-v2-title" title={item.title}>{item.title}</div>
+                            <div className="card-v2-artist">{item.artist}</div>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <div className="slider-wrapper">
+                      <button className="slider-nav-btn slider-nav-left" onClick={() => scrollSlider(ref, 'left')} aria-label="Scroll left"><ChevronLeft size={20} /></button>
+                      <div className="card-scroll-container" ref={ref}>
+                        {songs.map((item, i) => (
+                          <div key={i} className={`music-card-v2 ${currentSong?.id === item.id ? 'music-card-v2-playing' : ''}`} onClick={() => playSingleSong(item)} onContextMenu={(e) => handleContextMenu(e, item)}>
+                            <div className="card-v2-art">
+                              <img src={item.thumbnail} alt={item.title} />
+                              {currentSong?.id === item.id && isPlaying ? (
+                                <div className="card-v2-eq"><div className="eq-bar" /><div className="eq-bar" /><div className="eq-bar" /></div>
+                              ) : (
+                                <button className="card-v2-play-btn"><Play size={18} fill="currentColor" style={{ marginLeft: '2px' }} /></button>
+                              )}
+                            </div>
+                            <div className="card-v2-info">
+                              <div className="card-v2-title" title={item.title}>{item.title}</div>
+                              <div className="card-v2-artist">{item.artist}</div>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                      <button className="slider-nav-btn slider-nav-right" onClick={() => scrollSlider(ref, 'right')} aria-label="Scroll right"><ChevronRight size={20} /></button>
+                    </div>
+                  )}
+                </section>
+              );
+            };
+
+            return (
+              <>
+                {localCountry && hitsLocal.length > 0 &&
+                  renderHitsSection(`${t('trendingLocal')} ${localCountry.name} ${localCountry.flag}`, hitsLocal, localScrollRef, 'section-dot-cyan', isLocalExpanded, setIsLocalExpanded)}
+                {renderHitsSection(t('hitsInt'), hitsInternational, intScrollRef, '', isIntExpanded, setIsIntExpanded)}
+                {renderHitsSection(t('hitsId'), hitsIndonesia, idScrollRef, 'section-dot-green', isIdExpanded, setIsIdExpanded)}
+                {renderHitsSection(t('hitsJp'), hitsJapan, jpScrollRef, 'section-dot-cyan', isJpExpanded, setIsJpExpanded)}
+                {renderHitsSection(t('hitsKr'), hitsKorean, krScrollRef, 'section-dot-pink', isKrExpanded, setIsKrExpanded)}
+                {renderHitsSection(t('hitsLatin'), hitsLatin, latinScrollRef, 'section-dot-yellow', isLatinExpanded, setIsLatinExpanded)}
+              </>
+            );
+          })()}
+
         </div>
       ) : (
         <>
@@ -1200,31 +1681,47 @@ function App() {
             {toastData.msg}
           </div>
         )}
-        <div className="login-bg">
-          <div className="login-bg-orb login-bg-orb-1" />
-          <div className="login-bg-orb login-bg-orb-2" />
-          <div className="login-bg-orb login-bg-orb-3" />
+        <div className="login-hero">
+          <div className="login-hero-overlay" />
+          <div className="login-lang-picker">
+            <button className={`lang-flag ${language === 'id' ? 'active' : ''}`} onClick={() => setLanguage('id')} title="Bahasa Indonesia">
+              <img src="https://flagcdn.com/id.svg" alt="ID" />
+            </button>
+            <button className={`lang-flag ${language === 'en' ? 'active' : ''}`} onClick={() => setLanguage('en')} title="English">
+              <img src="https://flagcdn.com/us.svg" alt="EN" />
+            </button>
+            <button className={`lang-flag ${language === 'ja' ? 'active' : ''}`} onClick={() => setLanguage('ja')} title="日本語">
+              <img src="https://flagcdn.com/jp.svg" alt="JA" />
+            </button>
+          </div>
+          <div className="login-hero-content">
+            <div className="login-hero-title">Don Pollo Music.</div>
+            <div className="login-hero-subtitle">
+              {t('loginHeroSubtitle')}
+            </div>
+          </div>
         </div>
-        <div className="login-card">
-          <div className="login-logo">
-            <img src="https://donpollobot.vercel.app/donpollo-icon.jpg" alt="Don Pollo" />
+        <div className="login-form-container">
+          <div className="login-card">
+            <div className="login-logo">
+              <img src="https://donpollobot.vercel.app/donpollo-icon.jpg" alt="Don Pollo" />
+            </div>
+            <div className="login-title">{t('loginWelcome')}</div>
+            <div className="login-subtitle">
+              {t('loginWelcomeDesc')}
+            </div>
+            <div className="login-features">
+              <div className="login-feature"><Music size={20} color="var(--accent-primary)" /> {t('loginFeat1')}</div>
+              <div className="login-feature"><Mic2 size={20} color="var(--accent-primary)" /> {t('loginFeat2')}</div>
+              <div className="login-feature"><ListMusic size={20} color="var(--accent-primary)" /> {t('loginFeat3')}</div>
+            </div>
+            <button className="login-btn-discord" onClick={loginWithDiscord}>
+              <svg width="22" height="22" viewBox="0 0 127.14 96.36" fill="white" style={{ flexShrink: 0 }}>
+                <path d="M107.7,8.07A105.15,105.15,0,0,0,81.47,0a72.06,72.06,0,0,0-3.36,6.83A97.68,97.68,0,0,0,49,6.83,72.37,72.37,0,0,0,45.64,0,105.89,105.89,0,0,0,19.39,8.09C2.79,32.65-1.71,56.6.54,80.21h0A105.73,105.73,0,0,0,32.71,96.36,77.7,77.7,0,0,0,39.6,85.25a68.42,68.42,0,0,1-10.85-5.18c.91-.66,1.8-1.34,2.66-2a75.57,75.57,0,0,0,64.32,0c.87.71,1.76,1.39,2.66,2a68.68,68.68,0,0,1-10.87,5.19,77,77,0,0,0,6.89,11.1A105.25,105.25,0,0,0,126.6,80.22h0C129.24,52.84,122.09,29.11,107.7,8.07ZM42.45,65.69C36.18,65.69,31,60,31,53s5-12.74,11.43-12.74S54,46,53.89,53,48.84,65.69,42.45,65.69Zm42.24,0C78.41,65.69,73.25,60,73.25,53s5-12.74,11.44-12.74S96.23,46,96.12,53,91.08,65.69,84.69,65.69Z" />
+              </svg>
+              {t('loginBtn')}
+            </button>
           </div>
-          <div className="login-title">Don Pollo Music</div>
-          <div className="login-subtitle">
-            Dengarkan musik favorit Anda dengan pengalaman yang<br />elegan dan penuh fitur.
-          </div>
-          <div className="login-features">
-            <div className="login-feature"><span style={{ display: 'flex' }}><Music size={20} color="var(--accent-primary)" /></span> Streaming musik tanpa batas</div>
-            <div className="login-feature"><span style={{ display: 'flex' }}><Mic2 size={20} color="var(--accent-primary)" /></span> Lirik tersinkron real-time</div>
-            <div className="login-feature"><span style={{ display: 'flex' }}><ListMusic size={20} color="var(--accent-primary)" /></span> Playlist & Koleksi pribadi</div>
-            <div className="login-feature"><span style={{ display: 'flex' }}><Maximize2 size={20} color="var(--accent-primary)" /></span> Full Screen UI</div>
-          </div>
-          <button className="login-btn-discord" onClick={loginWithDiscord}>
-            <svg width="22" height="22" viewBox="0 0 127.14 96.36" fill="white" style={{ flexShrink: 0 }}>
-              <path d="M107.7,8.07A105.15,105.15,0,0,0,81.47,0a72.06,72.06,0,0,0-3.36,6.83A97.68,97.68,0,0,0,49,6.83,72.37,72.37,0,0,0,45.64,0,105.89,105.89,0,0,0,19.39,8.09C2.79,32.65-1.71,56.6.54,80.21h0A105.73,105.73,0,0,0,32.71,96.36,77.7,77.7,0,0,0,39.6,85.25a68.42,68.42,0,0,1-10.85-5.18c.91-.66,1.8-1.34,2.66-2a75.57,75.57,0,0,0,64.32,0c.87.71,1.76,1.39,2.66,2a68.68,68.68,0,0,1-10.87,5.19,77,77,0,0,0,6.89,11.1A105.25,105.25,0,0,0,126.6,80.22h0C129.24,52.84,122.09,29.11,107.7,8.07ZM42.45,65.69C36.18,65.69,31,60,31,53s5-12.74,11.43-12.74S54,46,53.89,53,48.84,65.69,42.45,65.69Zm42.24,0C78.41,65.69,73.25,60,73.25,53s5-12.74,11.44-12.74S96.23,46,96.12,53,91.08,65.69,84.69,65.69Z" />
-            </svg>
-            Login dengan Discord
-          </button>
         </div>
       </div>
     );
@@ -1483,16 +1980,71 @@ function App() {
           {activePage === 'settings' && (
             <div className="main-scroll">{renderSettingsPage()}</div>
           )}
+
+          {/* BOTTOM PLAYER BAR */}
+          {!isWidgetMode && (
+            <div className="bottom-player-bar">
+              <div className="player-left">
+                {currentSong ? (
+                  <>
+                    <img src={currentSong.thumbnail} className="player-cover" alt="cover" />
+                    <div className="player-info">
+                      <span className="player-title" style={{ color: 'white', fontSize: '14px', fontWeight: 'bold' }}>{currentSong.title}</span>
+                      <span className="player-artist" style={{ color: 'var(--text-secondary)', fontSize: '12px' }}>{currentSong.artist}</span>
+                    </div>
+                    <button className={`chat-btn ${isLiked(currentSong.id) ? 'liked' : ''}`} style={{ color: isLiked(currentSong.id) ? '#ff6b9d' : 'var(--text-secondary)', marginLeft: '12px' }} onClick={() => toggleLike(currentSong)}>
+                      <Heart size={16} fill={isLiked(currentSong.id) ? 'currentColor' : 'none'} />
+                    </button>
+                  </>
+                ) : (
+                  <div style={{ color: 'var(--text-muted)', fontSize: '13px' }}>{t('noHistory')}</div>
+                )}
+              </div>
+              <div className="player-center">
+                <div className="player-controls">
+                  <button className="chat-btn" onClick={toggleShuffle} style={{ color: isShuffled ? 'var(--accent-primary)' : 'var(--text-secondary)' }}><Shuffle size={18} /></button>
+                  <button className="chat-btn" onClick={handlePrev} disabled={currentIndex <= 0} style={{ opacity: currentIndex <= 0 ? 0.3 : 1 }}><SkipBack size={22} fill="currentColor" /></button>
+                  <button className="chat-play-btn" onClick={togglePlay} disabled={!currentSong}>
+                    {isPlaying ? <Pause size={20} fill="currentColor" /> : <Play size={20} fill="currentColor" style={{ marginLeft: '4px' }} />}
+                  </button>
+                  <button className="chat-btn" onClick={handleNext} disabled={currentIndex >= queue.length - 1} style={{ opacity: (currentIndex >= queue.length - 1) ? 0.3 : 1 }}><SkipForward size={22} fill="currentColor" /></button>
+                  <button className="chat-btn" onClick={() => setIsLooping(!isLooping)} style={{ color: isLooping ? 'var(--accent-primary)' : 'var(--text-secondary)' }}><Repeat size={18} /></button>
+                </div>
+                <div className="player-progress-container">
+                  <span className="chat-time">{formatTime(progress)}</span>
+                  <div className="chat-progress-bar" onClick={handleSeek}>
+                    <div className="chat-progress-fill" style={{ width: duration ? `${(progress / duration) * 100}%` : '0%' }}>
+                      <div className="chat-progress-thumb"></div>
+                    </div>
+                  </div>
+                  <span className="chat-time">{formatTime(duration)}</span>
+                </div>
+              </div>
+              <div className="player-right">
+                <button className="chat-btn" onClick={() => setIsRightSidebarOpen(!isRightSidebarOpen)} style={{ color: isRightSidebarOpen ? 'var(--accent-primary)' : 'var(--text-secondary)' }} title="Right Sidebar">
+                  <PanelRight size={20} />
+                </button>
+                <button className="chat-btn" onClick={() => setIsWidgetMode(true)} title="Full Screen"><Maximize2 size={16} /></button>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginLeft: '16px' }}>
+                  <button className="chat-btn" onClick={() => setIsMuted(!isMuted)}>
+                    {isMuted || volume === 0 ? <VolumeX size={18} /> : <Volume2 size={18} />}
+                  </button>
+                  <input type="range" min="0" max="1" step="0.01" value={isMuted ? 0 : volume}
+                    onChange={e => { setVolume(parseFloat(e.target.value)); if (isMuted) setIsMuted(false); }}
+                    style={{ width: '80px', height: '4px', cursor: 'pointer', accentColor: 'var(--accent-primary)' }} />
+                </div>
+              </div>
+            </div>
+          )}
         </div>
 
         {/* RIGHT SIDEBAR */}
-        {isRightSidebarOpen && (
-          <div className="right-sidebar" style={showLyrics && currentSong ? {
-            backgroundImage: `url(${currentSong.thumbnail})`,
-            backgroundSize: 'cover',
-            backgroundPosition: 'center',
-            position: 'relative'
-          } : undefined}>
+        <div className={`right-sidebar ${!isRightSidebarOpen ? 'closed' : ''}`} style={showLyrics && currentSong ? {
+          backgroundImage: `url(${currentSong.thumbnail})`,
+          backgroundSize: 'cover',
+          backgroundPosition: 'center',
+          position: 'relative'
+        } : undefined}>
             {showLyrics && currentSong && (
               <div style={{
                 position: 'absolute',
@@ -1507,7 +2059,7 @@ function App() {
               <div>
                 <div className="sidebar-title">{showLyrics ? t('lyricsPanel') : t('queue')}</div>
                 <div className="sidebar-subtitle">
-                  {showLyrics ? (currentSong ? currentSong.title : 'No song') : `${Math.max(0, queue.length - Math.max(0, currentIndex))} songs • ${formatTime(queue.slice(Math.max(0, currentIndex)).reduce((acc, s) => acc + (s.duration || 0), 0))}`}
+                  {showLyrics ? (currentSong ? currentSong.title : 'No song') : `${Math.max(0, queue.length - Math.max(0, currentIndex))} ${t('songs')} • ${formatTime(queue.slice(Math.max(0, currentIndex)).reduce((acc, s) => acc + (s.duration || 0), 0))}`}
                 </div>
               </div>
               <div className="sidebar-actions">
@@ -1582,76 +2134,40 @@ function App() {
               </div>
             )}
           </div>
-        )}
       </div>
 
-      {/* BOTTOM PLAYER BAR */}
-      {!isWidgetMode && (
-        <div className="bottom-player-bar">
-          <div className="player-left">
-            {currentSong ? (
-              <>
-                <img src={currentSong.thumbnail} className="player-cover" alt="cover" />
-                <div className="player-info">
-                  <span className="player-title" style={{ color: 'white', fontSize: '14px', fontWeight: 'bold' }}>{currentSong.title}</span>
-                  <span className="player-artist" style={{ color: 'var(--text-secondary)', fontSize: '12px' }}>{currentSong.artist}</span>
-                </div>
-                <button className={`chat-btn ${isLiked(currentSong.id) ? 'liked' : ''}`} style={{ color: isLiked(currentSong.id) ? '#ff6b9d' : 'var(--text-secondary)', marginLeft: '12px' }} onClick={() => toggleLike(currentSong)}>
-                  <Heart size={16} fill={isLiked(currentSong.id) ? 'currentColor' : 'none'} />
-                </button>
-              </>
-            ) : (
-              <div style={{ color: 'var(--text-muted)', fontSize: '13px' }}>{t('noHistory')}</div>
-            )}
-          </div>
-          <div className="player-center">
-            <div className="player-controls">
-              <button className="chat-btn" onClick={toggleShuffle} style={{ color: isShuffled ? 'var(--accent-primary)' : 'var(--text-secondary)' }}><Shuffle size={18} /></button>
-              <button className="chat-btn" onClick={handlePrev} disabled={currentIndex <= 0} style={{ opacity: currentIndex <= 0 ? 0.3 : 1 }}><SkipBack size={22} fill="currentColor" /></button>
-              <button className="chat-play-btn" onClick={togglePlay} disabled={!currentSong}>
-                {isPlaying ? <Pause size={20} fill="currentColor" /> : <Play size={20} fill="currentColor" style={{ marginLeft: '4px' }} />}
-              </button>
-              <button className="chat-btn" onClick={handleNext} disabled={currentIndex >= queue.length - 1} style={{ opacity: (currentIndex >= queue.length - 1) ? 0.3 : 1 }}><SkipForward size={22} fill="currentColor" /></button>
-              <button className="chat-btn" onClick={() => setIsLooping(!isLooping)} style={{ color: isLooping ? 'var(--accent-primary)' : 'var(--text-secondary)' }}><Repeat size={18} /></button>
-            </div>
-            <div className="player-progress-container">
-              <span className="chat-time">{formatTime(progress)}</span>
-              <div className="chat-progress-bar" onClick={handleSeek}>
-                <div className="chat-progress-fill" style={{ width: duration ? `${(progress / duration) * 100}%` : '0%' }}>
-                  <div className="chat-progress-thumb"></div>
-                </div>
-              </div>
-              <span className="chat-time">{formatTime(duration)}</span>
-            </div>
-          </div>
-          <div className="player-right">
-            <button className="chat-btn" onClick={() => setIsRightSidebarOpen(!isRightSidebarOpen)} style={{ color: isRightSidebarOpen ? 'var(--accent-primary)' : 'var(--text-secondary)' }} title="Right Sidebar">
-              <PanelRight size={20} />
-            </button>
-            <button className="chat-btn" onClick={() => setIsWidgetMode(true)} title="Full Screen"><Maximize2 size={16} /></button>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginLeft: '16px' }}>
-              <button className="chat-btn" onClick={() => setIsMuted(!isMuted)}>
-                {isMuted || volume === 0 ? <VolumeX size={18} /> : <Volume2 size={18} />}
-              </button>
-              <input type="range" min="0" max="1" step="0.01" value={isMuted ? 0 : volume}
-                onChange={e => { setVolume(parseFloat(e.target.value)); if (isMuted) setIsMuted(false); }}
-                style={{ width: '80px', height: '4px', cursor: 'pointer', accentColor: 'var(--accent-primary)' }} />
-            </div>
-          </div>
-        </div>
-      )}
+      {/* RIGHT SIDEBAR */}
 
       {/* FULLSCREEN PLAYER */}
       {isWidgetMode && (
         <div className="fullscreen-player">
           <div className="fs-background">
-            <img key={currentSong?.id || 'bg'} src={currentSong?.thumbnail || 'https://images.unsplash.com/photo-1614680376573-df3480f0c6ff?auto=format&fit=crop&w=300&q=80'} alt="bg" />
+            <img 
+              key={currentSong?.id || 'bg'} 
+              src={getHighResImage(currentSong?.thumbnail)} 
+              onError={(e) => {
+                if (e.currentTarget.src !== currentSong?.thumbnail && currentSong?.thumbnail) {
+                  e.currentTarget.src = currentSong.thumbnail;
+                }
+              }}
+              alt="bg" 
+            />
           </div>
 
           <div className="fs-content">
             <div className="fs-left">
               <div className="fs-art-container" onMouseEnter={() => setShowWidgetOverlay(true)} onMouseLeave={() => setShowWidgetOverlay(false)}>
-                <img key={currentSong?.id || 'art'} src={currentSong?.thumbnail || 'https://images.unsplash.com/photo-1614680376573-df3480f0c6ff?auto=format&fit=crop&w=500&q=80'} alt="art" className="fs-art" />
+                <img 
+                  key={currentSong?.id || 'art'} 
+                  src={getHighResImage(currentSong?.thumbnail)} 
+                  onError={(e) => {
+                    if (e.currentTarget.src !== currentSong?.thumbnail && currentSong?.thumbnail) {
+                      e.currentTarget.src = currentSong.thumbnail;
+                    }
+                  }}
+                  alt="art" 
+                  className="fs-art" 
+                />
 
                 <div className={`fs-art-overlay ${showWidgetOverlay ? 'visible' : ''}`}>
                   <div className="fs-overlay-top">
@@ -1701,7 +2217,7 @@ function App() {
                     const nextLineTime = idx < lyricsData.length - 1 ? lyricsData[idx + 1].time : duration;
                     const isActive = (progress - lyricsOffset) >= line.time && (progress - lyricsOffset) < nextLineTime;
                     if (line.isInstrumental) return null;
-                    return <div key={idx} data-lyric-idx={idx} className={`fs-lyric-line ${isActive ? 'active' : ''}`}>{line.text}</div>;
+                    return <div key={idx} data-lyric-idx={idx} className={`fs-lyric-line ${isActive ? 'active' : ''}`} onClick={() => jumpToLyric(line.time)}>{line.text}</div>;
                   })
                 ) : (
                   <div className="fs-lyric-line active">{plainLyrics || 'Instrumental'}</div>

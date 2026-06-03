@@ -1,6 +1,16 @@
 export type Language = 'id' | 'en' | 'ja';
 
 type TranslationKeys = {
+
+  // Login
+  loginHeroSubtitle: string;
+  loginWelcome: string;
+  loginWelcomeDesc: string;
+  loginFeat1: string;
+  loginFeat2: string;
+  loginFeat3: string;
+  loginBtn: string;
+
   // Nav / Sidebar
   home: string;
   settings: string;
@@ -18,6 +28,8 @@ type TranslationKeys = {
   recentlyPlayed: string;
   recommendations: string;
   playAll: string;
+  viewAll: string;
+  showLess: string;
   likedSongs: string;
   noLikedSongs: string;
   noLikedDesc: string;
@@ -101,6 +113,12 @@ type TranslationKeys = {
 
   // Toast
   toastLogout: string;
+  hitsInt: string;
+  hitsId: string;
+  hitsJp: string;
+  hitsKr: string;
+  hitsLatin: string;
+  trendingLocal: string;
   toastHistoryCleared: string;
   toastPlaylistDeleted: string;
   toastPlaylistCreated: string;
@@ -116,10 +134,22 @@ type TranslationKeys = {
   toastServerBlocked: string;
   toastServerFallback: string;
   toastVideoLocked: string;
+  lyricsSearching: string;
+  lyricsNotFound: string;
+  lyricsNotLRC: string;
+  lyricsFailed: string;
 };
 
 const translations: Record<Language, TranslationKeys> = {
   id: {
+    // Login
+    loginHeroSubtitle: 'Rasakan pengalaman mendengarkan musik tanpa batas dengan antarmuka yang elegan, fitur sinkronisasi lirik real-time, dan kualitas audio terbaik.',
+    loginWelcome: 'Selamat Datang',
+    loginWelcomeDesc: 'Masuk dengan akun Discord Anda untuk mulai membuat playlist dan menyimpan lagu favorit.',
+    loginFeat1: 'Streaming musik kualitas tinggi',
+    loginFeat2: 'Lirik tersinkron real-time',
+    loginFeat3: 'Kelola playlist sesuka hati',
+    loginBtn: 'Login dengan Discord',
     // Nav / Sidebar
     home: 'Beranda',
     settings: 'Pengaturan',
@@ -135,8 +165,10 @@ const translations: Record<Language, TranslationKeys> = {
     goodAfternoon: 'Selamat Siang',
     goodEvening: 'Selamat Malam',
     recentlyPlayed: 'Baru Diputar',
-    recommendations: 'Rekomendasi Untukmu',
+    recommendations: 'Rekomendasi Untuk Anda',
     playAll: 'Putar Semua',
+    viewAll: 'Lihat Semua',
+    showLess: 'Tutup',
     likedSongs: 'Lagu Disukai',
     noLikedSongs: 'Belum ada lagu yang disukai',
     noLikedDesc: 'Tekan ikon hati pada lagu untuk menyukainya.',
@@ -220,6 +252,12 @@ const translations: Record<Language, TranslationKeys> = {
 
     // Toast
     toastLogout: 'Berhasil logout dan pemutaran dihentikan',
+    hitsInt: 'Lagu-lagu Hits Internasional',
+    hitsId: 'Lagu-lagu Hits Indonesia',
+    hitsJp: 'Lagu-lagu Hits Jepang',
+    hitsKr: 'Lagu-lagu Hits Korea',
+    hitsLatin: 'Lagu-lagu Hits Latin',
+    trendingLocal: 'Sedang Tren di',
     toastHistoryCleared: 'Riwayat dihapus.',
     toastPlaylistDeleted: 'Playlist dihapus.',
     toastPlaylistCreated: 'berhasil dibuat!',
@@ -235,9 +273,21 @@ const translations: Record<Language, TranslationKeys> = {
     toastServerBlocked: 'Server utama diblokir. Mengalihkan ke server cadangan...',
     toastServerFallback: 'Terhubung ke server cadangan!',
     toastVideoLocked: 'Gagal: Video ini dikunci ketat oleh YouTube.',
+    lyricsSearching: 'Sedang mencari lirik...',
+    lyricsNotFound: 'Lirik tidak ditemukan.',
+    lyricsNotLRC: 'Lirik tidak berformat LRC.',
+    lyricsFailed: 'Gagal mengambil lirik.',
   },
 
   en: {
+    // Login
+    loginHeroSubtitle: 'Experience unlimited music streaming with an elegant interface, real-time synchronized lyrics, and the best audio quality.',
+    loginWelcome: 'Welcome',
+    loginWelcomeDesc: 'Login with your Discord account to start creating playlists and saving your favorite songs.',
+    loginFeat1: 'High quality music streaming',
+    loginFeat2: 'Real-time synchronized lyrics',
+    loginFeat3: 'Manage your playlists freely',
+    loginBtn: 'Login with Discord',
     // Nav / Sidebar
     home: 'Home',
     settings: 'Settings',
@@ -255,6 +305,8 @@ const translations: Record<Language, TranslationKeys> = {
     recentlyPlayed: 'Recently Played',
     recommendations: 'Recommended For You',
     playAll: 'Play All',
+    viewAll: 'View All',
+    showLess: 'Show Less',
     likedSongs: 'Liked Songs',
     noLikedSongs: 'No liked songs yet',
     noLikedDesc: 'Press the heart icon on a song to like it.',
@@ -338,6 +390,12 @@ const translations: Record<Language, TranslationKeys> = {
 
     // Toast
     toastLogout: 'Logged out and playback stopped',
+    hitsInt: 'Global Pop Hits',
+    hitsId: 'Indonesian Pop Hits',
+    hitsJp: 'J-Pop Hits',
+    hitsKr: 'K-Pop Hits',
+    hitsLatin: 'Latin Pop Hits',
+    trendingLocal: 'Trending in',
     toastHistoryCleared: 'History cleared.',
     toastPlaylistDeleted: 'Playlist deleted.',
     toastPlaylistCreated: 'created successfully!',
@@ -353,9 +411,21 @@ const translations: Record<Language, TranslationKeys> = {
     toastServerBlocked: 'Main server blocked. Switching to backup...',
     toastServerFallback: 'Connected to backup server!',
     toastVideoLocked: 'Failed: This video is restricted by YouTube.',
+    lyricsSearching: 'Searching for lyrics...',
+    lyricsNotFound: 'Lyrics not found.',
+    lyricsNotLRC: 'Lyrics are not in LRC format.',
+    lyricsFailed: 'Failed to fetch lyrics.',
   },
 
   ja: {
+    // Login
+    loginHeroSubtitle: 'エレガントなインターフェース、リアルタイムの同期歌詞、最高のオーディオ品質で、無制限の音楽ストリーミングを体験してください。',
+    loginWelcome: 'ようこそ',
+    loginWelcomeDesc: 'Discordアカウントでログインして、プレイリストを作成し、お気に入りの曲を保存しましょう。',
+    loginFeat1: '高品質な音楽ストリーミング',
+    loginFeat2: 'リアルタイム同期歌詞',
+    loginFeat3: 'プレイリストを自由に管理',
+    loginBtn: 'Discordでログイン',
     // Nav / Sidebar
     home: 'ホーム',
     settings: '設定',
@@ -371,8 +441,10 @@ const translations: Record<Language, TranslationKeys> = {
     goodAfternoon: 'こんにちは',
     goodEvening: 'こんばんは',
     recentlyPlayed: '最近再生した曲',
-    recommendations: 'おすすめの曲',
+    recommendations: 'あなたへのおすすめ',
     playAll: 'すべて再生',
+    viewAll: 'すべて表示',
+    showLess: '閉じる',
     likedSongs: 'お気に入りの曲',
     noLikedSongs: 'お気に入りの曲がありません',
     noLikedDesc: '曲のハートアイコンを押してお気に入りに追加しましょう。',
@@ -456,6 +528,12 @@ const translations: Record<Language, TranslationKeys> = {
 
     // Toast
     toastLogout: 'ログアウトして再生を停止しました',
+    hitsInt: 'グローバル・ヒット',
+    hitsId: 'インドネシア・ヒット',
+    hitsJp: 'J-Pop ヒット',
+    hitsKr: 'K-Pop ヒット',
+    hitsLatin: 'ラテン・ヒット',
+    trendingLocal: 'トレンド:',
     toastHistoryCleared: '履歴を削除しました。',
     toastPlaylistDeleted: 'プレイリストを削除しました。',
     toastPlaylistCreated: 'を作成しました！',
@@ -470,7 +548,11 @@ const translations: Record<Language, TranslationKeys> = {
     toastSearchFail: '検索サーバーに接続できませんでした。',
     toastServerBlocked: 'メインサーバーがブロックされています。バックアップに切り替え中...',
     toastServerFallback: 'バックアップサーバーに接続しました！',
-    toastVideoLocked: '失敗：このビデオはYouTubeによって制限されています。',
+    toastVideoLocked: 'エラー：この動画はYouTubeによって制限されています。',
+    lyricsSearching: '歌詞を検索中...',
+    lyricsNotFound: '歌詞が見つかりません。',
+    lyricsNotLRC: 'LRC形式の歌詞ではありません。',
+    lyricsFailed: '歌詞の取得に失敗しました。',
   },
 };
 

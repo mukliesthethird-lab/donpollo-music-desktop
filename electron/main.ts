@@ -1,4 +1,4 @@
-import { app, BrowserWindow, ipcMain } from 'electron';
+import { app, BrowserWindow, ipcMain, Menu } from 'electron';
 import * as path from 'path';
 import * as fs from 'fs';
 import mysql from 'mysql2/promise';
@@ -208,6 +208,7 @@ ipcMain.handle('delete-playlist', async (event, id) => {
 
 // APP LIFECYCLE
 app.whenReady().then(async () => {
+  Menu.setApplicationMenu(null);
   await initDB();
   createWindow();
 
