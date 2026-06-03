@@ -132,14 +132,7 @@ function App() {
     try { return JSON.parse(localStorage.getItem('donpollo_user') || 'null'); } catch { return null; }
   });
 
-  // ─── Listen Along & Presence Sync ───
-  useEffect(() => {
-    if (!discordUser) return;
-    const presenceInterval = setInterval(() => {
-      setOnlineUsers(prev => prev);
-    }, 5000);
-    return () => clearInterval(presenceInterval);
-  }, [discordUser]);
+
 
   // ─── Playlists ──────────────────────────────────────────────
   const [playlists, setPlaylists] = useState<Playlist[]>(() => {
@@ -347,6 +340,34 @@ function App() {
   const [showLyrics, setShowLyrics] = useState(false);
   const [isWidgetMode, setIsWidgetMode] = useState(false);
   const [isRightSidebarOpen, setIsRightSidebarOpen] = useState(true);
+
+  // ─── Listen Along & Presence Sync ───
+  useEffect(() => {
+    if (!discordUser) return;
+    
+    const syncPresence = async () => {
+      if ((window as any).electronAPI) {
+        try {
+          const avatar = discordUser.avatar ? `https://cdn.discordapp.com/avatars/${discordUser.id}/${discordUser.avatar}.png` : null;
+          await (window as any).electronAPI.updatePresence({
+            discordId: discordUser.id,
+            username: discordUser.global_name || discordUser.username,
+            avatarUrl: avatar,
+            currentSong: currentSong,
+            partyId: activePartyId
+          });
+          const users = await (window as any).electronAPI.getOnlineUsers(discordUser.id);
+          setOnlineUsers(users);
+        } catch (e) {
+          console.error('Failed to sync presence', e);
+        }
+      }
+    };
+
+    syncPresence();
+    const presenceInterval = setInterval(syncPresence, 5000);
+    return () => clearInterval(presenceInterval);
+  }, [discordUser, currentSong, activePartyId]);
 
   // ─── Lyrics ──────────────────────────────────────────────────
   const [lyricsData, setLyricsData] = useState<{ time: number, text: string, isInstrumental?: boolean }[] | null>(null);

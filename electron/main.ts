@@ -97,6 +97,7 @@ function createWindow() {
     minHeight: 600,
     backgroundColor: '#0B0B10',
     autoHideMenuBar: true,
+    icon: path.join(__dirname, isDev ? '../public/icon.jpg' : '../dist/icon.jpg'),
     webPreferences: {
       preload: path.join(__dirname, 'preload.cjs'),
       nodeIntegration: false,
@@ -157,6 +158,7 @@ function createMiniPlayerWindow() {
     transparent: true,
     backgroundColor: '#00000000',
     skipTaskbar: true,
+    icon: path.join(__dirname, isDev ? '../public/icon.jpg' : '../dist/icon.jpg'),
     webPreferences: {
       preload: path.join(__dirname, 'preload.cjs'),
       nodeIntegration: false,
