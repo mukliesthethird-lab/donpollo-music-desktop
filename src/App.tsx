@@ -7,7 +7,10 @@ import type { Language } from './translations';
 const API_BASE_URL = 'http://179.41.4.182:7097';
 // ⚠️ Ganti dengan Client ID dari Discord Developer Portal Anda
 const DISCORD_CLIENT_ID = import.meta.env.VITE_DISCORD_CLIENT_ID || '';
-const DISCORD_REDIRECT_URI = 'https://donpollo-music-desktop.vercel.app/callback';
+// Redirect URI: otomatis pilih localhost (dev) atau Vercel (installed app)
+const DISCORD_REDIRECT_URI = window.location.hostname === 'localhost'
+  ? 'http://localhost:5173/callback.html'
+  : 'https://donpollo-music-desktop.vercel.app/callback';
 
 type Page = 'home' | 'library' | 'playlist' | 'playlist-detail' | 'settings';
 
