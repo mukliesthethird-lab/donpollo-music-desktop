@@ -1602,6 +1602,15 @@ body {
   background-color: var(--bg-card);
 }
 
+.queue-remove-btn {
+  opacity: 0;
+  transition: opacity 0.2s ease;
+}
+
+.queue-item:hover .queue-remove-btn {
+  opacity: 1;
+}
+
 .queue-item.playing {
   background-color: rgba(107, 70, 255, 0.1);
   border: 1px solid rgba(107, 70, 255, 0.2);

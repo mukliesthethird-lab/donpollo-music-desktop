@@ -22,6 +22,10 @@ contextBridge.exposeInMainWorld('electronAPI', {
   sendJoinRequest: (hostId: string, guestId: string, guestName: string) => ipcRenderer.invoke('send-join-request', hostId, guestId, guestName),
   pollJoinRequests: (userId: string) => ipcRenderer.invoke('poll-join-requests', userId),
   respondJoinRequest: (requestId: number, status: string) => ipcRenderer.invoke('respond-join-request', requestId, status),
+  sendQueueRequest: (hostId: string, guestId: string, guestName: string, songData: any) => ipcRenderer.invoke('send-queue-request', hostId, guestId, guestName, songData),
+  pollQueueRequests: (hostId: string) => ipcRenderer.invoke('poll-queue-requests', hostId),
+  respondQueueRequest: (requestId: number, status: string) => ipcRenderer.invoke('respond-queue-request', requestId, status),
+  romanizeLyrics: (text: string, lang: 'ko' | 'ja') => ipcRenderer.invoke('romanize-lyrics', text, lang),
   setActivity: (song: any, progressStr?: string) => ipcRenderer.send('set-activity', song, progressStr),
   clearActivity: () => ipcRenderer.send('clear-activity'),
   onDiscordOAuthToken: (callback: (token: string) => void) =>

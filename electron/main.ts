@@ -76,9 +76,23 @@ async function initDB() {
 
     try {
       await db.execute("ALTER TABLE online_users ADD COLUMN status VARCHAR(20) DEFAULT 'online'");
-    } catch (e: any) {
-      // Ignore error if column already exists
-    }
+    } catch (e: any) { }
+
+    try {
+      await db.execute("ALTER TABLE online_users ADD COLUMN queue LONGTEXT");
+    } catch (e: any) { }
+
+    await db.execute(`
+      CREATE TABLE IF NOT EXISTS queue_requests (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        host_id VARCHAR(255),
+        guest_id VARCHAR(255),
+        guest_name VARCHAR(255),
+        song_data LONGTEXT,
+        status VARCHAR(20) DEFAULT 'pending',
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      )
+    `);
 
     await db.execute(`
       CREATE TABLE IF NOT EXISTS join_requests (
@@ -348,13 +362,14 @@ ipcMain.handle('delete-playlist', async (event, id) => {
 ipcMain.handle('update-presence', async (event, data) => {
   if (!db) return false;
   try {
-    const { discordId, username, avatarUrl, currentSong, partyId, status } = data;
+    const { discordId, username, avatarUrl, currentSong, partyId, status, queue } = data;
     const songDataStr = currentSong ? JSON.stringify(currentSong) : '';
+    const queueStr = queue ? JSON.stringify(queue) : '';
     await db.execute(
-      `INSERT INTO online_users (discord_id, username, avatar_url, current_song, party_id, status, last_seen) 
-       VALUES (?, ?, ?, ?, ?, ?, NOW()) 
-       ON DUPLICATE KEY UPDATE username = ?, avatar_url = ?, current_song = ?, party_id = ?, status = ?, last_seen = NOW()`,
-      [discordId, username, avatarUrl, songDataStr, partyId || '', status || 'online', username, avatarUrl, songDataStr, partyId || '', status || 'online']
+      `INSERT INTO online_users (discord_id, username, avatar_url, current_song, party_id, status, queue, last_seen) 
+       VALUES (?, ?, ?, ?, ?, ?, ?, NOW()) 
+       ON DUPLICATE KEY UPDATE username = ?, avatar_url = ?, current_song = ?, party_id = ?, status = ?, queue = ?, last_seen = NOW()`,
+      [discordId, username, avatarUrl, songDataStr, partyId || '', status || 'online', queueStr, username, avatarUrl, songDataStr, partyId || '', status || 'online', queueStr]
     );
     return true;
   } catch (error) {
@@ -376,11 +391,64 @@ ipcMain.handle('get-online-users', async (event, currentUserId) => {
       avatarUrl: row.avatar_url,
       currentSong: row.current_song ? JSON.parse(row.current_song) : null,
       partyId: row.party_id,
+      status: row.status,
+      queue: row.queue ? JSON.parse(row.queue) : []
+    }));
+  } catch (error) {
+    console.error(error);
+    return [];
+  }
+});
+
+// QUEUE REQUESTS IPC
+ipcMain.handle('send-queue-request', async (event, hostId, guestId, guestName, songData) => {
+  if (!db) return false;
+  try {
+    const songStr = typeof songData === 'object' ? JSON.stringify(songData) : songData;
+    await db.execute(
+      `INSERT INTO queue_requests (host_id, guest_id, guest_name, song_data, status) VALUES (?, ?, ?, ?, 'pending')`,
+      [hostId, guestId, guestName, songStr]
+    );
+    return true;
+  } catch (error) {
+    console.error(error);
+    return false;
+  }
+});
+
+ipcMain.handle('poll-queue-requests', async (event, hostId) => {
+  if (!db) return [];
+  try {
+    // Auto-clean old queue requests
+    await db.execute('DELETE FROM queue_requests WHERE created_at < DATE_SUB(NOW(), INTERVAL 5 MINUTE)');
+    
+    const [rows] = await db.execute('SELECT * FROM queue_requests WHERE host_id = ? AND status = "pending"', [hostId]);
+    return (rows as any[]).map(row => ({
+      id: row.id,
+      hostId: row.host_id,
+      guestId: row.guest_id,
+      guestName: row.guest_name,
+      songData: row.song_data ? JSON.parse(row.song_data) : null,
       status: row.status
     }));
   } catch (error) {
     console.error(error);
     return [];
+  }
+});
+
+ipcMain.handle('respond-queue-request', async (event, requestId, status) => {
+  if (!db) return false;
+  try {
+    if (status === 'consumed') {
+      await db.execute('DELETE FROM queue_requests WHERE id = ?', [requestId]);
+    } else {
+      await db.execute('UPDATE queue_requests SET status = ? WHERE id = ?', [status, requestId]);
+    }
+    return true;
+  } catch (error) {
+    console.error(error);
+    return false;
   }
 });
 
@@ -562,6 +630,28 @@ ipcMain.on('download-update', () => {
 
 ipcMain.on('install-update', () => {
   autoUpdater.quitAndInstall();
+});
+
+// ROMANIZATION IPC
+let kuroshiroInstance: any = null;
+ipcMain.handle('romanize-lyrics', async (event, text: string, lang: 'ko' | 'ja') => {
+  try {
+    if (lang === 'ko') {
+      const aromanize = require('aromanize');
+      return aromanize.romanize(text);
+    } else if (lang === 'ja') {
+      if (!kuroshiroInstance) {
+        const Kuroshiro = require('kuroshiro');
+        const KuromojiAnalyzer = require('kuroshiro-analyzer-kuromoji');
+        kuroshiroInstance = new Kuroshiro();
+        await kuroshiroInstance.init(new KuromojiAnalyzer());
+      }
+      return await kuroshiroInstance.convert(text, { to: 'romaji', mode: 'spaced', romajiSystem: 'hepburn' });
+    }
+  } catch (error) {
+    console.error('Romanization error:', error);
+  }
+  return text;
 });
 
 // APP LIFECYCLE

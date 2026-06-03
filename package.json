@@ -68,9 +68,12 @@
     "wait-on": "^9.0.10"
   },
   "dependencies": {
+    "aromanize": "^0.1.5",
     "discord-rpc": "^4.0.1",
     "dotenv": "^17.4.2",
     "electron-updater": "^6.8.3",
+    "kuroshiro": "^1.2.0",
+    "kuroshiro-analyzer-kuromoji": "^1.1.0",
     "lucide-react": "^1.17.0",
     "mysql2": "^3.22.4",
     "react": "^19.2.7",

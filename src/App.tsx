@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { Home, Library, Plus, Mic2, Settings, Play, Pause, SkipBack, SkipForward, Repeat, Shuffle, Volume2, VolumeX, ListMusic, UserCircle, ChevronRight, Search, AlertCircle, Headset, Loader2, Maximize2, X, ChevronLeft, Music, PanelRight, Trash2, Heart, LogIn, LogOut, Check, FolderPlus, Globe, Headphones } from 'lucide-react';
 import './index.css';
 import { createTranslator } from './translations';
@@ -344,6 +344,12 @@ function App() {
   const [userStatus, setUserStatus] = useState<'online' | 'idle' | 'dnd'>(localStorage.getItem('donpollo_status') as any || 'online');
   const [joinRequests, setJoinRequests] = useState<{incoming: any[], outgoing: any[]}>({ incoming: [], outgoing: [] });
 
+  // ─── Queue ───────────────────────────────────────────────────
+  const [queue, setQueue] = useState<any[]>([]);
+  const [originalQueue, setOriginalQueue] = useState<any[]>([]);
+  const [currentIndex, setCurrentIndex] = useState(-1);
+  const [isShuffled, setIsShuffled] = useState(false);
+
   // ─── Listen Along & Presence Sync ───
   useEffect(() => {
     if (!discordUser) return;
@@ -363,7 +369,8 @@ function App() {
               timestamp: Date.now()
             } : null,
             partyId: activePartyId,
-            status: userStatus
+            status: userStatus,
+            queue: queue
           });
           const users = await (window as any).electronAPI.getOnlineUsers(discordUser.id);
           setOnlineUsers(users);
@@ -374,17 +381,42 @@ function App() {
 
           // Handle Guest acceptance automatically
           if (reqs.outgoing && reqs.outgoing.length > 0) {
-            const accepted = reqs.outgoing.find((r: any) => r.status === 'accepted');
-            const rejected = reqs.outgoing.find((r: any) => r.status === 'rejected');
+            const allAccepted = reqs.outgoing.filter((r: any) => r.status === 'accepted');
+            const allRejected = reqs.outgoing.filter((r: any) => r.status === 'rejected');
             
-            if (accepted && !isGuest) {
-              setActivePartyId(accepted.hostId);
-              setIsGuest(true);
-              showToast(`Request accepted! Listening along...`, 'success');
-              await (window as any).electronAPI.respondJoinRequest(accepted.id, 'consumed'); // clean up
-            } else if (rejected) {
+            if (allAccepted.length > 0) {
+              if (!isGuest) {
+                setActivePartyId(allAccepted[0].hostId);
+                setIsGuest(true);
+                showToast(`Request accepted! Listening along...`, 'success');
+              }
+              for (const req of allAccepted) {
+                await (window as any).electronAPI.respondJoinRequest(req.id, 'consumed');
+              }
+            }
+            
+            if (allRejected.length > 0) {
               showToast(t('joinRequestRejected'), 'error');
-              await (window as any).electronAPI.respondJoinRequest(rejected.id, 'consumed'); // clean up
+              for (const req of allRejected) {
+                await (window as any).electronAPI.respondJoinRequest(req.id, 'consumed');
+              }
+            }
+          }
+
+          // Poll Queue requests
+          if (!isGuest) {
+            const queueReqs = await (window as any).electronAPI.pollQueueRequests(discordUser.id);
+            if (queueReqs && queueReqs.length > 0) {
+              setQueue((prevQueue: any[]) => {
+                const newQueue = [...prevQueue];
+                for (const req of queueReqs) {
+                  newQueue.push(req.songData);
+                  showToast(`${req.guestName} menambahkan lagu ke antrean!`, 'success');
+                  (window as any).electronAPI.respondQueueRequest(req.id, 'consumed');
+                }
+                setOriginalQueue(newQueue);
+                return newQueue;
+              });
             }
           }
 
@@ -398,10 +430,11 @@ function App() {
     const intervalMs = isGuest ? 1000 : 5000;
     const presenceInterval = setInterval(syncPresence, intervalMs);
     return () => clearInterval(presenceInterval);
-  }, [discordUser, currentSong, activePartyId, userStatus, isGuest]);
+  }, [discordUser, currentSong, activePartyId, userStatus, isGuest, queue]);
 
   // ─── Lyrics ──────────────────────────────────────────────────
-  const [lyricsData, setLyricsData] = useState<{ time: number, text: string, isInstrumental?: boolean }[] | null>(null);
+  const [lyricsData, setLyricsData] = useState<{ time: number, text: string, romanizedText?: string, isInstrumental?: boolean }[] | null>(null);
+  const [showRomanized, setShowRomanized] = useState(true);
   const [plainLyrics, setPlainLyrics] = useState<string>('');
   const [lyricsOffset, setLyricsOffset] = useState<number>(0);
   const sidebarLyricsRef = useRef<HTMLDivElement>(null);
@@ -412,13 +445,11 @@ function App() {
   const scrollTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [showWidgetOverlay, setShowWidgetOverlay] = useState(false);
 
-  // ─── Queue ───────────────────────────────────────────────────
-  const [queue, setQueue] = useState<any[]>([]);
-  const [originalQueue, setOriginalQueue] = useState<any[]>([]);
-  const [currentIndex, setCurrentIndex] = useState(-1);
-  const [isShuffled, setIsShuffled] = useState(false);
+  // ─── Queue State Moved Up
 
   const audioRef = useRef<HTMLAudioElement | null>(null);
+  const fadeAudioRef = useRef<HTMLAudioElement | null>(null);
+  const isCrossfadingRef = useRef(false);
   const recentScrollRef = useRef<HTMLDivElement>(null);
   const recsScrollRef = useRef<HTMLDivElement>(null);
 
@@ -528,21 +559,83 @@ function App() {
   }, []);
 
   // ─── Audio Setup ─────────────────────────────────────────────
-  useEffect(() => {
-    const audio = new Audio();
-    audioRef.current = audio;
-    const handleTimeUpdate = () => setProgress(audio.currentTime);
-    const handleEnded = () => handleNextRef.current();
-    const handleError = () => setIsPlaying(false);
+  const setupAudioListeners = useCallback((audio: HTMLAudioElement) => {
+    const handleTimeUpdate = () => {
+      if (audioRef.current !== audio) return;
+      setProgress(audio.currentTime);
+    };
+    const handleEnded = () => {
+      if (audioRef.current !== audio) return;
+      handleNextRef.current();
+    };
+    const handleError = () => {
+      if (audioRef.current !== audio) return;
+      setIsPlaying(false);
+    };
     audio.addEventListener('timeupdate', handleTimeUpdate);
     audio.addEventListener('ended', handleEnded);
     audio.addEventListener('error', handleError);
-    return () => {
-      audio.removeEventListener('timeupdate', handleTimeUpdate);
-      audio.removeEventListener('ended', handleEnded);
-      audio.removeEventListener('error', handleError);
-    };
   }, []);
+
+  useEffect(() => {
+    const audio = new Audio();
+    audioRef.current = audio;
+    setupAudioListeners(audio);
+    return () => {
+      if (audioRef.current) audioRef.current.pause();
+    };
+  }, [setupAudioListeners]);
+
+  // ─── Crossfade Monitor ───
+  useEffect(() => {
+    const interval = setInterval(() => {
+      const audio = audioRef.current;
+      if (!audio || isGuest || isCrossfadingRef.current || queue.length <= currentIndex + 1) return;
+      
+      const cfDurStr = localStorage.getItem('donpollo_crossfade');
+      const cfDuration = cfDurStr ? parseInt(cfDurStr) : 0;
+      
+      if (cfDuration > 0 && audio.duration > 0 && audio.currentTime >= audio.duration - cfDuration) {
+        isCrossfadingRef.current = true;
+        const oldAudio = audio;
+        fadeAudioRef.current = oldAudio;
+        
+        const fadeStep = oldAudio.volume / (cfDuration * 10);
+        const fadeOutInt = setInterval(() => {
+          if (oldAudio.volume - fadeStep > 0) {
+            oldAudio.volume -= fadeStep;
+          } else {
+            oldAudio.volume = 0;
+            oldAudio.pause();
+            oldAudio.src = '';
+            clearInterval(fadeOutInt);
+            if (fadeAudioRef.current === oldAudio) fadeAudioRef.current = null;
+          }
+        }, 100);
+
+        const newAudio = new Audio();
+        audioRef.current = newAudio;
+        setupAudioListeners(newAudio);
+        newAudio.volume = 0;
+        newAudio.loop = isLooping;
+
+        const targetVol = isMuted ? 0 : volume;
+        const inStep = targetVol / (cfDuration * 10);
+        const fadeInInt = setInterval(() => {
+          if (newAudio.volume + inStep < targetVol) {
+            newAudio.volume += inStep;
+          } else {
+            newAudio.volume = targetVol;
+            clearInterval(fadeInInt);
+            isCrossfadingRef.current = false;
+          }
+        }, 100);
+
+        handleNextRef.current();
+      }
+    }, 500);
+    return () => clearInterval(interval);
+  }, [isGuest, queue, currentIndex, volume, isMuted, isLooping, setupAudioListeners]);
 
   useEffect(() => {
     if (audioRef.current) {
@@ -875,8 +968,38 @@ function App() {
         
         if (bestMatch && bestMatch.syncedLyrics) {
           const parsed = parseLRC(bestMatch.syncedLyrics);
-          if (parsed) setLyricsData(parsed);
-          else setPlainLyrics(bestMatch.plainLyrics || t('lyricsNotLRC'));
+          if (parsed) {
+            setLyricsData(parsed);
+            
+            // Auto Romanization
+            setTimeout(async () => {
+              try {
+                const textSample = parsed.map((p: any) => p.text).join(' ');
+                let lang: 'ko' | 'ja' | null = null;
+                if (/[\uac00-\ud7af\u1100-\u11ff\u3130-\u318f]/.test(textSample)) lang = 'ko';
+                else if (/[\u3040-\u30ff\u3400-\u4dbf\u4e00-\u9fff]/.test(textSample)) lang = 'ja';
+                
+                if (lang && (window as any).electronAPI) {
+                  const combinedText = parsed.map((p: any) => p.text || '').join('\n');
+                  const romText = await (window as any).electronAPI.romanizeLyrics(combinedText, lang);
+                  if (romText) {
+                    const romLines = romText.split('\n');
+                    setLyricsData(prev => {
+                      if (!prev) return prev;
+                      return prev.map((item, i) => ({
+                        ...item,
+                        romanizedText: romLines[i] ? romLines[i].trim() : undefined
+                      }));
+                    });
+                  }
+                }
+              } catch (e) {
+                console.error('Romanization failed', e);
+              }
+            }, 100);
+          } else {
+            setPlainLyrics(bestMatch.plainLyrics || t('lyricsNotLRC'));
+          }
         } else if (bestMatch && bestMatch.plainLyrics) {
           setPlainLyrics(bestMatch.plainLyrics);
         } else {
@@ -959,6 +1082,12 @@ function App() {
             }
           }
         }
+        
+        // Sync queue for guest
+        if (hostUser.queue && hostUser.queue.length > 0) {
+           setQueue(hostUser.queue);
+           setOriginalQueue(hostUser.queue);
+        }
       }
     }
   }, [onlineUsers, isGuest, activePartyId, currentSong]);
@@ -972,9 +1101,16 @@ function App() {
     });
   };
 
-  const startPlayingFromList = (list: any[], startIndex: number) => {
+  const startPlayingFromList = async (list: any[], startIndex: number) => {
     if (!list || list.length === 0) return;
     const song = list[startIndex];
+    
+    if (isGuest && activePartyId) {
+       await (window as any).electronAPI.sendQueueRequest(activePartyId, discordUser?.id, discordUser?.global_name || discordUser?.username, song);
+       showToast(`Berhasil meminta Host untuk menambahkan "${song.title}" ke antrean!`, 'success');
+       return;
+    }
+
     setQueue(list);
     setOriginalQueue(list);
     if (isShuffled) {
@@ -999,7 +1135,13 @@ function App() {
   };
   handleNextRef.current = handleNext;
 
-  const playSingleSong = (song: any) => {
+  const playSingleSong = async (song: any) => {
+    if (isGuest && activePartyId) {
+       await (window as any).electronAPI.sendQueueRequest(activePartyId, discordUser?.id, discordUser?.global_name || discordUser?.username, song);
+       showToast(`Berhasil meminta Host untuk menambahkan "${song.title}" ke antrean!`, 'success');
+       return;
+    }
+
     setQueue([song]);
     setOriginalQueue([song]);
     setCurrentIndex(0);
@@ -1403,6 +1545,24 @@ function App() {
             <option value="auto">{t('qualityAuto')}</option>
             <option value="high">{t('qualityHigh')}</option>
             <option value="medium">{t('qualityMedium')}</option>
+          </select>
+        </div>
+        <div className="settings-row">
+          <div>
+            <div className="settings-label">Crossfade (Transisi Mulus)</div>
+            <div className="settings-desc">Hilangkan jeda antar lagu dengan efek fade in/out</div>
+          </div>
+          <select className="settings-select"
+            value={localStorage.getItem('donpollo_crossfade') || '0'}
+            onChange={e => {
+              localStorage.setItem('donpollo_crossfade', e.target.value);
+              setSettings((p: any) => ({ ...p, crossfade: e.target.value }));
+            }}>
+            <option value="0">Mati (Off)</option>
+            <option value="3">3 Detik</option>
+            <option value="5">5 Detik</option>
+            <option value="7">7 Detik</option>
+            <option value="10">10 Detik</option>
           </select>
         </div>
       </div>
@@ -2484,7 +2644,21 @@ function App() {
             {showLyrics ? (
               <div className="lyrics-mode" style={{ position: 'relative', zIndex: 1 }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
-                  <div style={{ fontSize: '12px', color: 'var(--text-muted)', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '1px' }}>Sync</div>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                    <div style={{ fontSize: '12px', color: 'var(--text-muted)', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '1px' }}>Sync</div>
+                    <button 
+                      onClick={() => setShowRomanized(!showRomanized)} 
+                      style={{ 
+                        background: showRomanized ? 'var(--accent-primary)' : 'transparent', 
+                        border: '1px solid var(--accent-primary)', 
+                        color: showRomanized ? 'white' : 'var(--accent-primary)', 
+                        fontSize: '10px', padding: '2px 6px', borderRadius: '4px', cursor: 'pointer', fontWeight: 600
+                      }}
+                      title="Toggle Romanization"
+                    >
+                      A/文
+                    </button>
+                  </div>
                   <div style={{ display: 'flex', gap: '4px', backgroundColor: 'var(--bg-card)', padding: '4px', borderRadius: '12px', border: '1px solid var(--border-color)' }}>
                     <button onClick={() => setLyricsOffset(prev => prev - 0.5)} style={{ background: 'transparent', border: 'none', color: 'var(--text-secondary)', fontSize: '11px', padding: '4px 8px', borderRadius: '8px', cursor: 'pointer' }}>-0.5s</button>
                     <div style={{ backgroundColor: 'var(--accent-primary)', color: 'white', fontSize: '11px', fontWeight: 'bold', padding: '4px 12px', borderRadius: '8px', display: 'flex', alignItems: 'center' }}>{lyricsOffset}s</div>
@@ -2509,7 +2683,7 @@ function App() {
                       }
                       return (
                         <div key={i} data-lyric-idx={i} className={`lyrics-line ${isActive ? 'active' : 'inactive'}`} onClick={() => jumpToLyric(line.time)}>
-                          {line.text}
+                          {showRomanized && line.romanizedText ? line.romanizedText : line.text}
                         </div>
                       );
                     })
@@ -2524,13 +2698,42 @@ function App() {
                   if (idx < currentIndex) return null;
                   const isPlayingNow = currentSong?.id === song.id;
                   return (
-                    <div key={idx} className={`queue-item ${isPlayingNow ? 'playing' : ''}`} onClick={() => { setCurrentIndex(idx); executePlay(song); }}>
-                      <img src={getCleanThumbnail(song.thumbnail)} alt={song.title} style={{ width: '40px', height: '40px', borderRadius: '6px', objectFit: 'cover' }} />
-                      <div style={{ flex: 1, overflow: 'hidden' }}>
-                        <div title={song.title} style={{ fontSize: "13px", fontWeight: 600}}>{song.title}</div>
-                        <div style={{ fontSize: '12px', color: 'var(--text-secondary)' }}>{song.artist}</div>
+                    <div key={idx} className={`queue-item ${isPlayingNow ? 'playing' : ''}`} style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                      <div style={{ display: 'flex', flex: 1, alignItems: 'center', gap: '12px', cursor: 'pointer', minWidth: 0 }} onClick={() => { setCurrentIndex(idx); executePlay(song); }}>
+                        <img src={getCleanThumbnail(song.thumbnail)} alt={song.title} style={{ width: '40px', height: '40px', borderRadius: '6px', objectFit: 'cover', flexShrink: 0 }} />
+                        <div style={{ flex: 1, overflow: 'hidden', minWidth: 0 }}>
+                          <div title={song.title} style={{ fontSize: "13px", fontWeight: 600, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{song.title}</div>
+                          <div style={{ fontSize: '12px', color: 'var(--text-secondary)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{song.artist}</div>
+                        </div>
+                        <div style={{ fontSize: '12px', color: 'var(--text-muted)', flexShrink: 0 }}>{formatTime(song.duration)}</div>
                       </div>
-                      <div style={{ fontSize: '12px', color: 'var(--text-muted)' }}>{formatTime(song.duration)}</div>
+                      
+                      {!isPlayingNow && (
+                        <button 
+                          className="queue-remove-btn"
+                          style={{
+                            background: 'transparent', border: 'none', color: 'var(--text-muted)', cursor: 'pointer', padding: '4px',
+                            display: 'flex', alignItems: 'center', justifyContent: 'center', borderRadius: '4px', flexShrink: 0
+                          }}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            if (isGuest) {
+                              showToast('Hanya Host yang bisa menghapus lagu dari antrean.', 'error');
+                              return;
+                            }
+                            setQueue(prev => {
+                              const newQ = [...prev];
+                              newQ.splice(idx, 1);
+                              setOriginalQueue(newQ);
+                              return newQ;
+                            });
+                          }}
+                          onMouseEnter={(e) => e.currentTarget.style.color = 'var(--accent-primary)'}
+                          onMouseLeave={(e) => e.currentTarget.style.color = 'var(--text-muted)'}
+                        >
+                          <X size={16} />
+                        </button>
+                      )}
                     </div>
                   );
                 })}
