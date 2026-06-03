@@ -7,7 +7,7 @@ import type { Language } from './translations';
 const API_BASE_URL = 'http://179.41.4.182:7097';
 // ⚠️ Ganti dengan Client ID dari Discord Developer Portal Anda
 const DISCORD_CLIENT_ID = import.meta.env.VITE_DISCORD_CLIENT_ID || '';
-const DISCORD_REDIRECT_URI = window.location.origin + '/callback';
+const DISCORD_REDIRECT_URI = 'https://donpollo-music-desktop.vercel.app/callback';
 
 type Page = 'home' | 'library' | 'playlist' | 'playlist-detail' | 'settings';
 
@@ -211,6 +211,28 @@ function App() {
           setUpdateStatus('downloaded');
         });
       }
+    }
+  }, []);
+
+  // Handle Discord OAuth token received from deep-link (installed app flow)
+  useEffect(() => {
+    const api = (window as any).electronAPI;
+    if (api && api.onDiscordOAuthToken) {
+      api.onDiscordOAuthToken(async (token: string) => {
+        try {
+          const res = await fetch('https://discord.com/api/users/@me', {
+            headers: { Authorization: `Bearer ${token}` },
+          });
+          if (!res.ok) return;
+          const user = await res.json();
+          localStorage.setItem('donpollo_user', JSON.stringify(user));
+          localStorage.setItem('donpollo_discord_token', token);
+          setDiscordUser(user);
+          showToast('Login Discord berhasil! 🎉', 'success');
+        } catch (e) {
+          console.error('Discord deep-link login error:', e);
+        }
+      });
     }
   }, []);
 

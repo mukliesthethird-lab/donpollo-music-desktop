@@ -1,0 +1,67 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>DonPollo – Connecting...</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      background: #0B0B10;
+      color: #fff;
+      font-family: 'Inter', sans-serif;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      height: 100vh;
+      flex-direction: column;
+      gap: 16px;
+    }
+    .logo { font-size: 32px; font-weight: 800; letter-spacing: -1px; }
+    .logo span { color: #5865F2; }
+    .msg { color: rgba(255,255,255,0.6); font-size: 14px; }
+    .spinner {
+      width: 32px; height: 32px;
+      border: 3px solid rgba(255,255,255,0.1);
+      border-top-color: #5865F2;
+      border-radius: 50%;
+      animation: spin 0.8s linear infinite;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    .error { color: #ff6b6b; font-size: 13px; display: none; }
+  </style>
+</head>
+<body>
+  <div class="logo">Don<span>Pollo</span></div>
+  <div class="spinner"></div>
+  <p class="msg" id="msg">Menghubungkan ke Discord...</p>
+  <p class="error" id="err"></p>
+
+  <script>
+    // Discord sends token in the URL hash after redirect
+    const hash = window.location.hash.substring(1); // remove '#'
+    const params = new URLSearchParams(hash);
+    const token = params.get('access_token');
+    const error = params.get('error');
+
+    if (error) {
+      document.getElementById('spinner') && (document.querySelector('.spinner').style.display = 'none');
+      document.getElementById('msg').textContent = 'Login dibatalkan.';
+      document.getElementById('err').style.display = 'block';
+      document.getElementById('err').textContent = 'Error: ' + (params.get('error_description') || error);
+    } else if (token) {
+      document.getElementById('msg').textContent = 'Berhasil! Membuka aplikasi...';
+      // Redirect to custom Electron protocol, carrying the token
+      const deepLink = 'donpollo://callback#' + hash;
+      window.location.href = deepLink;
+
+      // Fallback message if app isn't installed
+      setTimeout(() => {
+        document.getElementById('msg').textContent = 'Jika app tidak terbuka, pastikan DonPollo sudah terinstall.';
+      }, 3000);
+    } else {
+      document.getElementById('msg').textContent = 'Tidak ada token diterima. Silakan coba login lagi.';
+    }
+  </script>
+</body>
+</html>

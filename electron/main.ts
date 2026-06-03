@@ -13,6 +13,27 @@ let mainWindow: BrowserWindow | null = null;
 let miniPlayerWindow: BrowserWindow | null = null;
 let db: mysql.Connection | null = null;
 
+// Register custom protocol for OAuth deep-linking
+if (process.defaultApp) {
+  if (process.argv.length >= 2) {
+    app.setAsDefaultProtocolClient('donpollo', process.execPath, [path.resolve(process.argv[1])]);
+  }
+} else {
+  app.setAsDefaultProtocolClient('donpollo');
+}
+
+function handleDeepLink(url: string) {
+  // url = donpollo://callback#access_token=xxx&token_type=Bearer&...
+  if (!mainWindow) return;
+  const hash = url.split('#')[1] || '';
+  const params = new URLSearchParams(hash);
+  const token = params.get('access_token');
+  if (token) {
+    mainWindow.webContents.send('discord-oauth-token', token);
+    mainWindow.focus();
+  }
+}
+
 async function initDB() {
   try {
     db = await mysql.createConnection({
@@ -399,6 +420,12 @@ app.whenReady().then(async () => {
   await initDB();
   createWindow();
 
+  // Handle deep-link on macOS (open-url)
+  app.on('open-url', (event, url) => {
+    event.preventDefault();
+    handleDeepLink(url);
+  });
+
   // Check for updates after a short delay
   setTimeout(() => {
     if (!isDev) {
@@ -411,6 +438,17 @@ app.whenReady().then(async () => {
       createWindow();
     }
   });
+});
+
+// Handle deep-link on Windows/Linux (second-instance)
+app.on('second-instance', (_event, commandLine) => {
+  // The URL will be the last element of commandLine
+  const url = commandLine.find(arg => arg.startsWith('donpollo://'));
+  if (url) handleDeepLink(url);
+  if (mainWindow) {
+    if (mainWindow.isMinimized()) mainWindow.restore();
+    mainWindow.focus();
+  }
 });
 
 app.on('window-all-closed', () => {

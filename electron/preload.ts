@@ -20,4 +20,6 @@ contextBridge.exposeInMainWorld('electronAPI', {
   deleteParty: (partyId: string) => ipcRenderer.invoke('delete-party', partyId),
   setActivity: (song: any, progressStr?: string) => ipcRenderer.send('set-activity', song, progressStr),
   clearActivity: () => ipcRenderer.send('clear-activity'),
+  onDiscordOAuthToken: (callback: (token: string) => void) =>
+    ipcRenderer.on('discord-oauth-token', (_event, token) => callback(token)),
 });
