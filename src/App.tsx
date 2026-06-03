@@ -647,10 +647,13 @@ function App() {
 
   // ─── Discord Auth Functions ──────────────────────────────────
   const loginWithDiscord = async () => {
+    const scope = encodeURIComponent('identify');
+    const authUrl = `https://discord.com/api/oauth2/authorize?client_id=${DISCORD_CLIENT_ID}&redirect_uri=${encodeURIComponent(DISCORD_REDIRECT_URI)}&response_type=token&scope=${scope}`;
+
     const api = (window as any).electronAPI;
     if (api && api.discordLogin) {
       // Electron: open a popup window, never navigate away from main window
-      const token = await api.discordLogin();
+      const token = await api.discordLogin(authUrl);
       if (token) {
         try {
           const res = await fetch('https://discord.com/api/users/@me', {
@@ -668,9 +671,7 @@ function App() {
       }
     } else {
       // Browser fallback (dev without Electron)
-      const scope = encodeURIComponent('identify');
-      const url = `https://discord.com/api/oauth2/authorize?client_id=${DISCORD_CLIENT_ID}&redirect_uri=${encodeURIComponent(DISCORD_REDIRECT_URI)}&response_type=token&scope=${scope}`;
-      window.location.href = url;
+      window.location.href = authUrl;
     }
   };
 

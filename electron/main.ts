@@ -188,12 +188,7 @@ function createMiniPlayerWindow() {
 // IPC HANDLERS
 
 // Discord OAuth - opens a popup, never navigates the main window
-ipcMain.handle('discord-login', async () => {
-  const clientId = process.env.VITE_DISCORD_CLIENT_ID || '';
-  const redirectUri = encodeURIComponent('https://donpollo-music-desktop.vercel.app/callback');
-  const scope = encodeURIComponent('identify');
-  const authUrl = `https://discord.com/api/oauth2/authorize?client_id=${clientId}&redirect_uri=${redirectUri}&response_type=token&scope=${scope}`;
-
+ipcMain.handle('discord-login', async (_event, authUrl: string) => {
   return new Promise<string | null>((resolve) => {
     const popup = new BrowserWindow({
       width: 500,

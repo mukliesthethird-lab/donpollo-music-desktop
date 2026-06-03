@@ -1,7 +1,7 @@
 import { contextBridge, ipcRenderer } from 'electron';
 
 contextBridge.exposeInMainWorld('electronAPI', {
-  discordLogin: () => ipcRenderer.invoke('discord-login'),
+  discordLogin: (authUrl: string) => ipcRenderer.invoke('discord-login', authUrl),
   enterMiniPlayer: () => ipcRenderer.send('enter-mini-player'),
   exitMiniPlayer: () => ipcRenderer.send('exit-mini-player'),
   closeMiniPlayerWindow: () => ipcRenderer.send('close-mini-player-window'),
