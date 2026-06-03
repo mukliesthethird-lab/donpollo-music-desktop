@@ -356,7 +356,12 @@ function App() {
             discordId: discordUser.id,
             username: discordUser.global_name || discordUser.username,
             avatarUrl: avatar,
-            currentSong: currentSong,
+            currentSong: currentSong ? {
+              ...currentSong,
+              currentTime: audioRef.current?.currentTime || 0,
+              isPlaying: audioRef.current ? !audioRef.current.paused : false,
+              timestamp: Date.now()
+            } : null,
             partyId: activePartyId,
             status: userStatus
           });
@@ -390,7 +395,8 @@ function App() {
     };
 
     syncPresence();
-    const presenceInterval = setInterval(syncPresence, 5000);
+    const intervalMs = isGuest ? 1000 : 5000;
+    const presenceInterval = setInterval(syncPresence, intervalMs);
     return () => clearInterval(presenceInterval);
   }, [discordUser, currentSong, activePartyId, userStatus, isGuest]);
 
@@ -884,7 +890,7 @@ function App() {
     }
   };
 
-  const executePlay = async (song: any) => {
+  const executePlay = async (song: any, startTime?: number) => {
     try {
       setLyricsData(null);
       setLyricsOffset(0);
@@ -894,6 +900,9 @@ function App() {
         setCurrentSong(song);
         setDuration(song.duration || 0);
         audioRef.current.src = `${API_BASE_URL}/api/stream?id=${song.id}`;
+        if (startTime !== undefined) {
+          audioRef.current.currentTime = startTime;
+        }
         audioRef.current.play().catch(async (err) => {
           if (err.name === 'AbortError') return;
           showToast(t('toastServerBlocked'));
@@ -924,8 +933,31 @@ function App() {
     if (isGuest && activePartyId) {
       const hostUser = onlineUsers.find(u => u.discordId === activePartyId);
       if (hostUser && hostUser.currentSong) {
-        if (!currentSong || currentSong.id !== hostUser.currentSong.id) {
-          executePlay(hostUser.currentSong);
+        const hs = hostUser.currentSong;
+        
+        // Calculate exact time based on elapsed time since host reported it
+        const elapsed = hs.timestamp ? (Date.now() - hs.timestamp) / 1000 : 0;
+        let targetTime = (hs.currentTime || 0);
+        if (hs.isPlaying) {
+          targetTime += elapsed;
+        }
+
+        if (!currentSong || currentSong.id !== hs.id) {
+          executePlay(hs, targetTime);
+        } else {
+          // If already playing the same song, check if we need to sync time or play/pause state
+          if (audioRef.current) {
+            if (hs.isPlaying && audioRef.current.paused) {
+              audioRef.current.play().catch(()=>{});
+            } else if (!hs.isPlaying && !audioRef.current.paused) {
+              audioRef.current.pause();
+            }
+
+            // If we are out of sync by more than 3 seconds, forcefully seek to catch up
+            if (Math.abs(audioRef.current.currentTime - targetTime) > 3) {
+              audioRef.current.currentTime = targetTime;
+            }
+          }
         }
       }
     }
