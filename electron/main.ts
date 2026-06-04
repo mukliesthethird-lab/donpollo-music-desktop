@@ -623,8 +623,9 @@ autoUpdater.on('update-available', (info) => {
   if (mainWindow) mainWindow.webContents.send('update-available', info);
 });
 
-autoUpdater.on('error', (err) => {
-  if (mainWindow) mainWindow.webContents.send('update-error', err.message);
+autoUpdater.on('error', (err: any) => {
+  const msg = err instanceof Error ? err.message : err?.toString() || 'Unknown error';
+  if (mainWindow) mainWindow.webContents.send('update-error', msg);
 });
 
 autoUpdater.on('update-downloaded', (info) => {
