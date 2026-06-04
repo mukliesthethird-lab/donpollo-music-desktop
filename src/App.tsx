@@ -2508,11 +2508,12 @@ function App() {
 
             <div className="friend-list">
               {(() => {
-                const currentPartyMembers = onlineUsers.filter(u => activePartyId && (u.partyId === activePartyId || u.discordId === activePartyId));
-                const otherFriends = onlineUsers.filter(u => !activePartyId || (u.partyId !== activePartyId && u.discordId !== activePartyId));
+                const effectivePartyId = activePartyId || (discordUser && onlineUsers.some(u => u.partyId === discordUser.id) ? discordUser.id : null);
+                const currentPartyMembers = onlineUsers.filter(u => effectivePartyId && (u.partyId === effectivePartyId || u.discordId === effectivePartyId));
+                const otherFriends = onlineUsers.filter(u => !effectivePartyId || (u.partyId !== effectivePartyId && u.discordId !== effectivePartyId));
                 
                 const partyAvatars = [];
-                if (activePartyId && discordUser) {
+                if (effectivePartyId && discordUser) {
                   partyAvatars.push({
                     id: discordUser.id,
                     url: discordUser.avatar ? `https://cdn.discordapp.com/avatars/${discordUser.id}/${discordUser.avatar}.png` : `https://ui-avatars.com/api/?name=${discordUser.username}`,
@@ -2529,7 +2530,7 @@ function App() {
 
                 return (
                   <>
-                    {activePartyId && partyAvatars.length > 0 && (
+                    {effectivePartyId && partyAvatars.length > 0 && (
                       <div className="friend-item current-party-block" style={{ flexDirection: 'row', alignItems: 'center', padding: '10px', background: 'rgba(255,255,255,0.03)', borderRadius: '8px', position: 'relative', marginBottom: '8px', width: '100%', boxSizing: 'border-box' }}>
                         <div className="party-avatars" style={{ display: 'flex', marginRight: '12px' }}>
                           {partyAvatars.map((av, idx) => (
@@ -2566,23 +2567,25 @@ function App() {
                             <div className="friend-song" style={{ fontSize: '12px', color: 'var(--text-muted)' }}>Browsing...</div>
                           )}
                         </div>
-                        <button 
-                          className="leave-party-icon-btn" 
-                          onClick={() => {
-                            setIsGuest(false);
-                            setActivePartyId(null);
-                            if (audioRef.current) audioRef.current.pause();
-                            setIsPlaying(false);
-                          }}
-                          title={t('leaveParty')}
-                          style={{ marginLeft: '8px' }}
-                        >
-                          <LogOut size={16} />
-                        </button>
+                        {isGuest && (
+                          <button 
+                            className="leave-party-icon-btn" 
+                            onClick={() => {
+                              setIsGuest(false);
+                              setActivePartyId(null);
+                              if (audioRef.current) audioRef.current.pause();
+                              setIsPlaying(false);
+                            }}
+                            title={t('leaveParty')}
+                            style={{ marginLeft: '8px' }}
+                          >
+                            <LogOut size={16} />
+                          </button>
+                        )}
                       </div>
                     )}
 
-                    {otherFriends.length === 0 && !activePartyId ? (
+                    {otherFriends.length === 0 && !effectivePartyId ? (
                       <div style={{ color: 'var(--text-muted)', fontSize: '11px', textAlign: 'center', marginTop: '12px' }}>{t('noFriendsOnline')}</div>
                     ) : (
                       otherFriends.map(user => (
@@ -2746,8 +2749,14 @@ function App() {
                             <button
                               className="suggestion-btn"
                               title={t('addToQueue')}
-                              onClick={(e) => {
+                              onClick={async (e) => {
                                 e.stopPropagation();
+                                if (isGuest && activePartyId) {
+                                  await (window as any).electronAPI.sendQueueRequest(activePartyId, discordUser?.id, discordUser?.global_name || discordUser?.username, song);
+                                  showToast(`Berhasil meminta Host untuk menambahkan "${song.title}" ke antrean!`, 'success');
+                                  setShowSuggestions(false);
+                                  return;
+                                }
                                 setQueue(prev => [...prev, song]);
                                 setOriginalQueue(prev => [...prev, song]);
                                 if (currentIndex === -1) {
@@ -3128,7 +3137,13 @@ function App() {
               <Play size={16} /> {t('playNext')}
             </div>
           )}
-          <div className="context-menu-item" onClick={() => {
+          <div className="context-menu-item" onClick={async () => {
+            if (isGuest && activePartyId) {
+              await (window as any).electronAPI.sendQueueRequest(activePartyId, discordUser?.id, discordUser?.global_name || discordUser?.username, contextMenu.song);
+              showToast(`Berhasil meminta Host untuk menambahkan "${contextMenu.song.title}" ke antrean!`, 'success');
+              setContextMenu(null);
+              return;
+            }
             setQueue(prev => [...prev, contextMenu.song]);
             setOriginalQueue(prev => [...prev, contextMenu.song]);
             if (currentIndex === -1) {
