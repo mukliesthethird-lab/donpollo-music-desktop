@@ -649,16 +649,8 @@ function App() {
         newAudio.loop = isLooping;
 
         const targetVol = isMuted ? 0 : volume;
-        const inStep = targetVol / (cfDuration * 10);
-        const fadeInInt = setInterval(() => {
-          if (newAudio.volume + inStep < targetVol) {
-            newAudio.volume += inStep;
-          } else {
-            newAudio.volume = targetVol;
-            clearInterval(fadeInInt);
-            isCrossfadingRef.current = false;
-          }
-        }, 100);
+        newAudio.volume = targetVol;
+        isCrossfadingRef.current = false;
 
         handleNextRef.current();
       }
@@ -1163,7 +1155,13 @@ function App() {
         }
 
         if (!currentSong || currentSong.id !== hs.id) {
-          executePlay(hs, targetTime);
+          // Abaikan broadcast host jika host masih tertinggal (lagging) dari eager advance kita
+          const lastAdvance = (window as any).lastGuestAdvance || 0;
+          const isStaleHost = (Date.now() - lastAdvance < 15000) && queue[currentIndex - 1]?.id === hs.id;
+          
+          if (!isStaleHost) {
+            executePlay(hs, targetTime);
+          }
         } else {
           // If already playing the same song, check if we need to sync time or play/pause state
           if (audioRef.current) {
@@ -1224,6 +1222,9 @@ function App() {
   const handleNextRef = useRef<() => void>(() => { });
   const handleNext = async () => {
     if (currentIndex < queue.length - 1) {
+      if (isGuest) {
+        (window as any).lastGuestAdvance = Date.now();
+      }
       setCurrentIndex(currentIndex + 1);
       executePlay(queue[currentIndex + 1]);
     } else {
@@ -1646,8 +1647,8 @@ function App() {
         </div>
         <div className="settings-row">
           <div>
-            <div className="settings-label">Crossfade (Transisi Mulus)</div>
-            <div className="settings-desc">Hilangkan jeda antar lagu dengan efek fade in/out</div>
+            <div className="settings-label">{t('crossfadeLabel')}</div>
+            <div className="settings-desc">{t('crossfadeDesc')}</div>
           </div>
           <select className="settings-select"
             value={localStorage.getItem('donpollo_crossfade') || '0'}
@@ -1655,11 +1656,11 @@ function App() {
               localStorage.setItem('donpollo_crossfade', e.target.value);
               setSettings((p: any) => ({ ...p, crossfade: e.target.value }));
             }}>
-            <option value="0">Mati (Off)</option>
-            <option value="3">3 Detik</option>
-            <option value="5">5 Detik</option>
-            <option value="7">7 Detik</option>
-            <option value="10">10 Detik</option>
+            <option value="0">{t('crossfadeOff')}</option>
+            <option value="3">3 {t('crossfadeSec')}</option>
+            <option value="5">5 {t('crossfadeSec')}</option>
+            <option value="7">7 {t('crossfadeSec')}</option>
+            <option value="10">10 {t('crossfadeSec')}</option>
           </select>
         </div>
       </div>

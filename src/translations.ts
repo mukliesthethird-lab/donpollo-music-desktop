@@ -119,6 +119,10 @@ type TranslationKeys = {
   qualityAuto: string;
   qualityHigh: string;
   qualityMedium: string;
+  crossfadeLabel: string;
+  crossfadeDesc: string;
+  crossfadeOff: string;
+  crossfadeSec: string;
   displaySection: string;
   autoLyrics: string;
   autoLyricsDesc: string;
@@ -285,10 +289,14 @@ const translations: Record<Language, TranslationKeys> = {
     defaultVolume: 'Volume Default',
     defaultVolumeDesc: 'Volume yang digunakan saat aplikasi pertama dibuka',
     audioQuality: 'Kualitas Audio',
-    audioQualityDesc: 'Preferensi kualitas stream dari YouTube',
-    qualityAuto: 'Auto (Direkomendasikan)',
-    qualityHigh: 'Tinggi (160kbps)',
-    qualityMedium: 'Sedang (128kbps)',
+    audioQualityDesc: 'Kualitas lebih tinggi membutuhkan lebih banyak data internet',
+    qualityAuto: 'Otomatis (Direkomendasikan)',
+    qualityHigh: 'Tinggi (Terbaik)',
+    qualityMedium: 'Sedang (Hemat Data)',
+    crossfadeLabel: 'Crossfade (Transisi Mulus)',
+    crossfadeDesc: 'Hilangkan jeda antar lagu dengan efek fade in/out',
+    crossfadeOff: 'Mati (Off)',
+    crossfadeSec: 'Detik',
     displaySection: 'Tampilan',
     autoLyrics: 'Auto-tampilkan Lirik',
     autoLyricsDesc: 'Buka panel lirik otomatis saat lagu diputar',
@@ -454,10 +462,14 @@ const translations: Record<Language, TranslationKeys> = {
     defaultVolume: 'Default Volume',
     defaultVolumeDesc: 'Volume used when the app first opens',
     audioQuality: 'Audio Quality',
-    audioQualityDesc: 'Preferred stream quality from YouTube',
+    audioQualityDesc: 'Higher quality requires more internet data',
     qualityAuto: 'Auto (Recommended)',
-    qualityHigh: 'High (160kbps)',
-    qualityMedium: 'Medium (128kbps)',
+    qualityHigh: 'High (Best)',
+    qualityMedium: 'Medium (Data Saver)',
+    crossfadeLabel: 'Crossfade (Smooth Transition)',
+    crossfadeDesc: 'Eliminate silence between songs with a fade in/out effect',
+    crossfadeOff: 'Off',
+    crossfadeSec: 'Seconds',
     displaySection: 'Display',
     autoLyrics: 'Auto-show Lyrics',
     autoLyricsDesc: 'Automatically open lyrics panel when a song plays',
@@ -623,10 +635,14 @@ const translations: Record<Language, TranslationKeys> = {
     defaultVolume: 'デフォルト音量',
     defaultVolumeDesc: 'アプリを起動したときの音量',
     audioQuality: '音質',
-    audioQualityDesc: 'YouTubeのストリーム品質の設定',
+    audioQualityDesc: '高品質なほど多くのデータ通信を必要とします',
     qualityAuto: '自動（推奨）',
-    qualityHigh: '高品質（160kbps）',
-    qualityMedium: '中品質（128kbps）',
+    qualityHigh: '高音質（最高）',
+    qualityMedium: '標準（データ節約）',
+    crossfadeLabel: 'クロスフェード (滑らかな移行)',
+    crossfadeDesc: '曲間の無音をフェードイン/アウトでなくす',
+    crossfadeOff: 'オフ',
+    crossfadeSec: '秒',
     displaySection: '表示',
     autoLyrics: '歌詞を自動表示',
     autoLyricsDesc: '曲の再生時に歌詞パネルを自動で開く',
