@@ -1410,7 +1410,18 @@ function App() {
                 onClick={() => { setAvatarUrlInput(pl.avatar || ''); setShowAvatarPrompt(true); }}
               >
                 {pl.avatar ? (
-                  <img src={pl.avatar} alt="Avatar" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                  <img 
+                    src={pl.avatar} 
+                    alt="Avatar" 
+                    style={{ width: '100%', height: '100%', objectFit: 'cover' }} 
+                    onError={(e) => {
+                      if (pl.songs.length > 0) {
+                        e.currentTarget.src = getCleanThumbnail(pl.songs[0].thumbnail);
+                      } else {
+                        e.currentTarget.style.display = 'none';
+                      }
+                    }}
+                  />
                 ) : (
                   <ListMusic size={48} color="var(--text-muted)" />
                 )}
@@ -1452,7 +1463,7 @@ function App() {
                 </button>
               )}
               <button className="btn-secondary" onClick={() => setPlaylistToDelete(pl.id)} style={{ color: '#ff5555' }}>
-                <Trash2 size={16} /> {t('delete')}
+                <Trash2 size={16} /> {t('deletePlaylist')}
               </button>
             </div>
           </div>
@@ -2434,7 +2445,18 @@ function App() {
                 }}>
                   <div className="sidebar-item-img">
                     {pl.avatar ? (
-                      <img src={pl.avatar} alt="cover" style={{ width: '100%', height: '100%', objectFit: 'cover', borderRadius: '4px' }} />
+                      <img 
+                        src={pl.avatar} 
+                        alt="cover" 
+                        style={{ width: '100%', height: '100%', objectFit: 'cover', borderRadius: '4px' }} 
+                        onError={(e) => {
+                          if (pl.songs.length > 0) {
+                            e.currentTarget.src = getCleanThumbnail(pl.songs[0].thumbnail);
+                          } else {
+                            e.currentTarget.style.display = 'none';
+                          }
+                        }}
+                      />
                     ) : (
                       pl.songs.length > 0 ? (
                         <img src={getCleanThumbnail(pl.songs[0].thumbnail)} alt="cover" style={{ width: '100%', height: '100%', objectFit: 'cover', borderRadius: '4px' }} />
@@ -2485,57 +2507,125 @@ function App() {
             )}
 
             <div className="friend-list">
-              {onlineUsers.length === 0 ? (
-                <div style={{ color: 'var(--text-muted)', fontSize: '11px', textAlign: 'center', marginTop: '12px' }}>{t('noFriendsOnline')}</div>
-              ) : (
-                onlineUsers.map(user => (
-                  <div key={user.discordId} className={`friend-item ${activePartyId === (user.partyId || user.discordId) ? 'active-party' : ''}`}>
-                    <div className="friend-avatar-container" style={{ position: 'relative' }}>
-                      <img src={user.avatarUrl || `https://ui-avatars.com/api/?name=${user.username}`} alt={user.username} className="friend-avatar" />
-                      <div className={`status-dot-avatar status-dot ${user.status || 'online'}`}></div>
-                    </div>
-                    <div className="friend-info">
-                      <div className="friend-name">{user.username}</div>
-                      {user.currentSong ? (
-                        <>
-                          <div className="friend-song" title={user.currentSong.title}>♫ {user.currentSong.title}</div>
-                          {activePartyId !== (user.partyId || user.discordId) && user.status !== 'dnd' && (
-                            <button className="listen-along-btn" onClick={async () => {
-                              if (user.status === 'idle') {
-                                // Request Join
-                                const success = await (window as any).electronAPI.sendJoinRequest(user.partyId || user.discordId, discordUser.id, discordUser.global_name || discordUser.username);
-                                if (success) {
-                                  showToast(t('joinRequestSent'), 'success');
-                                }
-                              } else {
-                                // Direct Join (Online)
-                                setActivePartyId(user.partyId || user.discordId);
-                                setIsGuest(true);
-                                showToast(`Listening along with ${user.username}...`, 'success');
-                              }
-                            }}><Headphones size={12} style={{ marginRight: '4px' }}/> {user.status === 'idle' ? t('askToJoin') : t('listenAlong')}</button>
+              {(() => {
+                const currentPartyMembers = onlineUsers.filter(u => activePartyId && (u.partyId === activePartyId || u.discordId === activePartyId));
+                const otherFriends = onlineUsers.filter(u => !activePartyId || (u.partyId !== activePartyId && u.discordId !== activePartyId));
+                
+                const partyAvatars = [];
+                if (activePartyId && discordUser) {
+                  partyAvatars.push({
+                    id: discordUser.id,
+                    url: discordUser.avatar ? `https://cdn.discordapp.com/avatars/${discordUser.id}/${discordUser.avatar}.png` : `https://ui-avatars.com/api/?name=${discordUser.username}`,
+                    name: discordUser.username
+                  });
+                  currentPartyMembers.forEach(u => {
+                    partyAvatars.push({
+                      id: u.discordId,
+                      url: u.avatarUrl || `https://ui-avatars.com/api/?name=${u.username}`,
+                      name: u.username
+                    });
+                  });
+                }
+
+                return (
+                  <>
+                    {activePartyId && partyAvatars.length > 0 && (
+                      <div className="friend-item current-party-block" style={{ flexDirection: 'row', alignItems: 'center', padding: '10px', background: 'rgba(255,255,255,0.03)', borderRadius: '8px', position: 'relative', marginBottom: '8px', width: '100%', boxSizing: 'border-box' }}>
+                        <div className="party-avatars" style={{ display: 'flex', marginRight: '12px' }}>
+                          {partyAvatars.map((av, idx) => (
+                            <img 
+                              key={av.id} 
+                              src={av.url} 
+                              alt={av.name} 
+                              title={av.name}
+                              style={{ 
+                                width: '28px', 
+                                height: '28px', 
+                                borderRadius: '50%', 
+                                border: '2px solid var(--background-secondary)',
+                                marginLeft: idx === 0 ? '0' : '-10px',
+                                zIndex: partyAvatars.length - idx,
+                                objectFit: 'cover'
+                              }} 
+                            />
+                          ))}
+                        </div>
+                        <div style={{ display: 'flex', flexDirection: 'column', flex: 1, overflow: 'hidden' }}>
+                          <span style={{ fontSize: '10px', color: 'var(--accent-primary)', fontWeight: 600, marginBottom: '2px', letterSpacing: '0.5px' }}>
+                            {t('listenAlong')}
+                          </span>
+                          {currentPartyMembers.length > 0 && currentPartyMembers[0].currentSong ? (
+                            <div className="friend-song" style={{ fontSize: '12px', color: 'var(--text-primary)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', width: '100%' }} title={currentPartyMembers[0].currentSong.title}>
+                              ♫ {currentPartyMembers[0].currentSong.title}
+                            </div>
+                          ) : currentSong ? (
+                            <div className="friend-song" style={{ fontSize: '12px', color: 'var(--text-primary)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', width: '100%' }} title={currentSong.title}>
+                              ♫ {currentSong.title}
+                            </div>
+                          ) : (
+                            <div className="friend-song" style={{ fontSize: '12px', color: 'var(--text-muted)' }}>Browsing...</div>
                           )}
-                          {user.status === 'dnd' && activePartyId !== (user.partyId || user.discordId) && (
-                            <button className="listen-along-btn" disabled style={{ opacity: 0.5, cursor: 'not-allowed' }}>
-                              <Headphones size={12} style={{ marginRight: '4px' }}/> {t('joinDisabled')}
-                            </button>
-                          )}
-                          {activePartyId === (user.partyId || user.discordId) && isGuest && (
-                            <button className="listen-along-btn active" onClick={() => {
-                              setIsGuest(false);
-                              setActivePartyId(null);
-                              if (audioRef.current) audioRef.current.pause();
-                              setIsPlaying(false);
-                            }}>{t('leaveParty')}</button>
-                          )}
-                        </>
-                      ) : (
-                        <div className="friend-song" style={{ color: 'var(--text-muted)' }}>Browsing...</div>
-                      )}
-                    </div>
-                  </div>
-                ))
-              )}
+                        </div>
+                        <button 
+                          className="leave-party-icon-btn" 
+                          onClick={() => {
+                            setIsGuest(false);
+                            setActivePartyId(null);
+                            if (audioRef.current) audioRef.current.pause();
+                            setIsPlaying(false);
+                          }}
+                          title={t('leaveParty')}
+                          style={{ marginLeft: '8px' }}
+                        >
+                          <LogOut size={16} />
+                        </button>
+                      </div>
+                    )}
+
+                    {otherFriends.length === 0 && !activePartyId ? (
+                      <div style={{ color: 'var(--text-muted)', fontSize: '11px', textAlign: 'center', marginTop: '12px' }}>{t('noFriendsOnline')}</div>
+                    ) : (
+                      otherFriends.map(user => (
+                        <div key={user.discordId} className="friend-item">
+                          <div className="friend-avatar-container" style={{ position: 'relative' }}>
+                            <img src={user.avatarUrl || `https://ui-avatars.com/api/?name=${user.username}`} alt={user.username} className="friend-avatar" />
+                            <div className={`status-dot-avatar status-dot ${user.status || 'online'}`}></div>
+                          </div>
+                          <div className="friend-info">
+                            <div className="friend-name">{user.username}</div>
+                            {user.currentSong ? (
+                              <>
+                                <div className="friend-song" title={user.currentSong.title}>♫ {user.currentSong.title}</div>
+                                {user.status !== 'dnd' && (
+                                  <button className="listen-along-btn" onClick={async () => {
+                                    if (user.status === 'idle') {
+                                      const success = await (window as any).electronAPI.sendJoinRequest(user.partyId || user.discordId, discordUser.id, discordUser.global_name || discordUser.username);
+                                      if (success) {
+                                        showToast(t('joinRequestSent'), 'success');
+                                      }
+                                    } else {
+                                      setActivePartyId(user.partyId || user.discordId);
+                                      setIsGuest(true);
+                                      showToast(`Listening along with ${user.username}...`, 'success');
+                                    }
+                                  }}><Headphones size={12} style={{ marginRight: '4px' }}/> {user.status === 'idle' ? t('askToJoin') : t('listenAlong')}</button>
+                                )}
+                                {user.status === 'dnd' && (
+                                  <button className="listen-along-btn" disabled style={{ opacity: 0.5, cursor: 'not-allowed' }}>
+                                    <Headphones size={12} style={{ marginRight: '4px' }}/> {t('joinDisabled')}
+                                  </button>
+                                )}
+                              </>
+                            ) : (
+                              <div className="friend-song" style={{ color: 'var(--text-muted)' }}>Browsing...</div>
+                            )}
+                          </div>
+                        </div>
+                      ))
+                    )}
+                  </>
+                );
+              })()}
             </div>
           </div>
         )}
@@ -2901,7 +2991,7 @@ function App() {
                         <div style={{ fontSize: '12px', color: 'var(--text-muted)', flexShrink: 0 }}>{formatTime(song.duration)}</div>
                       </div>
                       
-                      {!isPlayingNow && (
+                      {!isPlayingNow && !(isGuest && activePartyId) && (
                         <button 
                           className="queue-remove-btn"
                           style={{
@@ -2910,10 +3000,6 @@ function App() {
                           }}
                           onClick={(e) => {
                             e.stopPropagation();
-                            if (isGuest) {
-                              showToast('Hanya Host yang bisa menghapus lagu dari antrean.', 'error');
-                              return;
-                            }
                             setQueue(prev => {
                               const newQ = [...prev];
                               newQ.splice(idx, 1);
@@ -2930,7 +3016,7 @@ function App() {
                     </div>
                   );
                 })}
-                {queue.length > 0 && (
+                {queue.length > 0 && !(isGuest && activePartyId) && (
                   <div className="clear-queue" onClick={() => { setQueue([]); setOriginalQueue([]); setCurrentIndex(-1); }}>{t('clearQueue')}</div>
                 )}
               </div>
@@ -3031,15 +3117,17 @@ function App() {
       )}
       {contextMenu && (
         <div className="context-menu" style={{ top: contextMenu.y, left: contextMenu.x, position: 'fixed', zIndex: 9999 }}>
-          <div className="context-menu-item" onClick={() => {
-            const newQ = [...queue];
-            newQ.splice(currentIndex + 1, 0, contextMenu.song);
-            setQueue(newQ);
-            setOriginalQueue(newQ);
-            showToast(t('toastPlayNext'));
-          }}>
-            <Play size={16} /> {t('playNext')}
-          </div>
+          {!(isGuest && activePartyId) && (
+            <div className="context-menu-item" onClick={() => {
+              const newQ = [...queue];
+              newQ.splice(currentIndex + 1, 0, contextMenu.song);
+              setQueue(newQ);
+              setOriginalQueue(newQ);
+              showToast(t('toastPlayNext'));
+            }}>
+              <Play size={16} /> {t('playNext')}
+            </div>
+          )}
           <div className="context-menu-item" onClick={() => {
             setQueue(prev => [...prev, contextMenu.song]);
             setOriginalQueue(prev => [...prev, contextMenu.song]);
