@@ -4,9 +4,8 @@ contextBridge.exposeInMainWorld('electronAPI', {
   discordLogin: (authUrl: string) => ipcRenderer.invoke('discord-login', authUrl),
   enterMiniPlayer: () => ipcRenderer.send('enter-mini-player'),
   exitMiniPlayer: () => ipcRenderer.send('exit-mini-player'),
-  closeMiniPlayerWindow: () => ipcRenderer.send('close-mini-player-window'),
-  onMiniPlayerClosed: (callback: () => void) => ipcRenderer.on('mini-player-closed', callback),
-  isMiniPlayerWindow: () => new URLSearchParams(window.location.search).get('miniplayer') === 'true',
+  setMinimizeToMiniPlayer: (enabled: boolean) => ipcRenderer.send('set-minimize-to-miniplayer', enabled),
+  onMiniPlayerMode: (callback: (event: any, mode: boolean) => void) => ipcRenderer.on('mini-player-mode', callback),
   getPlaylists: (discordId?: string) => ipcRenderer.invoke('get-playlists', discordId),
   savePlaylist: (playlist: any) => ipcRenderer.invoke('save-playlist', playlist),
   deletePlaylist: (id: string) => ipcRenderer.invoke('delete-playlist', id),
@@ -33,7 +32,11 @@ contextBridge.exposeInMainWorld('electronAPI', {
   onDiscordOAuthToken: (callback: (token: string) => void) =>
     ipcRenderer.on('discord-oauth-token', (_event, token) => callback(token)),
   checkCache: (songId: string) => ipcRenderer.invoke('check-cache', songId),
-  cacheAudio: (songId: string, url: string) => ipcRenderer.send('cache-audio', songId, url),
+  cacheAudio: (songData: any, url: string) => ipcRenderer.send('cache-audio', songData, url),
+  getDownloadedSongs: () => ipcRenderer.invoke('get-downloaded-songs'),
+  deleteDownloadedSong: (songId: string) => ipcRenderer.invoke('delete-downloaded-song', songId),
   clearCache: () => ipcRenderer.invoke('clear-cache'),
   getCacheSize: () => ipcRenderer.invoke('get-cache-size'),
+  onDownloadCacheProgress: (callback: (event: any, data: any) => void) => ipcRenderer.on('download-cache-progress', callback),
+  onDownloadCacheComplete: (callback: (event: any, song: any) => void) => ipcRenderer.on('download-cache-complete', callback)
 });

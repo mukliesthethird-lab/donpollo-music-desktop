@@ -2381,12 +2381,47 @@ body {
   }
 }
 
+.download-toast-container {
+  position: fixed;
+  bottom: 100px;
+  right: 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  z-index: 9999;
+}
+
+.download-toast {
+  background-color: var(--bg-card);
+  border: 1px solid var(--border-color);
+  border-radius: 12px;
+  padding: 12px 16px;
+  width: 300px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
+  animation: slideInRight 0.3s cubic-bezier(0.2, 0.8, 0.2, 1);
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+@keyframes slideInRight {
+  from {
+    transform: translateX(120%);
+    opacity: 0;
+  }
+  to {
+    transform: translateX(0);
+    opacity: 1;
+  }
+}
+
 .toast-popup.toast-error {
   background-color: #ED4245;
 }
 
 .toast-popup.toast-success {
   background-color: var(--accent-primary);
+  color: var(--accent-text, white);
 }
 
 /* =========================================
@@ -2661,6 +2696,7 @@ body {
 
 .settings-toggle.on {
   background-color: var(--accent-primary);
+  color: var(--accent-text, #ffffff);
 }
 
 .settings-select {
@@ -2877,7 +2913,7 @@ body {
 .lang-btn.active {
   background-color: var(--accent-primary);
   border-color: var(--accent-primary);
-  color: white;
+  color: var(--accent-text, #ffffff);
   font-weight: 700;
 }
 

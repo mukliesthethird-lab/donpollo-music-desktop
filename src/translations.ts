@@ -82,6 +82,10 @@ type TranslationKeys = {
   delete: string;
   editName: string;
   changeImage: string;
+  downloadSong: string;
+  toastDownloadStarted: string;
+  toastDownloadComplete: string;
+  downloadDesktopOnly: string;
 
   // Create Playlist Modal
   newPlaylistTitle: string;
@@ -140,6 +144,18 @@ type TranslationKeys = {
   appVersion: string;
   clearAudioCache: string;
   audioCacheDesc: string;
+  downloads: string;
+  offlineMode: string;
+  noDownloads: string;
+  noDownloadsDesc: string;
+  miniPlayer: string;
+  minimizeToMiniPlayer: string;
+  shortcutsTitle: string;
+  shortcutPlayPause: string;
+  shortcutNext: string;
+  shortcutPrev: string;
+  equalizer: string;
+  eqEnabled: string;
 
   // Toast
   toastLogout: string;
@@ -256,6 +272,10 @@ const translations: Record<Language, TranslationKeys> = {
     delete: 'Ya, Hapus',
     editName: 'Ubah Nama',
     changeImage: 'Ubah Gambar',
+    downloadSong: 'Download Lagu',
+    toastDownloadStarted: 'Mendownload',
+    toastDownloadComplete: 'Download telah selesai',
+    downloadDesktopOnly: 'Download hanya tersedia di Desktop App',
 
     // Create Playlist Modal
     newPlaylistTitle: 'Buat Playlist Baru',
@@ -314,6 +334,18 @@ const translations: Record<Language, TranslationKeys> = {
     appVersion: 'Versi Aplikasi',
     clearAudioCache: 'Hapus Cache Lagu Lokal',
     audioCacheDesc: 'Cache menyimpan lagu untuk memutar lebih cepat dan hemat kuota',
+    downloads: 'Unduhan',
+    offlineMode: 'Mode Offline',
+    noDownloads: 'Belum ada unduhan',
+    noDownloadsDesc: 'Lagu yang selesai diputar akan di-cache dan muncul di sini.',
+    miniPlayer: 'Mini Player',
+    minimizeToMiniPlayer: 'Minimize otomatis menjadi Mini Player',
+    shortcutsTitle: 'Keyboard Shortcuts Global',
+    shortcutPlayPause: 'Play / Pause (Media Key)',
+    shortcutNext: 'Next Track (Media Key)',
+    shortcutPrev: 'Previous Track (Media Key)',
+    equalizer: 'Equalizer',
+    eqEnabled: 'Aktifkan Equalizer',
 
     // Toast
     toastLogout: 'Berhasil logout dan pemutaran dihentikan',
@@ -429,6 +461,10 @@ const translations: Record<Language, TranslationKeys> = {
     delete: 'Yes, Delete',
     editName: 'Edit Name',
     changeImage: 'Change Image',
+    downloadSong: 'Download Song',
+    toastDownloadStarted: 'Downloading',
+    toastDownloadComplete: 'Download completed',
+    downloadDesktopOnly: 'Download is only available on Desktop App',
 
     // Create Playlist Modal
     newPlaylistTitle: 'Create New Playlist',
@@ -487,6 +523,18 @@ const translations: Record<Language, TranslationKeys> = {
     appVersion: 'App Version',
     clearAudioCache: 'Clear Local Audio Cache',
     audioCacheDesc: 'Cache saves songs for faster playback and data saving',
+    downloads: 'Downloads',
+    offlineMode: 'Offline Mode',
+    noDownloads: 'No downloads yet',
+    noDownloadsDesc: 'Songs you cache will appear here.',
+    miniPlayer: 'Mini Player',
+    minimizeToMiniPlayer: 'Minimize to Mini Player',
+    shortcutsTitle: 'Global Keyboard Shortcuts',
+    shortcutPlayPause: 'Play / Pause (Media Key)',
+    shortcutNext: 'Next Track (Media Key)',
+    shortcutPrev: 'Previous Track (Media Key)',
+    equalizer: 'Equalizer',
+    eqEnabled: 'Enable Equalizer',
 
     // Toast
     toastLogout: 'Logged out and playback stopped',
@@ -602,6 +650,10 @@ const translations: Record<Language, TranslationKeys> = {
     delete: '削除する',
     editName: '名前を編集',
     changeImage: '画像を変更',
+    downloadSong: '曲をダウンロード',
+    toastDownloadStarted: 'ダウンロード中',
+    toastDownloadComplete: 'ダウンロードが完了しました',
+    downloadDesktopOnly: 'ダウンロードはデスクトップアプリでのみ利用可能です',
 
     // Create Playlist Modal
     newPlaylistTitle: '新しいプレイリストを作成',
@@ -660,6 +712,18 @@ const translations: Record<Language, TranslationKeys> = {
     appVersion: 'アプリバージョン',
     clearAudioCache: 'ローカルオーディオキャッシュをクリア',
     audioCacheDesc: 'キャッシュは曲を保存して、より高速に再生し、データを節約します',
+    downloads: 'ダウンロード',
+    offlineMode: 'オフラインモード',
+    noDownloads: 'ダウンロードがありません',
+    noDownloadsDesc: 'キャッシュした曲はここに表示されます。',
+    miniPlayer: 'ミニプレーヤー',
+    minimizeToMiniPlayer: '最小化でミニプレーヤーにする',
+    shortcutsTitle: 'キーボードショートカット',
+    shortcutPlayPause: '再生 / 一時停止 (Media Key)',
+    shortcutNext: '次の曲 (Media Key)',
+    shortcutPrev: '前の曲 (Media Key)',
+    equalizer: 'イコライザー',
+    eqEnabled: 'イコライザーを有効にする',
 
     // Toast
     toastLogout: 'ログアウトして再生を停止しました',

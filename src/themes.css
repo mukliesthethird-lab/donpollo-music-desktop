@@ -1,0 +1,54 @@
+/* =========================================
+   CUSTOM THEMES FOR DON POLLO MUSIC
+   ========================================= */
+
+/* Default transition for smooth theme switching */
+.app-layout {
+  transition: all 0.3s ease;
+}
+
+/* =========================================
+   1. THEME: MINIMALIST
+   ========================================= */
+.theme-minimalist {
+  --bg-primary: #121212;
+  --bg-secondary: #181818;
+  --bg-card: #222222;
+  --accent-primary: #ffffff;
+  --accent-text: #000000;
+  --accent-hover: #dddddd;
+  --text-primary: #ffffff;
+  --text-secondary: #aaaaaa;
+  --border-color: #333333;
+  --bg-card-hover: #2a2a2a;
+}
+
+/* Hide Sidebars */
+.theme-minimalist .nav-sidebar,
+.theme-minimalist .friend-activity-section,
+.theme-minimalist .right-sidebar {
+  display: none !important;
+}
+
+/* Fake a Top-Nav using main-view padding */
+.theme-minimalist .main-view {
+  margin-top: 20px;
+}
+
+/* Floating Pill Player */
+.theme-minimalist .player-container {
+  position: fixed;
+  bottom: 24px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 80%;
+  max-width: 800px;
+  border-radius: 100px;
+  background: rgba(20, 20, 20, 0.85);
+  backdrop-filter: blur(20px);
+  border: 1px solid #333;
+  padding: 8px 24px;
+  height: auto;
+  box-shadow: 0 10px 40px rgba(0,0,0,0.8);
+  z-index: 9999;
+}

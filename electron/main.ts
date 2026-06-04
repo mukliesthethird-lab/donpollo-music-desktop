@@ -1,4 +1,4 @@
-import { app, BrowserWindow, ipcMain, Menu, protocol } from 'electron';
+import { app, BrowserWindow, ipcMain, Menu, protocol, globalShortcut } from 'electron';
 import * as path from 'path';
 import * as fs from 'fs';
 import * as https from 'https';
@@ -12,8 +12,10 @@ const isDev = !app.isPackaged;
 dotenv.config({ path: path.join(__dirname, '../.env') });
 
 let mainWindow: BrowserWindow | null = null;
-let miniPlayerWindow: BrowserWindow | null = null;
 let db: mysql.Connection | null = null;
+let minimizeToMiniPlayerEnabled = false;
+let isMiniPlayerMode = false;
+let previousBounds = { width: 1280, height: 800, x: 0, y: 0 };
 
 // Register custom protocol for OAuth deep-linking
 if (process.defaultApp) {
@@ -167,67 +169,44 @@ function createWindow() {
     console.log('Main window failed to load:', code, desc);
   });
 
+  // @ts-ignore: minimize event does pass an event object in Electron, despite what TS thinks
+  mainWindow.on('minimize', (event: any) => {
+    if (minimizeToMiniPlayerEnabled && !isMiniPlayerMode) {
+      event.preventDefault();
+      previousBounds = mainWindow!.getBounds();
+      isMiniPlayerMode = true;
+      mainWindow!.setMinimumSize(300, 100);
+      mainWindow!.setBounds({ width: 320, height: 420 });
+      mainWindow!.setAlwaysOnTop(true);
+      mainWindow!.webContents.send('mini-player-mode', true);
+    }
+  });
+
+  mainWindow.on('restore', () => {
+    if (isMiniPlayerMode && mainWindow) {
+      isMiniPlayerMode = false;
+      mainWindow.setAlwaysOnTop(false);
+      mainWindow.setMinimumSize(800, 600);
+      mainWindow.setBounds(previousBounds);
+      mainWindow.webContents.send('mini-player-mode', false);
+    }
+  });
+
+  mainWindow.on('maximize', () => {
+    if (isMiniPlayerMode && mainWindow) {
+      isMiniPlayerMode = false;
+      mainWindow.setAlwaysOnTop(false);
+      mainWindow.setMinimumSize(800, 600);
+      mainWindow.webContents.send('mini-player-mode', false);
+    }
+  });
+
   mainWindow.on('closed', () => {
     mainWindow = null;
-
-    if (miniPlayerWindow) {
-      miniPlayerWindow.close();
-      miniPlayerWindow = null;
-    }
   });
 }
 
-function createMiniPlayerWindow() {
-  if (miniPlayerWindow) {
-    miniPlayerWindow.focus();
-    return;
-  }
 
-  miniPlayerWindow = new BrowserWindow({
-    width: 320,
-    height: 420,
-    resizable: false,
-    alwaysOnTop: true,
-    frame: false,
-    transparent: true,
-    backgroundColor: '#00000000',
-    skipTaskbar: true,
-    icon: path.join(__dirname, isDev ? '../public/icon.jpg' : '../dist/icon.jpg'),
-    webPreferences: {
-      preload: path.join(__dirname, 'preload.cjs'),
-      nodeIntegration: false,
-      contextIsolation: true,
-    },
-  });
-
-  if (isDev) {
-    miniPlayerWindow.loadURL(
-      'http://localhost:5173?miniplayer=true'
-    );
-  } else {
-    miniPlayerWindow.loadFile(
-      path.join(__dirname, '../dist/index.html'),
-      {
-        query: { miniplayer: 'true' },
-      }
-    );
-  }
-
-  // 🔥 DEBUG IMPORTANT (lihat kenapa blank)
-  miniPlayerWindow.webContents.openDevTools();
-
-  miniPlayerWindow.webContents.on('did-fail-load', (_, code, desc) => {
-    console.log('Mini player failed to load:', code, desc);
-  });
-
-  miniPlayerWindow.on('closed', () => {
-    miniPlayerWindow = null;
-
-    if (mainWindow) {
-      mainWindow.webContents.send('mini-player-closed');
-    }
-  });
-}
 
 // IPC HANDLERS
 
@@ -296,26 +275,28 @@ ipcMain.handle('discord-login', async (_event, authUrl: string) => {
 });
 
 ipcMain.on('enter-mini-player', () => {
-  if (mainWindow) mainWindow.minimize();
-  createMiniPlayerWindow();
+  if (mainWindow && !isMiniPlayerMode) {
+    previousBounds = mainWindow.getBounds();
+    isMiniPlayerMode = true;
+    mainWindow.setMinimumSize(300, 100);
+    mainWindow.setBounds({ width: 320, height: 420 });
+    mainWindow.setAlwaysOnTop(true);
+    mainWindow.webContents.send('mini-player-mode', true);
+  }
 });
 
 ipcMain.on('exit-mini-player', () => {
-  if (miniPlayerWindow) {
-    miniPlayerWindow.close();
-    miniPlayerWindow = null;
-  }
-
-  if (mainWindow) {
-    mainWindow.restore();
+  if (mainWindow && isMiniPlayerMode) {
+    isMiniPlayerMode = false;
+    mainWindow.setAlwaysOnTop(false);
+    mainWindow.setMinimumSize(800, 600);
+    mainWindow.setBounds(previousBounds);
+    mainWindow.webContents.send('mini-player-mode', false);
   }
 });
 
-ipcMain.on('close-mini-player-window', () => {
-  if (miniPlayerWindow) {
-    miniPlayerWindow.close();
-    miniPlayerWindow = null;
-  }
+ipcMain.on('set-minimize-to-miniplayer', (event, enabled) => {
+  minimizeToMiniPlayerEnabled = enabled;
 });
 
 ipcMain.handle('get-playlists', async (event, discordId) => {
@@ -669,35 +650,59 @@ ipcMain.handle('romanize-lyrics', async (event, text: string, lang: 'ko' | 'ja')
 // CACHING SYSTEM
 const CACHE_LIMIT_BYTES = 1024 * 1024 * 1024; // 1 GB
 const cacheDir = path.join(app.getPath('userData'), 'AudioCache');
+const metadataPath = path.join(cacheDir, 'metadata.json');
+
 if (!fs.existsSync(cacheDir)) {
   fs.mkdirSync(cacheDir, { recursive: true });
+}
+
+function getCachedMetadata() {
+  try {
+    if (fs.existsSync(metadataPath)) {
+      const data = fs.readFileSync(metadataPath, 'utf-8');
+      return JSON.parse(data);
+    }
+  } catch (e) {}
+  return [];
+}
+
+function saveCachedMetadata(data: any[]) {
+  try {
+    fs.writeFileSync(metadataPath, JSON.stringify(data, null, 2));
+  } catch (e) {}
 }
 
 function enforceCacheLimit() {
   fs.readdir(cacheDir, (err, files) => {
     if (err) return;
     let totalSize = 0;
-    const fileStats = files.map(file => {
-      const filePath = path.join(cacheDir, file);
-      const stats = fs.statSync(filePath);
-      totalSize += stats.size;
-      return { filePath, size: stats.size, mtime: stats.mtime.getTime() };
-    });
+    const fileStats = files
+      .filter(file => file !== 'metadata.json')
+      .map(file => {
+        const filePath = path.join(cacheDir, file);
+        const stats = fs.statSync(filePath);
+        totalSize += stats.size;
+        return { filePath, size: stats.size, mtime: stats.mtime.getTime(), songId: file.replace('.m4a', '') };
+      });
 
     if (totalSize > CACHE_LIMIT_BYTES) {
       fileStats.sort((a, b) => a.mtime - b.mtime); // Oldest first
+      let metadata = getCachedMetadata();
       for (const file of fileStats) {
         try {
           fs.unlinkSync(file.filePath);
           totalSize -= file.size;
+          metadata = metadata.filter((s: any) => s.id !== file.songId);
           if (totalSize <= CACHE_LIMIT_BYTES) break;
         } catch (e) { }
       }
+      saveCachedMetadata(metadata);
     }
   });
 }
 
-function downloadToCache(songId: string, urlStr: string) {
+function downloadToCache(songData: any, urlStr: string, sender: any) {
+  const songId = songData.id;
   const filePath = path.join(cacheDir, `${songId}.m4a`);
   const tempPath = path.join(cacheDir, `${songId}.tmp`);
   
@@ -710,14 +715,30 @@ function downloadToCache(songId: string, urlStr: string) {
   client.get(urlStr, (response) => {
     // Only save if status is OK and content is audio/video
     if (response.statusCode === 200) {
+      const totalBytes = parseInt(response.headers['content-length'] || '0', 10);
+      let downloadedBytes = 0;
+
       const fileStream = fs.createWriteStream(tempPath);
+      response.on('data', (chunk) => {
+        downloadedBytes += chunk.length;
+        if (totalBytes > 0 && sender) {
+          const progress = Math.round((downloadedBytes / totalBytes) * 100);
+          sender.send('download-cache-progress', { songId, progress, songData });
+        }
+      });
       response.pipe(fileStream);
 
       fileStream.on('finish', () => {
         fileStream.close(() => {
           try {
             fs.renameSync(tempPath, filePath);
+            const metadata = getCachedMetadata();
+            if (!metadata.find((s: any) => s.id === songId)) {
+              metadata.push(songData);
+              saveCachedMetadata(metadata);
+            }
             enforceCacheLimit();
+            if (sender) sender.send('download-cache-complete', songData);
           } catch (e) {}
         });
       });
@@ -739,8 +760,27 @@ ipcMain.handle('check-cache', async (event, songId) => {
   return fs.existsSync(filePath);
 });
 
-ipcMain.on('cache-audio', (event, songId, url) => {
-  downloadToCache(songId, url);
+ipcMain.on('cache-audio', (event, songData, url, isSilent) => {
+  downloadToCache(songData, url, isSilent ? null : event.sender);
+});
+
+ipcMain.handle('get-downloaded-songs', async () => {
+  return getCachedMetadata();
+});
+
+ipcMain.handle('delete-downloaded-song', async (event, songId) => {
+  try {
+    const filePath = path.join(cacheDir, `${songId}.m4a`);
+    if (fs.existsSync(filePath)) {
+      fs.unlinkSync(filePath);
+    }
+    const metadata = getCachedMetadata();
+    const updated = metadata.filter((s: any) => s.id !== songId);
+    saveCachedMetadata(updated);
+    return true;
+  } catch (e) {
+    return false;
+  }
 });
 
 ipcMain.handle('clear-cache', async () => {
@@ -780,6 +820,8 @@ app.whenReady().then(async () => {
   Menu.setApplicationMenu(null);
   await initDB();
   createWindow();
+
+
 
   // Handle deep-link on macOS (open-url)
   app.on('open-url', (event, url) => {

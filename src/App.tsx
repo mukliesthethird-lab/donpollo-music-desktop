@@ -1,6 +1,7 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react';
-import { Home, Library, Plus, Mic2, Settings, Play, Pause, SkipBack, SkipForward, Repeat, Shuffle, Volume2, VolumeX, ListMusic, UserCircle, ChevronRight, Search, AlertCircle, Headset, Loader2, Maximize2, X, ChevronLeft, Music, PanelRight, Trash2, Heart, LogIn, LogOut, Check, FolderPlus, Globe, Headphones, Download } from 'lucide-react';
+import { Home, Library, Plus, Mic2, Settings, Play, Pause, SkipBack, SkipForward, Repeat, Shuffle, Volume2, VolumeX, ListMusic, UserCircle, ChevronRight, Search, AlertCircle, Headset, Loader2, Maximize2, X, ChevronLeft, Music, PanelRight, Trash2, Heart, LogIn, LogOut, Check, FolderPlus, Globe, Headphones, Download, DownloadCloud, Database, WifiOff, CheckCircle2, Paintbrush } from 'lucide-react';
 import './index.css';
+import './themes.css';
 import { createTranslator } from './translations';
 import type { Language } from './translations';
 
@@ -12,7 +13,7 @@ const DISCORD_REDIRECT_URI = window.location.hostname === 'localhost'
   ? 'http://localhost:5173/callback.html'
   : 'https://donpollo-music-desktop.vercel.app/callback';
 
-type Page = 'home' | 'library' | 'playlist' | 'playlist-detail' | 'settings';
+type Page = 'home' | 'library' | 'playlist' | 'playlist-detail' | 'settings' | 'downloads';
 
 interface Playlist {
   id: string;
@@ -343,8 +344,11 @@ function App() {
   }, [language]);
 
   // ─── Settings ────────────────────────────────────────────────
-  const [settings, setSettings] = useState(() => {
-    try { return JSON.parse(localStorage.getItem('donpollo_settings') || '{}'); } catch { return {}; }
+  const [settings, setSettings] = useState<any>(() => {
+    try { 
+      const saved = JSON.parse(localStorage.getItem('donpollo_settings') || '{}');
+      return { theme: 'default', ...saved };
+    } catch { return { theme: 'default' }; }
   });
 
   // ─── Player State ────────────────────────────────────────────
@@ -361,6 +365,40 @@ function App() {
 
   const [userStatus, setUserStatus] = useState<'online' | 'idle' | 'dnd'>(localStorage.getItem('donpollo_status') as any || 'online');
   const [joinRequests, setJoinRequests] = useState<{incoming: any[], outgoing: any[]}>({ incoming: [], outgoing: [] });
+
+  const [downloadedSongs, setDownloadedSongs] = useState<any[]>([]);
+  const [activeDownloads, setActiveDownloads] = useState<Record<string, { progress: number, songData: any }>>({});
+
+  useEffect(() => {
+    if ((window as any).electronAPI?.getDownloadedSongs) {
+      (window as any).electronAPI.getDownloadedSongs().then(setDownloadedSongs);
+    }
+  }, [cacheSize, activePage]);
+
+  useEffect(() => {
+    const handleProgress = (_event: any, data: { songId: string, progress: number, songData: any }) => {
+      setActiveDownloads(prev => ({ ...prev, [data.songId]: { progress: data.progress, songData: data.songData } }));
+    };
+    
+    const handleComplete = (_event: any, songData: any) => {
+      setActiveDownloads(prev => {
+        const next = { ...prev };
+        delete next[songData.id];
+        return next;
+      });
+      if ((window as any).electronAPI?.getDownloadedSongs) {
+        (window as any).electronAPI.getDownloadedSongs().then(setDownloadedSongs);
+      }
+      showToast(`${t('toastDownloadComplete')}: ${songData.title}`, 'success');
+    };
+
+    if ((window as any).electronAPI?.onDownloadCacheProgress) {
+      (window as any).electronAPI.onDownloadCacheProgress(handleProgress);
+    }
+    if ((window as any).electronAPI?.onDownloadCacheComplete) {
+      (window as any).electronAPI.onDownloadCacheComplete(handleComplete);
+    }
+  }, []);
 
   // ─── Queue ───────────────────────────────────────────────────
   const [queue, setQueue] = useState<any[]>([]);
@@ -380,7 +418,7 @@ function App() {
           if (!isCached) {
             console.log(`[Prefetch] Memulai download diam-diam untuk lagu berikutnya: ${nextSong.title}`);
             const streamUrl = `${API_BASE_URL}/api/stream?id=${nextSong.id}`;
-            (window as any).electronAPI.cacheAudio(nextSong.id, streamUrl);
+            /* (window as any).electronAPI.cacheAudio(nextSong, streamUrl, true); */
           }
         }
       };
@@ -489,6 +527,43 @@ function App() {
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const fadeAudioRef = useRef<HTMLAudioElement | null>(null);
   const isCrossfadingRef = useRef(false);
+  const audioContextRef = useRef<AudioContext | null>(null);
+  const sourceNodeRef = useRef<MediaElementAudioSourceNode | null>(null);
+  const filtersRef = useRef<BiquadFilterNode[]>([]);
+
+  const setupAudioContext = (audio: HTMLAudioElement) => {
+    if (!audioContextRef.current) {
+      try {
+        const AudioContextClass = window.AudioContext || (window as any).webkitAudioContext;
+        const ctx = new AudioContextClass();
+        audioContextRef.current = ctx;
+
+        const source = ctx.createMediaElementSource(audio);
+        sourceNodeRef.current = source;
+
+        // Create 5-band EQ
+        const freqs = [60, 230, 910, 3600, 14000];
+        const newFilters = freqs.map(freq => {
+          const filter = ctx.createBiquadFilter();
+          filter.type = 'peaking';
+          filter.frequency.value = freq;
+          filter.Q.value = 1.0;
+          filter.gain.value = 0;
+          return filter;
+        });
+        filtersRef.current = newFilters;
+
+        let prevNode: AudioNode = source;
+        for (const filter of newFilters) {
+          prevNode.connect(filter);
+          prevNode = filter;
+        }
+        prevNode.connect(ctx.destination);
+      } catch (e) {
+        console.error('AudioContext setup failed', e);
+      }
+    }
+  };
   const recentScrollRef = useRef<HTMLDivElement>(null);
   const recsScrollRef = useRef<HTMLDivElement>(null);
 
@@ -592,7 +667,7 @@ function App() {
             window.history.replaceState(null, '', window.location.pathname);
             setActivePage('home');
           })
-          .catch(() => showToast(t('toastDiscordError')));
+          .catch(() => showToast(t('toastDiscordError'), 'error'));
       }
     }
   }, []);
@@ -618,15 +693,26 @@ function App() {
 
   useEffect(() => {
     const audio = new Audio();
-    // Initialize with current state values so it respects saved settings
+    // audio.crossOrigin = "anonymous"; // Dicomment sementara agar tidak error CORS di mode Dev
     audio.volume = isMuted ? 0 : volume;
     audio.loop = isLooping;
     audioRef.current = audio;
+    setupAudioContext(audio);
     setupAudioListeners(audio);
     return () => {
       if (audioRef.current) audioRef.current.pause();
     };
   }, [setupAudioListeners]);
+
+  useEffect(() => {
+    if (filtersRef.current.length === 5) {
+      const isEqEnabled = settings.eqEnabled;
+      const bands = settings.eqBands || [0, 0, 0, 0, 0];
+      filtersRef.current.forEach((f, i) => {
+        f.gain.value = isEqEnabled ? bands[i] : 0;
+      });
+    }
+  }, [settings.eqEnabled, settings.eqBands]);
 
   // ─── Crossfade Monitor ───
   useEffect(() => {
@@ -683,6 +769,16 @@ function App() {
       (window as any).electronAPI.getCacheSize().then(setCacheSize);
     }
   }, [activePage]);
+
+  useEffect(() => {
+    const api = (window as any).electronAPI;
+    if (api) {
+      if (api.onMiniPlayerMode) api.onMiniPlayerMode((_event: any, mode: boolean) => {
+         setIsWidgetMode(mode);
+         if (mode && activePage !== 'home') setActivePage('home');
+      });
+    }
+  }, []);
 
   // ─── Lyrics Auto-Scroll ──────────────────────────────────────
   useEffect(() => {
@@ -910,7 +1006,7 @@ function App() {
       if (data.results) setPlaylistSearchResults(data.results);
     } catch (err) {
       console.error(err);
-      showToast(t('toastSearchFail'));
+      showToast(t('toastSearchFail'), 'error');
     }
     setIsPlaylistSearching(false);
   };
@@ -1118,9 +1214,11 @@ function App() {
           audioRef.current.src = `donpollo-cache://${song.id}`;
         } else {
           audioRef.current.src = streamUrl;
+          /*
           if ((window as any).electronAPI?.cacheAudio) {
-             (window as any).electronAPI.cacheAudio(song.id, streamUrl);
+             (window as any).electronAPI.cacheAudio(song, streamUrl, true);
           }
+          */
         }
         
         if (startTime !== undefined) {
@@ -1128,8 +1226,9 @@ function App() {
         }
         
         audioRef.current.play().catch(async (err) => {
+          console.error("PLAY ERROR:", err.name, err.message, err);
           if (err.name === 'AbortError') return;
-          showToast(t('toastServerBlocked'));
+          showToast(`Error Play: ${err.message || err.name}`, 'error');
           try {
             // Fallback Piped API
             const pipedData = await (await fetch(`https://pipedapi.kavin.rocks/streams/${song.id}`)).json();
@@ -1142,13 +1241,13 @@ function App() {
               showToast(t('toastServerFallback'), 'music');
             } else throw new Error('Format tidak didukung.');
           } catch {
-            showToast(t('toastVideoLocked'));
+            showToast(t('toastVideoLocked'), 'error');
             setIsPlaying(false);
           }
         });
       }
     } catch (err: any) {
-      showToast(`Error: ${err.message}`);
+      showToast(err.message, 'error');
       setIsPlaying(false);
     }
   };
@@ -1233,6 +1332,8 @@ function App() {
   };
 
   const handleNextRef = useRef<() => void>(() => { });
+  const handlePrevRef = useRef<() => void>(() => { });
+  const togglePlayRef = useRef<() => void>(() => { });
   const handleNext = async () => {
     if (currentIndex < queue.length - 1) {
       if (isGuest) {
@@ -1271,6 +1372,9 @@ function App() {
   };
 
   const togglePlay = () => {
+    if (audioContextRef.current && audioContextRef.current.state === 'suspended') {
+      audioContextRef.current.resume();
+    }
     if (audioRef.current) {
       if (isPlaying) {
         audioRef.current.pause();
@@ -1282,6 +1386,9 @@ function App() {
       setIsPlaying(!isPlaying);
     }
   };
+
+  handlePrevRef.current = handlePrev;
+  togglePlayRef.current = togglePlay;
 
   const handleSeek = (e: React.MouseEvent<HTMLDivElement>) => {
     if (!audioRef.current || !duration) return;
@@ -1322,77 +1429,157 @@ function App() {
   // ═══════════════════════════════════════════════════════════════
 
   const renderLibraryPage = () => (
-    <div className="page-content">
-      <div className="page-header">
-        <h1>{t('myLibrary')}</h1>
-        <p className="page-subtitle">{playHistory.length} {t('savedSongs')}</p>
+    <div className="page-content library-mode" style={{ minHeight: '100%', display: 'flex', flexDirection: 'column', background: 'var(--bg-primary)' }}>
+      <div style={{ padding: '32px 32px 16px 32px' }}>
+        <h1 style={{ fontSize: '28px', fontWeight: '800', marginBottom: '24px', color: 'var(--text-primary)' }}>{t('myLibrary')}</h1>
+        
+        {/* Dashboard Cards */}
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(250px, 1fr))', gap: '16px', marginBottom: '32px' }}>
+          
+          <div style={{ background: 'var(--bg-card)', padding: '20px', borderRadius: '12px', border: '1px solid var(--border-color)', display: 'flex', flexDirection: 'column', gap: '12px' }}>
+             <div style={{ display: 'flex', alignItems: 'center', gap: '8px', color: '#ff6b9d' }}>
+               <Heart size={20} fill="currentColor" />
+               <h3 style={{ fontSize: '12px', fontWeight: '700', letterSpacing: '1px', textTransform: 'uppercase' }}>{t('likedSongs')}</h3>
+             </div>
+             <div style={{ fontSize: '36px', fontWeight: '800' }}>{likedSongs.length} <span style={{ fontSize: '16px', color: 'var(--text-secondary)', fontWeight: '600' }}>Lagu</span></div>
+             <div style={{ fontSize: '12px', color: 'var(--text-secondary)' }}>Koleksi favorit Anda</div>
+          </div>
+          
+          <div style={{ background: 'var(--bg-card)', padding: '20px', borderRadius: '12px', border: '1px solid var(--border-color)', display: 'flex', flexDirection: 'column', gap: '12px' }}>
+             <div style={{ display: 'flex', alignItems: 'center', gap: '8px', color: 'var(--text-secondary)' }}>
+               <ListMusic size={20} />
+               <h3 style={{ fontSize: '12px', fontWeight: '700', letterSpacing: '1px', textTransform: 'uppercase' }}>{t('recentlyPlayed')}</h3>
+             </div>
+             <div style={{ fontSize: '36px', fontWeight: '800' }}>{playHistory.length} <span style={{fontSize: '16px', color: 'var(--text-secondary)', fontWeight: '600'}}>Lagu</span></div>
+             <div style={{ fontSize: '12px', color: 'var(--text-secondary)' }}>Riwayat putar terakhir</div>
+          </div>
+          
+          <div style={{ background: 'linear-gradient(135deg, #ff6b9d, #ff4785)', padding: '20px', borderRadius: '12px', display: 'flex', flexDirection: 'column', gap: '8px', justifyContent: 'center', position: 'relative', overflow: 'hidden' }}>
+             <div style={{ position: 'absolute', right: '-15px', bottom: '-15px', opacity: 0.15 }}>
+               <Headphones size={100} />
+             </div>
+             <h3 style={{ fontSize: '16px', fontWeight: '800', color: '#fff', zIndex: 1, letterSpacing: '0.5px' }}>Koleksi Pribadi<br/>Anda</h3>
+             <p style={{ fontSize: '12px', color: 'rgba(255,255,255,0.85)', zIndex: 1, margin: 0, marginTop: '4px', lineHeight: '1.4' }}>Semua lagu yang Anda putar dan sukai, tersimpan aman di sini.</p>
+          </div>
+        </div>
+
+        {likedSongs.length === 0 && playHistory.length === 0 ? (
+          <div className="empty-state" style={{ marginTop: '24px', color: 'var(--text-muted)' }}>
+            <Music size={64} style={{ marginBottom: '16px', opacity: 0.3 }} />
+            <h3 style={{ color: 'var(--text-secondary)' }}>{t('noHistory')}</h3>
+            <p style={{ fontSize: '13px' }}>{t('noHistoryDesc')}</p>
+          </div>
+        ) : (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '32px' }}>
+            
+            {/* Liked Songs List */}
+            {likedSongs.length > 0 && (
+              <section>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
+                  <h2 style={{ fontSize: '18px', fontWeight: '700', color: 'var(--text-primary)', display: 'flex', alignItems: 'center', gap: '8px' }}><Heart size={20} fill="#ff6b9d" color="#ff6b9d" /> {t('likedSongs')}</h2>
+                  <span style={{ fontSize: '12px', color: 'var(--accent-primary)', cursor: 'pointer', fontWeight: '600' }} onClick={() => startPlayingFromList(likedSongs, 0)}>{t('playAll')}</span>
+                </div>
+                
+                <div style={{ background: 'var(--bg-card)', borderRadius: '12px', border: '1px solid var(--border-color)', overflow: 'hidden' }}>
+                  <div style={{ display: 'grid', gridTemplateColumns: '40px 1fr 100px 80px', padding: '16px 24px', borderBottom: '1px solid var(--border-color)', fontSize: '11px', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '1px', fontWeight: '700' }}>
+                    <span>#</span>
+                    <span>Detail Lagu</span>
+                    <span>Durasi</span>
+                    <span></span>
+                  </div>
+                  
+                  <div style={{ display: 'flex', flexDirection: 'column' }}>
+                     {likedSongs.map((song, i) => (
+                       <div key={i} className={`offline-row ${currentSong?.id === song.id ? 'active-row' : ''}`} style={{ display: 'grid', gridTemplateColumns: '40px 1fr 100px 80px', padding: '12px 24px', alignItems: 'center', transition: 'background 0.2s', cursor: 'pointer', borderBottom: i === likedSongs.length - 1 ? 'none' : '1px solid rgba(255,255,255,0.03)' }} onClick={() => startPlayingFromList(likedSongs, i)}>
+                          <span style={{ color: currentSong?.id === song.id ? 'var(--accent-primary)' : 'var(--text-muted)', fontSize: '13px', fontWeight: '600' }}>{currentSong?.id === song.id ? <Play size={14} fill="currentColor" /> : String(i + 1).padStart(2, '0')}</span>
+                          <div style={{ display: 'flex', gap: '16px', alignItems: 'center' }}>
+                             <div style={{ position: 'relative', width: '40px', height: '40px', borderRadius: '6px', overflow: 'hidden', flexShrink: 0 }}>
+                               <img src={getCleanThumbnail(song.thumbnail)} style={{ width: '100%', height: '100%', objectFit: 'cover' }} alt="Cover" />
+                               <div className="play-overlay" style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(0,0,0,0.6)', display: 'flex', alignItems: 'center', justifyContent: 'center', opacity: 0, transition: 'opacity 0.2s' }}>
+                                 <Play fill="currentColor" size={16} />
+                               </div>
+                             </div>
+                             <div style={{ display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+                                <span style={{ fontWeight: '600', fontSize: '14px', color: currentSong?.id === song.id ? 'var(--accent-primary)' : 'var(--text-primary)', whiteSpace: 'nowrap', textOverflow: 'ellipsis', overflow: 'hidden' }}>{song.title}</span>
+                                <span style={{ fontSize: '12px', color: 'var(--text-secondary)' }}>{song.artist}</span>
+                             </div>
+                          </div>
+                          <div>
+                            <span style={{ fontSize: '13px', color: 'var(--text-secondary)' }}>{formatTime(song.duration)}</span>
+                          </div>
+                          <div style={{ display: 'flex', gap: '8px', justifyContent: 'flex-end' }}>
+                            <button className="btn-icon" onClick={(e) => { e.stopPropagation(); toggleLike(song); }} style={{ color: '#ff6b9d' }}>
+                              <Heart size={16} fill="currentColor" />
+                            </button>
+                            <button className="btn-icon" onClick={(e) => { e.stopPropagation(); setAddToPlaylistSong(song); }} style={{ color: 'var(--text-secondary)' }}>
+                              <FolderPlus size={16} />
+                            </button>
+                          </div>
+                       </div>
+                     ))}
+                  </div>
+                </div>
+              </section>
+            )}
+
+            {/* Recently Played List */}
+            {playHistory.length > 0 && (
+              <section>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
+                  <h2 style={{ fontSize: '18px', fontWeight: '700', color: 'var(--text-primary)' }}>{t('recentlyPlayed')}</h2>
+                  <span style={{ fontSize: '12px', color: 'var(--text-secondary)', cursor: 'pointer', fontWeight: '600' }} onClick={() => { setPlayHistory([]); showToast(t('toastHistoryCleared')); }}>{t('clearHistory')}</span>
+                </div>
+                
+                <div style={{ background: 'var(--bg-card)', borderRadius: '12px', border: '1px solid var(--border-color)', overflow: 'hidden' }}>
+                  <div style={{ display: 'grid', gridTemplateColumns: '40px 1fr 100px 80px', padding: '16px 24px', borderBottom: '1px solid var(--border-color)', fontSize: '11px', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '1px', fontWeight: '700' }}>
+                    <span>#</span>
+                    <span>Detail Lagu</span>
+                    <span>Durasi</span>
+                    <span></span>
+                  </div>
+                  
+                  <div style={{ display: 'flex', flexDirection: 'column' }}>
+                     {playHistory.map((song, i) => (
+                       <div key={i} className={`offline-row ${currentSong?.id === song.id ? 'active-row' : ''}`} style={{ display: 'grid', gridTemplateColumns: '40px 1fr 100px 80px', padding: '12px 24px', alignItems: 'center', transition: 'background 0.2s', cursor: 'pointer', borderBottom: i === playHistory.length - 1 ? 'none' : '1px solid rgba(255,255,255,0.03)' }} onClick={() => playSingleSong(song)}>
+                          <span style={{ color: currentSong?.id === song.id ? 'var(--accent-primary)' : 'var(--text-muted)', fontSize: '13px', fontWeight: '600' }}>{currentSong?.id === song.id ? <Play size={14} fill="currentColor" /> : String(i + 1).padStart(2, '0')}</span>
+                          <div style={{ display: 'flex', gap: '16px', alignItems: 'center' }}>
+                             <div style={{ position: 'relative', width: '40px', height: '40px', borderRadius: '6px', overflow: 'hidden', flexShrink: 0 }}>
+                               <img src={getCleanThumbnail(song.thumbnail)} style={{ width: '100%', height: '100%', objectFit: 'cover' }} alt="Cover" />
+                               <div className="play-overlay" style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(0,0,0,0.6)', display: 'flex', alignItems: 'center', justifyContent: 'center', opacity: 0, transition: 'opacity 0.2s' }}>
+                                 <Play fill="currentColor" size={16} />
+                               </div>
+                             </div>
+                             <div style={{ display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+                                <span style={{ fontWeight: '600', fontSize: '14px', color: currentSong?.id === song.id ? 'var(--accent-primary)' : 'var(--text-primary)', whiteSpace: 'nowrap', textOverflow: 'ellipsis', overflow: 'hidden' }}>{song.title}</span>
+                                <span style={{ fontSize: '12px', color: 'var(--text-secondary)' }}>{song.artist}</span>
+                             </div>
+                          </div>
+                          <div>
+                            <span style={{ fontSize: '13px', color: 'var(--text-secondary)' }}>{formatTime(song.duration)}</span>
+                          </div>
+                          <div style={{ display: 'flex', gap: '8px', justifyContent: 'flex-end' }}>
+                            <button className="btn-icon" onClick={(e) => { e.stopPropagation(); toggleLike(song); }} style={{ color: isLiked(song.id) ? '#ff6b9d' : 'var(--text-secondary)' }}>
+                              <Heart size={16} fill={isLiked(song.id) ? 'currentColor' : 'none'} />
+                            </button>
+                            <button className="btn-icon" onClick={(e) => { e.stopPropagation(); setAddToPlaylistSong(song); }} style={{ color: 'var(--text-secondary)' }}>
+                              <FolderPlus size={16} />
+                            </button>
+                          </div>
+                       </div>
+                     ))}
+                  </div>
+                </div>
+              </section>
+            )}
+          </div>
+        )}
       </div>
 
-      {likedSongs.length > 0 && (
-        <section className="home-section">
-          <div className="section-header">
-            <h2 style={{ display: 'flex', alignItems: 'center', gap: '8px' }}><Heart size={24} fill="#ff6b9d" color="#ff6b9d" /> {t('likedSongs')}</h2>
-            <span className="show-all" onClick={() => startPlayingFromList(likedSongs, 0)}>{t('playAll')}</span>
-          </div>
-          <div className="library-list">
-            {likedSongs.map((song, i) => (
-              <div key={i} className={`library-item ${currentSong?.id === song.id ? 'playing' : ''}`}>
-                <div className="library-item-art" onClick={() => startPlayingFromList(likedSongs, i)}>
-                  <img src={getCleanThumbnail(song.thumbnail)} alt={song.title} />
-                  <div className="library-item-play"><Play size={16} fill="currentColor" /></div>
-                </div>
-                <div className="library-item-info" onClick={() => startPlayingFromList(likedSongs, i)}>
-                  <div className="library-item-title" title={song.title}>{song.title}</div>
-                  <div className="library-item-artist">{song.artist}</div>
-                </div>
-                <div className="library-item-duration">{formatTime(song.duration)}</div>
-                <button className="library-item-action liked" onClick={() => toggleLike(song)} title="Hapus dari Disukai">
-                  <Heart size={16} fill="currentColor" />
-                </button>
-                <button className="library-item-action" onClick={() => setAddToPlaylistSong(song)} title="Tambah ke Playlist">
-                  <FolderPlus size={16} />
-                </button>
-              </div>
-            ))}
-          </div>
-        </section>
-      )}
-
-      {playHistory.length > 0 ? (
-        <section className="home-section">
-          <div className="section-header">
-            <h2>{t('recentlyPlayed')}</h2>
-            <span className="show-all" onClick={() => { setPlayHistory([]); showToast(t('toastHistoryCleared')); }}>{t('clearHistory')}</span>
-          </div>
-          <div className="library-list">
-            {playHistory.map((song, i) => (
-              <div key={i} className={`library-item ${currentSong?.id === song.id ? 'playing' : ''}`}>
-                <div className="library-item-art" onClick={() => playSingleSong(song)}>
-                  <img src={getCleanThumbnail(song.thumbnail)} alt={song.title} />
-                  <div className="library-item-play"><Play size={16} fill="currentColor" /></div>
-                </div>
-                <div className="library-item-info" onClick={() => playSingleSong(song)}>
-                  <div className="library-item-title" title={song.title}>{song.title}</div>
-                  <div className="library-item-artist">{song.artist}</div>
-                </div>
-                <div className="library-item-duration">{formatTime(song.duration)}</div>
-                <button className={`library-item-action ${isLiked(song.id) ? 'liked' : ''}`} onClick={() => toggleLike(song)} title="Sukai">
-                  <Heart size={16} fill={isLiked(song.id) ? 'currentColor' : 'none'} />
-                </button>
-                <button className="library-item-action" onClick={() => setAddToPlaylistSong(song)} title="Tambah ke Playlist">
-                  <FolderPlus size={16} />
-                </button>
-              </div>
-            ))}
-          </div>
-        </section>
-      ) : (
-        <div className="empty-state">
-          <Music size={64} color="var(--text-muted)" />
-          <h3>{t('noHistory')}</h3>
-          <p>{t('noHistoryDesc')}</p>
-        </div>
-      )}
+      <style>{`
+        .offline-row:hover { background: var(--bg-card-hover) !important; }
+        .offline-row:hover .play-overlay { opacity: 1 !important; }
+        .active-row { background: rgba(var(--accent-primary-rgb), 0.05); }
+      `}</style>
     </div>
   );
 
@@ -1587,6 +1774,35 @@ function App() {
         <h1>{t('settingsTitle')}</h1>
       </div>
 
+      {/* Tema Tampilan */}
+      <div className="settings-section">
+        <div className="settings-section-title" style={{ display: 'flex', alignItems: 'center', gap: '8px' }}><Paintbrush size={20} color="var(--accent-primary)" /> Tema Tampilan</div>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(120px, 1fr))', gap: '12px' }}>
+          {[
+            { id: 'default', name: 'Default', desc: 'Klasik' },
+            { id: 'minimalist', name: 'Minimalist', desc: 'Bersih & Kompak' }
+          ].map(theme => (
+            <button 
+              key={theme.id}
+              onClick={() => {
+                const newSettings = { ...settings, theme: theme.id };
+                setSettings(newSettings);
+                localStorage.setItem('donpollo_settings', JSON.stringify(newSettings));
+              }}
+              style={{ 
+                background: settings.theme === theme.id ? 'var(--accent-primary)' : 'var(--bg-card)', 
+                color: settings.theme === theme.id ? 'var(--accent-text, #ffffff)' : 'var(--text-primary)',
+                border: `1px solid ${settings.theme === theme.id ? 'var(--accent-primary)' : 'var(--border-color)'}`,
+                padding: '16px', borderRadius: '12px', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '8px', cursor: 'pointer', transition: 'all 0.2s'
+              }}
+            >
+              <div style={{ fontWeight: 'bold', fontSize: '14px' }}>{theme.name}</div>
+              <div style={{ fontSize: '11px', opacity: 0.8 }}>{theme.desc}</div>
+            </button>
+          ))}
+        </div>
+      </div>
+
       {/* Akun Discord */}
       <div className="settings-section">
         <div className="settings-section-title" style={{ display: 'flex', alignItems: 'center', gap: '8px' }}><UserCircle size={20} color="var(--accent-primary)" /> {t('accountSection')}</div>
@@ -1717,7 +1933,172 @@ function App() {
             {settings.autoSidebar !== false && <Check size={14} />}
           </button>
         </div>
+        <div className="settings-row">
+          <div>
+            <div className="settings-label">{t('minimizeToMiniPlayer')}</div>
+            <div className="settings-desc">Minimize app ke Mini Player</div>
+          </div>
+          <button className={`settings-toggle ${settings.minimizeToMiniPlayer ? 'on' : ''}`}
+            onClick={() => {
+              const newVal = !settings.minimizeToMiniPlayer;
+              setSettings((p: any) => ({ ...p, minimizeToMiniPlayer: newVal }));
+              if ((window as any).electronAPI?.setMinimizeToMiniPlayer) {
+                 (window as any).electronAPI.setMinimizeToMiniPlayer(newVal);
+              }
+            }}>
+            {settings.minimizeToMiniPlayer && <Check size={14} />}
+          </button>
+        </div>
       </div>
+
+      {/* Audio & Equalizer */}
+      <div className="settings-section">
+        <div className="settings-section-title" style={{ display: 'flex', alignItems: 'center', gap: '8px' }}><Headphones size={20} color="var(--accent-primary)" /> {t('equalizer')}</div>
+        <div className="settings-row">
+          <div>
+            <div className="settings-label">{t('eqEnabled')}</div>
+            <div className="settings-desc">Aktifkan efek Equalizer</div>
+          </div>
+          <button className={`settings-toggle ${settings.eqEnabled ? 'on' : ''}`}
+            onClick={() => setSettings((p: any) => ({ ...p, eqEnabled: !p.eqEnabled }))}>
+            {settings.eqEnabled && <Check size={14} />}
+          </button>
+        </div>
+        {settings.eqEnabled && (
+          <div className="settings-eq-container" style={{ position: 'relative', marginTop: '16px', background: 'var(--bg-secondary)', borderRadius: '12px', padding: '24px', border: '1px solid rgba(255,255,255,0.05)' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '16px', alignItems: 'center' }}>
+               <div style={{ display: 'flex', gap: '12px', alignItems: 'center' }}>
+                 <span style={{ fontSize: '12px', fontWeight: 'bold', color: 'var(--text-secondary)', textTransform: 'uppercase' }}>Preset</span>
+                 <select 
+                    className="settings-select"
+                    style={{ padding: '4px 8px', fontSize: '12px', minWidth: '120px' }}
+                    value={
+                      (() => {
+                        const b = (settings.eqBands || [0,0,0,0,0]).join(',');
+                        if (b === '0,0,0,0,0') return 'default';
+                        if (b === '6,4,0,-2,-4') return 'bass_booster';
+                        if (b === '-2,2,4,3,-1') return 'pop';
+                        if (b === '4,3,-1,2,5') return 'electronic';
+                        if (b === '3,1,0,1,3') return 'acoustic';
+                        return 'custom';
+                      })()
+                    }
+                    onChange={(e) => {
+                      const v = e.target.value;
+                      let newBands = [...(settings.eqBands || [0,0,0,0,0])];
+                      if (v === 'default') newBands = [0,0,0,0,0];
+                      if (v === 'bass_booster') newBands = [6,4,0,-2,-4];
+                      if (v === 'pop') newBands = [-2,2,4,3,-1];
+                      if (v === 'electronic') newBands = [4,3,-1,2,5];
+                      if (v === 'acoustic') newBands = [3,1,0,1,3];
+                      setSettings((p: any) => ({ ...p, eqBands: newBands }));
+                    }}
+                 >
+                    <option value="custom">Custom</option>
+                    <option value="default">Default (Flat)</option>
+                    <option value="bass_booster">Bass Booster</option>
+                    <option value="pop">Pop</option>
+                    <option value="electronic">Electronic</option>
+                    <option value="acoustic">Acoustic</option>
+                 </select>
+               </div>
+               <span style={{ fontSize: '11px', fontWeight: 'bold', color: 'var(--text-secondary)' }}>+12dB</span>
+            </div>
+            
+            <div style={{ position: 'relative', height: '180px', width: '100%', marginBottom: '8px' }}>
+              {/* SVG Background Curve */}
+              <svg viewBox="0 0 1000 180" style={{ position: 'absolute', top: 0, left: 0, width: '100%', height: '100%', overflow: 'visible', pointerEvents: 'none' }} preserveAspectRatio="none">
+                <defs>
+                  <linearGradient id="eqGrad" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="0%" stopColor="#1db954" stopOpacity="0.6" />
+                    <stop offset="100%" stopColor="#1db954" stopOpacity="0.0" />
+                  </linearGradient>
+                </defs>
+                <path d={(() => {
+                  const bands = settings.eqBands || [0,0,0,0,0];
+                  let path = "";
+                  const points = bands.map((val: number, i: number) => ({
+                    x: 100 + (i * 200),
+                    y: 90 - (val / 12) * 75
+                  }));
+                  path += `M 0,180 L 0,${points[0].y} L ${points[0].x},${points[0].y} `;
+                  for (let i = 1; i < points.length; i++) {
+                    const p0 = points[i-1];
+                    const p1 = points[i];
+                    const dx = (p1.x - p0.x) / 2;
+                    path += `C ${p0.x + dx},${p0.y} ${p1.x - dx},${p1.y} ${p1.x},${p1.y} `;
+                  }
+                  path += `L 1000,${points[points.length-1].y} L 1000,180 Z`;
+                  return path;
+                })()} fill="url(#eqGrad)" />
+                <path d={(() => {
+                  const bands = settings.eqBands || [0,0,0,0,0];
+                  let path = "";
+                  const points = bands.map((val: number, i: number) => ({
+                    x: 100 + (i * 200),
+                    y: 90 - (val / 12) * 75
+                  }));
+                  path += `M 0,${points[0].y} L ${points[0].x},${points[0].y} `;
+                  for (let i = 1; i < points.length; i++) {
+                    const p0 = points[i-1];
+                    const p1 = points[i];
+                    const dx = (p1.x - p0.x) / 2;
+                    path += `C ${p0.x + dx},${p0.y} ${p1.x - dx},${p1.y} ${p1.x},${p1.y} `;
+                  }
+                  path += `L 1000,${points[points.length-1].y}`;
+                  return path;
+                })()} fill="none" stroke="#1db954" strokeWidth="3" />
+                
+                {/* Reference lines */}
+                <line x1="0" y1="90" x2="1000" y2="90" stroke="rgba(255,255,255,0.1)" strokeWidth="1" />
+                {Array.from({length: 5}).map((_, i) => (
+                  <line key={i} x1={100 + (i * 200)} y1="0" x2={100 + (i * 200)} y2="180" stroke="rgba(255,255,255,0.05)" strokeWidth="1" />
+                ))}
+              </svg>
+              
+              {/* Sliders Overlaid */}
+              <div style={{ position: 'absolute', top: 0, left: 0, width: '100%', height: '100%', zIndex: 2 }}>
+                {['60Hz', '150Hz', '400Hz', '1kHz', '15kHz'].map((label, i) => (
+                  <div key={label} style={{ position: 'absolute', left: `${10 + i * 20}%`, transform: 'translateX(-50%)', height: '100%', width: '30px' }}>
+                    <div style={{ flex: 1, position: 'relative', width: '100%', height: '100%' }}>
+                      <input type="range" min="-12" max="12" step="0.1" 
+                        value={(settings.eqBands || [0,0,0,0,0])[i]}
+                        onChange={(e) => {
+                           const newBands = [...(settings.eqBands || [0,0,0,0,0])];
+                           newBands[i] = parseFloat(e.target.value);
+                           setSettings((p: any) => ({ ...p, eqBands: newBands }));
+                        }}
+                        style={{ 
+                          position: 'absolute', top: '50%', left: '50%', transform: 'translate(-50%, -50%) rotate(-90deg)',
+                          width: '180px', height: '20px', margin: 0, opacity: 0, cursor: 'pointer', zIndex: 3
+                        }} 
+                      />
+                      {/* Fake Knob */}
+                      <div style={{ 
+                        position: 'absolute', left: '50%', transform: 'translate(-50%, -50%)',
+                        top: `${(1 - (((settings.eqBands || [0,0,0,0,0])[i] + 12) / 24)) * 100}%`,
+                        width: '14px', height: '14px', borderRadius: '50%', background: '#fff', 
+                        boxShadow: '0 2px 4px rgba(0,0,0,0.5)', pointerEvents: 'none'
+                      }} />
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+            
+            <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '4px' }}>
+               <span style={{ fontSize: '11px', fontWeight: 'bold', color: 'var(--text-secondary)' }}>-12dB</span>
+            </div>
+            <div style={{ position: 'relative', width: '100%', height: '20px' }}>
+              {['60Hz', '150Hz', '400Hz', '1kHz', '15kHz'].map((label, i) => (
+                <span key={label} style={{ position: 'absolute', left: `${10 + i * 20}%`, transform: 'translateX(-50%)', fontSize: '11px', color: 'var(--text-secondary)', textAlign: 'center', fontWeight: '600' }}>{label}</span>
+              ))}
+            </div>
+          </div>
+        )}
+      </div>
+
+
 
       {/* Data */}
       <div className="settings-section">
@@ -1766,6 +2147,109 @@ function App() {
     </div>
   );
 
+
+  const renderDownloadsPage = () => (
+    <div className="page-content offline-mode" style={{ minHeight: '100%', display: 'flex', flexDirection: 'column', background: 'var(--bg-primary)' }}>
+      <div style={{ padding: '32px 32px 16px 32px' }}>
+        <h1 style={{ fontSize: '28px', fontWeight: '800', marginBottom: '24px', color: 'var(--text-primary)' }}>{t('offlineMode')}</h1>
+        
+        {/* Dashboard Cards */}
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(250px, 1fr))', gap: '16px', marginBottom: '32px' }}>
+          
+          <div style={{ background: 'var(--bg-card)', padding: '20px', borderRadius: '12px', border: '1px solid var(--border-color)', display: 'flex', flexDirection: 'column', gap: '12px' }}>
+             <div style={{ display: 'flex', alignItems: 'center', gap: '8px', color: 'var(--accent-primary)' }}>
+               <DownloadCloud size={20} />
+               <h3 style={{ fontSize: '12px', fontWeight: '700', letterSpacing: '1px', textTransform: 'uppercase' }}>Koleksi Lokal</h3>
+             </div>
+             <div style={{ fontSize: '36px', fontWeight: '800' }}>{downloadedSongs.length} <span style={{ fontSize: '16px', color: 'var(--text-secondary)', fontWeight: '600' }}>Lagu</span></div>
+             <div style={{ fontSize: '12px', color: 'var(--text-secondary)' }}>Tersedia tanpa internet</div>
+          </div>
+          
+          <div style={{ background: 'var(--bg-card)', padding: '20px', borderRadius: '12px', border: '1px solid var(--border-color)', display: 'flex', flexDirection: 'column', gap: '12px' }}>
+             <div style={{ display: 'flex', alignItems: 'center', gap: '8px', color: 'var(--text-secondary)' }}>
+               <Database size={20} />
+               <h3 style={{ fontSize: '12px', fontWeight: '700', letterSpacing: '1px', textTransform: 'uppercase' }}>Penyimpanan</h3>
+             </div>
+             <div style={{ fontSize: '36px', fontWeight: '800' }}>{(cacheSize / (1024 * 1024)).toFixed(1)} <span style={{fontSize: '16px', color: 'var(--text-secondary)', fontWeight: '600'}}>MB</span></div>
+             <div style={{ fontSize: '12px', color: 'var(--text-secondary)' }}>Total kapasitas terpakai</div>
+          </div>
+          
+          <div style={{ background: 'linear-gradient(135deg, #00c6ff, #0072ff)', padding: '20px', borderRadius: '12px', display: 'flex', flexDirection: 'column', gap: '8px', justifyContent: 'center', position: 'relative', overflow: 'hidden' }}>
+             <div style={{ position: 'absolute', right: '-15px', bottom: '-15px', opacity: 0.15 }}>
+               <WifiOff size={100} />
+             </div>
+             <h3 style={{ fontSize: '16px', fontWeight: '800', color: '#fff', zIndex: 1, letterSpacing: '0.5px' }}>Dengarkan<br/>Tanpa Batas</h3>
+             <p style={{ fontSize: '12px', color: 'rgba(255,255,255,0.85)', zIndex: 1, margin: 0, marginTop: '4px', lineHeight: '1.4' }}>Musik Anda selalu bersama Anda, di mana saja kapan saja.</p>
+          </div>
+
+        </div>
+
+        {/* List Section */}
+        {downloadedSongs.length === 0 ? (
+          <div className="empty-state" style={{ marginTop: '24px', color: 'var(--text-muted)' }}>
+            <FolderPlus size={64} style={{ marginBottom: '16px', opacity: 0.3 }} />
+            <h3 style={{ color: 'var(--text-secondary)' }}>Belum ada unduhan</h3>
+            <p style={{ fontSize: '13px' }}>Lagu yang selesai diputar akan ter-cache dan muncul di sini.</p>
+          </div>
+        ) : (
+          <div style={{ background: 'var(--bg-card)', borderRadius: '12px', border: '1px solid var(--border-color)', overflow: 'hidden' }}>
+            <div style={{ display: 'grid', gridTemplateColumns: '40px 1fr 120px 40px', padding: '16px 24px', borderBottom: '1px solid var(--border-color)', fontSize: '11px', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '1px', fontWeight: '700' }}>
+              <span>#</span>
+              <span>Detail Lagu</span>
+              <span>Status</span>
+              <span></span>
+            </div>
+            
+            <div style={{ display: 'flex', flexDirection: 'column' }}>
+               {downloadedSongs.map((song, i) => (
+                 <div key={i} className="offline-row" style={{ display: 'grid', gridTemplateColumns: '40px 1fr 120px 40px', padding: '12px 24px', alignItems: 'center', transition: 'background 0.2s', cursor: 'pointer', borderBottom: i === downloadedSongs.length - 1 ? 'none' : '1px solid rgba(255,255,255,0.03)' }} onClick={() => executePlay(song)}>
+                    <span style={{ color: 'var(--text-muted)', fontSize: '13px', fontWeight: '600' }}>{String(i + 1).padStart(2, '0')}</span>
+                    <div style={{ display: 'flex', gap: '16px', alignItems: 'center' }}>
+                       <div style={{ position: 'relative', width: '40px', height: '40px', borderRadius: '6px', overflow: 'hidden', flexShrink: 0 }}>
+                         <img src={song.thumbnail || getHighResImage(song.cover)} style={{ width: '100%', height: '100%', objectFit: 'cover' }} alt="Cover" />
+                         <div className="play-overlay" style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(0,0,0,0.6)', display: 'flex', alignItems: 'center', justifyContent: 'center', opacity: 0, transition: 'opacity 0.2s' }}>
+                           <Play fill="currentColor" size={16} />
+                         </div>
+                       </div>
+                       <div style={{ display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+                          <span style={{ fontWeight: '600', fontSize: '14px', whiteSpace: 'nowrap', textOverflow: 'ellipsis', overflow: 'hidden' }}>{song.title}</span>
+                          <span style={{ fontSize: '12px', color: 'var(--text-secondary)' }}>{song.artist}</span>
+                       </div>
+                    </div>
+                    <div>
+                      <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', background: 'rgba(46, 204, 113, 0.1)', color: '#2ecc71', padding: '4px 8px', borderRadius: '4px', fontSize: '11px', fontWeight: '700' }}>
+                        <CheckCircle2 size={12} /> Tersedia
+                      </span>
+                    </div>
+                    <button 
+                      className="btn-icon delete-btn" 
+                      onClick={(e) => { 
+                        e.stopPropagation(); 
+                        if ((window as any).electronAPI) {
+                          (window as any).electronAPI.deleteDownloadedSong(song.id).then(() => {
+                            setDownloadedSongs(prev => prev.filter(s => s.id !== song.id));
+                          });
+                        }
+                      }}
+                      style={{ opacity: 0.5, color: 'var(--text-secondary)' }}
+                      onMouseEnter={(e) => { e.currentTarget.style.opacity = '1'; e.currentTarget.style.color = '#ff4d4d'; }}
+                      onMouseLeave={(e) => { e.currentTarget.style.opacity = '0.5'; e.currentTarget.style.color = 'var(--text-secondary)'; }}
+                    >
+                      <Trash2 size={16} />
+                    </button>
+                 </div>
+               ))}
+            </div>
+          </div>
+        )}
+      </div>
+
+      <style>{`
+        .offline-row:hover { background: var(--bg-card-hover); }
+        .offline-row:hover .play-overlay { opacity: 1 !important; }
+      `}</style>
+    </div>
+  );
 
   const renderHomePage = () => (
     <div className="main-scroll">
@@ -2236,15 +2720,33 @@ function App() {
     );
   }
 
+  const glassBgUrl = currentSong ? (currentSong.cover || currentSong.thumbnail) : 'https://donpollobot.vercel.app/donpollo-icon.jpg';
+
   return (
-    <div className="app-layout">
-      {/* Toast */}
-      {toastData && (
-        <div className={`toast-popup ${toastData.type === 'error' ? 'toast-error' : 'toast-success'}`}>
-          {toastData.icon}
-          {toastData.msg}
-        </div>
-      )}
+    <div className={`app-layout theme-${settings.theme || 'default'}`} style={{ '--glass-bg': `url(${glassBgUrl})` } as any}>
+      {/* Toast Container */}
+      <div style={{ position: 'fixed', top: '24px', left: '50%', transform: 'translateX(-50%)', display: 'flex', flexDirection: 'column', gap: '12px', zIndex: 9999 }}>
+        {toastData && (
+          <div className={`toast-popup ${toastData.type === 'error' ? 'toast-error' : 'toast-success'}`} style={{ position: 'relative', top: 0, left: 0, transform: 'none' }}>
+            {toastData.icon}
+            {toastData.msg}
+          </div>
+        )}
+
+        {/* 
+        {Object.values(activeDownloads).map((active, i) => (
+          <div key={`dt-${i}`} className="toast-popup toast-success" style={{ position: 'relative', top: 0, left: 0, transform: 'none', flexDirection: 'column', alignItems: 'stretch' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+              <DownloadCloud size={16} />
+              <span>{t('toastDownloadStarted')} {active.songData?.title}...</span>
+            </div>
+            <div style={{ width: '100%', height: '4px', background: 'rgba(0,0,0,0.1)', borderRadius: '2px', overflow: 'hidden', marginTop: '8px' }}>
+              <div style={{ width: `${active.progress}%`, height: '100%', background: 'currentColor', transition: 'width 0.2s ease-out' }}></div>
+            </div>
+          </div>
+        ))}
+        */}
+      </div>
 
       {/* Modal: Hapus Playlist */}
       {playlistToDelete && (
@@ -2436,6 +2938,18 @@ function App() {
                   <div className="sidebar-item-subtitle">{t('playlist')} • {likedSongs.length} {t('songs')}</div>
                 </div>
               </button>
+
+              {/* 
+              <button className={`sidebar-list-item ${activePage === 'downloads' ? 'active' : ''}`} onClick={() => setActivePage('downloads')}>
+                <div className="sidebar-item-img" style={{ background: 'linear-gradient(135deg, #102a24, #121212)' }}>
+                  <FolderPlus size={20} color="#8ba69c" />
+                </div>
+                <div className="sidebar-item-info">
+                  <div className="sidebar-item-title">{t('downloads')}</div>
+                  <div className="sidebar-item-subtitle">{t('offlineMode')} • {downloadedSongs.length} {t('songs')}</div>
+                </div>
+              </button>
+              */}
 
               {/* Playlists */}
               {playlists.map(pl => (
@@ -2680,12 +3194,24 @@ function App() {
         {/* MAIN CONTENT */}
         <div className="main-area">
           {/* Top Bar */}
-          <div className="top-bar">
-            <div className="nav-arrows">
-              <button className="arrow-btn" onClick={goHome}><ChevronLeft size={20} /></button>
-              <button className="arrow-btn"><ChevronRight size={20} /></button>
+          <div className="top-bar" style={settings.theme === 'minimalist' ? { display: 'flex', justifyContent: 'space-between', alignItems: 'center' } : {}}>
+            <div style={{ display: 'flex', alignItems: 'center' }}>
+              {settings.theme === 'minimalist' && (
+                <div className="minimalist-nav" style={{ display: 'flex', gap: '8px', marginRight: '8px', alignItems: 'center' }}>
+                  <button className="btn-icon" onClick={goHome} style={{ color: activePage === 'home' ? 'var(--accent-primary)' : 'var(--text-primary)' }} title="Home"><Home size={20} /></button>
+                  <button className="btn-icon" onClick={() => setActivePage('library')} style={{ color: activePage === 'library' ? 'var(--accent-primary)' : 'var(--text-primary)' }} title="Koleksi"><ListMusic size={20} /></button>
+                {/* <button className="btn-icon" onClick={() => setActivePage('downloads')} style={{ color: activePage === 'downloads' ? 'var(--accent-primary)' : 'var(--text-primary)' }} title="Mode Offline"><DownloadCloud size={20} /></button> */}
+                  <button className="btn-icon" onClick={() => setActivePage('settings')} style={{ color: activePage === 'settings' ? 'var(--accent-primary)' : 'var(--text-primary)' }} title="Pengaturan"><Settings size={20} /></button>
+                  <div style={{ width: '1px', height: '24px', background: 'var(--border-color)', margin: '0 8px' }}></div>
+                </div>
+              )}
+              <div className="nav-arrows" style={settings.theme === 'minimalist' ? { margin: 0 } : {}}>
+                <button className="arrow-btn" onClick={goHome}><ChevronLeft size={20} /></button>
+                <button className="arrow-btn"><ChevronRight size={20} /></button>
+              </div>
             </div>
-            <div className="search-container" ref={searchContainerRef} style={{ position: 'relative' }}>
+            
+            <div className="search-container" ref={searchContainerRef} style={settings.theme === 'minimalist' ? { marginLeft: 'auto' } : { position: 'relative' }}>
               <form onSubmit={e => e.preventDefault()}>
                 <Search size={16} className="search-icon" />
                 <input
@@ -2826,6 +3352,9 @@ function App() {
           )}
           {activePage === 'settings' && (
             <div className="main-scroll">{renderSettingsPage()}</div>
+          )}
+          {activePage === 'downloads' && (
+            <div className="main-scroll">{renderDownloadsPage()}</div>
           )}
 
           {/* BOTTOM PLAYER BAR */}
@@ -3160,6 +3689,17 @@ function App() {
             setContextMenu(null);
           }}>
             <FolderPlus size={16} /> {t('addToPlaylist')}
+          </div>
+          <div className="context-menu-item" onClick={() => {
+            if ((window as any).electronAPI?.cacheAudio) {
+              const streamUrl = `${API_BASE_URL}/api/stream?id=${contextMenu.song.id}`;
+              (window as any).electronAPI.cacheAudio(contextMenu.song, streamUrl);
+            } else {
+              showToast(t('downloadDesktopOnly'), 'error');
+            }
+            setContextMenu(null);
+          }}>
+            <DownloadCloud size={16} /> {t('downloadSong')}
           </div>
         </div>
       )}
