@@ -41,6 +41,8 @@ type TranslationKeys = {
   noFriendsOnline: string;
   listenAlong: string;
   leaveParty: string;
+  friends: string;
+  pendingFriendRequest: string;
 
   // Home Page
   goodMorning: string;
@@ -102,6 +104,7 @@ type TranslationKeys = {
   // Player
   nowPlaying: string;
   queue: string;
+  emptyQueue: string;
   clearQueue: string;
   lyricsPanel: string;
   noLyrics: string;
@@ -135,6 +138,11 @@ type TranslationKeys = {
   languageSection: string;
   languageLabel: string;
   languageDesc: string;
+  themeDisplay: string;
+  themeDefault: string;
+  themeDefaultDesc: string;
+  themeMinimalist: string;
+  themeMinimalistDesc: string;
   dataSection: string;
   playHistory: string;
   savedSongs: string;
@@ -231,6 +239,8 @@ const translations: Record<Language, TranslationKeys> = {
     noFriendsOnline: 'Tidak ada teman yang sedang online.',
     listenAlong: 'Ikut Dengar',
     leaveParty: 'Tinggalkan Party',
+    friends: 'Teman',
+    pendingFriendRequest: 'permintaan pertemanan tertunda',
 
     // Home Page
     goodMorning: 'Selamat Pagi',
@@ -292,6 +302,7 @@ const translations: Record<Language, TranslationKeys> = {
     // Player
     nowPlaying: 'Sedang Diputar',
     queue: 'Antrean',
+    emptyQueue: 'Tidak ada musik dalam antrian',
     clearQueue: 'Hapus Antrean',
     lyricsPanel: 'Lirik',
     noLyrics: 'Tidak ada lirik tersedia.',
@@ -325,6 +336,11 @@ const translations: Record<Language, TranslationKeys> = {
     languageSection: 'Bahasa / Language',
     languageLabel: 'Bahasa Aplikasi',
     languageDesc: 'Pilih bahasa yang ditampilkan di seluruh aplikasi',
+    themeDisplay: 'Tema Tampilan',
+    themeDefault: 'Default',
+    themeDefaultDesc: 'Klasik',
+    themeMinimalist: 'Minimalis',
+    themeMinimalistDesc: 'Bersih & Kompak',
     dataSection: 'Data',
     playHistory: 'Riwayat Putar',
     savedSongs: 'lagu tersimpan',
@@ -420,6 +436,8 @@ const translations: Record<Language, TranslationKeys> = {
     noFriendsOnline: 'No friends are currently online.',
     listenAlong: 'Listen Along',
     leaveParty: 'Leave Party',
+    friends: 'Friends',
+    pendingFriendRequest: 'pending friend request',
 
     // Home Page
     goodMorning: 'Good Morning',
@@ -481,6 +499,7 @@ const translations: Record<Language, TranslationKeys> = {
     // Player
     nowPlaying: 'Now Playing',
     queue: 'Queue',
+    emptyQueue: 'No music in queue',
     clearQueue: 'Clear Queue',
     lyricsPanel: 'Lyrics',
     noLyrics: 'No lyrics available.',
@@ -514,6 +533,11 @@ const translations: Record<Language, TranslationKeys> = {
     languageSection: 'Language / 言語',
     languageLabel: 'App Language',
     languageDesc: 'Choose the language displayed throughout the app',
+    themeDisplay: 'Display Theme',
+    themeDefault: 'Default',
+    themeDefaultDesc: 'Classic',
+    themeMinimalist: 'Minimalist',
+    themeMinimalistDesc: 'Clean & Compact',
     dataSection: 'Data',
     playHistory: 'Play History',
     savedSongs: 'songs saved',
@@ -609,6 +633,8 @@ const translations: Record<Language, TranslationKeys> = {
     noFriendsOnline: '現在オンラインのフレンドはいません。',
     listenAlong: '一緒に聴く',
     leaveParty: '退出する',
+    friends: 'フレンド',
+    pendingFriendRequest: '件の保留中のフレンドリクエスト',
 
     // Home Page
     goodMorning: 'おはようございます',
@@ -670,6 +696,7 @@ const translations: Record<Language, TranslationKeys> = {
     // Player
     nowPlaying: '再生中',
     queue: 'キュー',
+    emptyQueue: 'キューに音楽がありません',
     clearQueue: 'キューをクリア',
     lyricsPanel: '歌詞',
     noLyrics: '歌詞はありません。',
@@ -703,6 +730,11 @@ const translations: Record<Language, TranslationKeys> = {
     languageSection: '言語 / Language',
     languageLabel: 'アプリの言語',
     languageDesc: 'アプリ全体で表示する言語を選択してください',
+    themeDisplay: 'テーマ表示',
+    themeDefault: 'デフォルト',
+    themeDefaultDesc: 'クラシック',
+    themeMinimalist: 'ミニマリスト',
+    themeMinimalistDesc: 'クリーン＆コンパクト',
     dataSection: 'データ',
     playHistory: '再生履歴',
     savedSongs: '曲が保存されています',

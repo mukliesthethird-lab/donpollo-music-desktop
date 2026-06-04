@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react';
-import { Home, Library, Plus, Mic2, Settings, Play, Pause, SkipBack, SkipForward, Repeat, Shuffle, Volume2, VolumeX, ListMusic, UserCircle, ChevronRight, Search, AlertCircle, Headset, Loader2, Maximize2, X, ChevronLeft, Music, PanelRight, Trash2, Heart, LogIn, LogOut, Check, FolderPlus, Globe, Headphones, Download, DownloadCloud, Database, WifiOff, CheckCircle2, Paintbrush } from 'lucide-react';
+import { Home, Library, Plus, Mic2, Settings, Play, Pause, SkipBack, SkipForward, Repeat, Shuffle, Volume2, VolumeX, ListMusic, UserCircle, ChevronRight, Search, AlertCircle, Headset, Loader2, Maximize2, X, ChevronLeft, ChevronUp, ChevronDown, Music, PanelRight, Trash2, Heart, LogIn, LogOut, Check, FolderPlus, Globe, Headphones, Download, DownloadCloud, Database, WifiOff, CheckCircle2, Paintbrush } from 'lucide-react';
 import './index.css';
 import './themes.css';
 import { createTranslator } from './translations';
@@ -68,7 +68,7 @@ function App() {
   const [isKrExpanded, setIsKrExpanded] = useState(false);
   const [isLatinExpanded, setIsLatinExpanded] = useState(false);
   const [isLocalExpanded, setIsLocalExpanded] = useState(false);
-
+  const [isFriendsOpen, setIsFriendsOpen] = useState(false);
   // ─── Search ─────────────────────────────────────────────────
   const [searchQuery, setSearchQuery] = useState('');
   const [searchResults, setSearchResults] = useState<any[]>([]);
@@ -1776,11 +1776,11 @@ function App() {
 
       {/* Tema Tampilan */}
       <div className="settings-section">
-        <div className="settings-section-title" style={{ display: 'flex', alignItems: 'center', gap: '8px' }}><Paintbrush size={20} color="var(--accent-primary)" /> Tema Tampilan</div>
+        <div className="settings-section-title" style={{ display: 'flex', alignItems: 'center', gap: '8px' }}><Paintbrush size={20} color="var(--accent-primary)" /> {t('themeDisplay')}</div>
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(120px, 1fr))', gap: '12px' }}>
           {[
-            { id: 'default', name: 'Default', desc: 'Klasik' },
-            { id: 'minimalist', name: 'Minimalist', desc: 'Bersih & Kompak' }
+            { id: 'default', name: t('themeDefault'), desc: t('themeDefaultDesc') },
+            { id: 'minimalist', name: t('themeMinimalist'), desc: t('themeMinimalistDesc') }
           ].map(theme => (
             <button 
               key={theme.id}
@@ -2988,9 +2988,10 @@ function App() {
             </div>
           </div>
 
-        {/* FRIEND ACTIVITY SIDEBAR */}
-        {discordUser && (
+        {/* FRIEND ACTIVITY SIDEBAR - DEFAULT THEME */}
+        {discordUser && settings.theme !== 'minimalist' && (
           <div className="friend-activity-section">
+            <div className="friend-activity-inner">
             <div className="sidebar-header" style={{ padding: '0 0 12px 0', borderBottom: '1px solid rgba(255,255,255,0.05)', marginBottom: '8px' }}>
               <div className="sidebar-title" style={{ fontSize: '12px' }}>{t('friendActivityTitle')}</div>
               <div className="sidebar-subtitle" style={{ fontSize: '11px' }}>{t('friendActivitySubtitle')}</div>
@@ -3144,6 +3145,7 @@ function App() {
                 );
               })()}
             </div>
+            </div>
           </div>
         )}
 
@@ -3198,10 +3200,22 @@ function App() {
             <div style={{ display: 'flex', alignItems: 'center' }}>
               {settings.theme === 'minimalist' && (
                 <div className="minimalist-nav" style={{ display: 'flex', gap: '8px', marginRight: '8px', alignItems: 'center' }}>
-                  <button className="btn-icon" onClick={goHome} style={{ color: activePage === 'home' ? 'var(--accent-primary)' : 'var(--text-primary)' }} title="Home"><Home size={20} /></button>
-                  <button className="btn-icon" onClick={() => setActivePage('library')} style={{ color: activePage === 'library' ? 'var(--accent-primary)' : 'var(--text-primary)' }} title="Koleksi"><ListMusic size={20} /></button>
-                {/* <button className="btn-icon" onClick={() => setActivePage('downloads')} style={{ color: activePage === 'downloads' ? 'var(--accent-primary)' : 'var(--text-primary)' }} title="Mode Offline"><DownloadCloud size={20} /></button> */}
-                  <button className="btn-icon" onClick={() => setActivePage('settings')} style={{ color: activePage === 'settings' ? 'var(--accent-primary)' : 'var(--text-primary)' }} title="Pengaturan"><Settings size={20} /></button>
+                  <button className="btn-icon" onClick={goHome} style={{ 
+                    color: activePage === 'home' ? (settings.theme === 'minimalist' ? 'var(--accent-text, black)' : 'var(--accent-primary)') : 'var(--text-primary)',
+                    background: activePage === 'home' && settings.theme === 'minimalist' ? 'var(--accent-primary)' : ''
+                  }} title="Home"><Home size={20} /></button>
+                  <button className="btn-icon" onClick={() => setActivePage('library')} style={{ 
+                    color: activePage === 'library' ? (settings.theme === 'minimalist' ? 'var(--accent-text, black)' : 'var(--accent-primary)') : 'var(--text-primary)',
+                    background: activePage === 'library' && settings.theme === 'minimalist' ? 'var(--accent-primary)' : ''
+                  }} title={t('likedSongs') || 'Liked Songs'}><Heart size={20} /></button>
+                  <button className="btn-icon" onClick={() => setActivePage('playlist')} style={{ 
+                    color: (activePage === 'playlist' || activePage === 'playlist-detail') ? (settings.theme === 'minimalist' ? 'var(--accent-text, black)' : 'var(--accent-primary)') : 'var(--text-primary)',
+                    background: (activePage === 'playlist' || activePage === 'playlist-detail') && settings.theme === 'minimalist' ? 'var(--accent-primary)' : ''
+                  }} title={t('playlist') || 'Playlists'}><ListMusic size={20} /></button>
+                  <button className="btn-icon" onClick={() => setActivePage('settings')} style={{ 
+                    color: activePage === 'settings' ? (settings.theme === 'minimalist' ? 'var(--accent-text, black)' : 'var(--accent-primary)') : 'var(--text-primary)',
+                    background: activePage === 'settings' && settings.theme === 'minimalist' ? 'var(--accent-primary)' : ''
+                  }} title="Pengaturan"><Settings size={20} /></button>
                   <div style={{ width: '1px', height: '24px', background: 'var(--border-color)', margin: '0 8px' }}></div>
                 </div>
               )}
@@ -3408,9 +3422,11 @@ function App() {
                 </div>
               </div>
               <div className="player-right">
-                <button className="chat-btn" onClick={() => setIsRightSidebarOpen(!isRightSidebarOpen)} style={{ color: isRightSidebarOpen ? 'var(--accent-primary)' : 'var(--text-secondary)' }} title="Right Sidebar">
-                  <PanelRight size={20} />
-                </button>
+                {settings.theme !== 'minimalist' && (
+                  <button className="chat-btn" onClick={() => setIsRightSidebarOpen(!isRightSidebarOpen)} style={{ color: isRightSidebarOpen ? 'var(--accent-primary)' : 'var(--text-secondary)' }} title="Right Sidebar">
+                    <PanelRight size={20} />
+                  </button>
+                )}
                 <button className="chat-btn" onClick={() => setIsWidgetMode(true)} title="Full Screen"><Maximize2 size={16} /></button>
                 <div className="player-volume-container" style={{ display: 'flex', alignItems: 'center', gap: '8px', marginLeft: '16px' }}>
                   <button className="chat-btn" onClick={() => setIsMuted(!isMuted)}>
@@ -3425,15 +3441,205 @@ function App() {
           )}
         </div>
 
+        {/* FRIEND ACTIVITY SIDEBAR - MINIMALIST THEME */}
+        {discordUser && settings.theme === 'minimalist' && (
+          <div className={`friend-activity-section xbox-widget ${isFriendsOpen ? 'expanded' : 'collapsed'}`}>
+            <div className="xbox-widget-header" onClick={() => setIsFriendsOpen(!isFriendsOpen)}>
+              <div className="xbox-widget-header-info">
+                <div className="xbox-widget-title">{t('friends')} ({onlineUsers.length})</div>
+                {joinRequests.incoming && joinRequests.incoming.length > 0 && (
+                  <div className="xbox-widget-subtitle">{joinRequests.incoming.length} {t('pendingFriendRequest')}</div>
+                )}
+              </div>
+              <div className="xbox-widget-actions">
+                {isFriendsOpen ? <ChevronDown size={20} /> : <ChevronUp size={20} />}
+              </div>
+            </div>
+            <div className="friend-activity-inner">
+            <div className="sidebar-header" style={{ padding: '0 0 12px 0', borderBottom: '1px solid rgba(255,255,255,0.05)', marginBottom: '8px' }}>
+              <div className="sidebar-title" style={{ fontSize: '12px' }}>{t('friendActivityTitle')}</div>
+              <div className="sidebar-subtitle" style={{ fontSize: '11px' }}>{t('friendActivitySubtitle')}</div>
+            </div>
+            
+            {joinRequests.incoming && joinRequests.incoming.length > 0 && (
+              <div className="join-requests-container" style={{ marginBottom: '12px', padding: '8px', backgroundColor: 'rgba(240, 178, 50, 0.1)', border: '1px solid rgba(240, 178, 50, 0.3)', borderRadius: '8px' }}>
+                <div style={{ fontSize: '11px', color: '#f0b232', fontWeight: 700, marginBottom: '8px' }}>{t('pendingRequests')}</div>
+                {joinRequests.incoming.map((req: any) => (
+                  <div key={req.id} style={{ display: 'flex', flexDirection: 'column', gap: '8px', marginBottom: '8px', paddingBottom: '8px', borderBottom: '1px solid rgba(255,255,255,0.05)' }}>
+                    <div style={{ fontSize: '12px', color: 'var(--text-primary)' }}>
+                      <strong>{req.guestName}</strong> {t('joinRequestReceived')}
+                    </div>
+                    <div style={{ display: 'flex', gap: '8px' }}>
+                      <button onClick={async () => {
+                        await (window as any).electronAPI.respondJoinRequest(req.id, 'accepted');
+                        setJoinRequests(prev => ({ ...prev, incoming: prev.incoming.filter(r => r.id !== req.id) }));
+                      }} style={{ flex: 1, padding: '4px 0', backgroundColor: '#23a559', color: 'white', border: 'none', borderRadius: '4px', cursor: 'pointer', fontSize: '11px', fontWeight: 600 }}>{t('accept')}</button>
+                      
+                      <button onClick={async () => {
+                        await (window as any).electronAPI.respondJoinRequest(req.id, 'rejected');
+                        setJoinRequests(prev => ({ ...prev, incoming: prev.incoming.filter(r => r.id !== req.id) }));
+                      }} style={{ flex: 1, padding: '4px 0', backgroundColor: '#f23f43', color: 'white', border: 'none', borderRadius: '4px', cursor: 'pointer', fontSize: '11px', fontWeight: 600 }}>{t('reject')}</button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            <div className="friend-list">
+              {(() => {
+                const effectivePartyId = activePartyId || (discordUser && onlineUsers.some(u => u.partyId === discordUser.id) ? discordUser.id : null);
+                const currentPartyMembers = onlineUsers.filter(u => effectivePartyId && (u.partyId === effectivePartyId || u.discordId === effectivePartyId));
+                const otherFriends = onlineUsers.filter(u => !effectivePartyId || (u.partyId !== effectivePartyId && u.discordId !== effectivePartyId));
+                
+                const partyAvatars = [];
+                if (effectivePartyId && discordUser) {
+                  partyAvatars.push({
+                    id: discordUser.id,
+                    url: discordUser.avatar ? `https://cdn.discordapp.com/avatars/${discordUser.id}/${discordUser.avatar}.png` : `https://ui-avatars.com/api/?name=${discordUser.username}`,
+                    name: discordUser.username
+                  });
+                  currentPartyMembers.forEach(u => {
+                    partyAvatars.push({
+                      id: u.discordId,
+                      url: u.avatarUrl || `https://ui-avatars.com/api/?name=${u.username}`,
+                      name: u.username
+                    });
+                  });
+                }
+
+                return (
+                  <>
+                    {effectivePartyId && partyAvatars.length > 0 && (
+                      <div className="friend-item current-party-block" style={{ flexDirection: 'row', alignItems: 'center', padding: '10px', background: 'rgba(255,255,255,0.03)', borderRadius: '8px', position: 'relative', marginBottom: '8px', width: '100%', boxSizing: 'border-box' }}>
+                        <div className="party-avatars" style={{ display: 'flex', marginRight: '12px' }}>
+                          {partyAvatars.map((av, idx) => (
+                            <img 
+                              key={av.id} 
+                              src={av.url} 
+                              alt={av.name} 
+                              title={av.name}
+                              style={{ 
+                                width: '28px', 
+                                height: '28px', 
+                                borderRadius: '50%', 
+                                border: '2px solid var(--background-secondary)',
+                                marginLeft: idx === 0 ? '0' : '-10px',
+                                zIndex: partyAvatars.length - idx,
+                                objectFit: 'cover'
+                              }} 
+                            />
+                          ))}
+                        </div>
+                        <div style={{ display: 'flex', flexDirection: 'column', flex: 1, overflow: 'hidden' }}>
+                          <span style={{ fontSize: '10px', color: 'var(--accent-primary)', fontWeight: 600, marginBottom: '2px', letterSpacing: '0.5px' }}>
+                            {t('listenAlong')}
+                          </span>
+                          {currentPartyMembers.length > 0 && currentPartyMembers[0].currentSong ? (
+                            <div className="friend-song" style={{ fontSize: '12px', color: 'var(--text-primary)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', width: '100%' }} title={currentPartyMembers[0].currentSong.title}>
+                              ♫ {currentPartyMembers[0].currentSong.title}
+                            </div>
+                          ) : currentSong ? (
+                            <div className="friend-song" style={{ fontSize: '12px', color: 'var(--text-primary)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', width: '100%' }} title={currentSong.title}>
+                              ♫ {currentSong.title}
+                            </div>
+                          ) : (
+                            <div className="friend-song" style={{ fontSize: '12px', color: 'var(--text-muted)' }}>Browsing...</div>
+                          )}
+                        </div>
+                        {isGuest && (
+                          <button 
+                            className="leave-party-icon-btn" 
+                            onClick={() => {
+                              setIsGuest(false);
+                              setActivePartyId(null);
+                              if (audioRef.current) audioRef.current.pause();
+                              setIsPlaying(false);
+                            }}
+                            title={t('leaveParty')}
+                            style={{ marginLeft: '8px' }}
+                          >
+                            <LogOut size={16} />
+                          </button>
+                        )}
+                      </div>
+                    )}
+
+                    {otherFriends.length === 0 && !effectivePartyId ? (
+                      <div style={{ color: 'var(--text-muted)', fontSize: '11px', textAlign: 'center', marginTop: '12px' }}>{t('noFriendsOnline')}</div>
+                    ) : (
+                      otherFriends.map(user => (
+                        <div key={user.discordId} className="friend-item">
+                          <div className="friend-avatar-container" style={{ position: 'relative' }}>
+                            <img src={user.avatarUrl || `https://ui-avatars.com/api/?name=${user.username}`} alt={user.username} className="friend-avatar" />
+                            <div className={`status-dot-avatar status-dot ${user.status || 'online'}`}></div>
+                          </div>
+                          <div className="friend-info">
+                            <div className="friend-name">{user.username}</div>
+                            {user.currentSong ? (
+                              <>
+                                <div className="friend-song" title={user.currentSong.title}>♫ {user.currentSong.title}</div>
+                                {user.status !== 'dnd' && (
+                                  <button className="listen-along-btn" onClick={async () => {
+                                    if (user.status === 'idle') {
+                                      const success = await (window as any).electronAPI.sendJoinRequest(user.partyId || user.discordId, discordUser.id, discordUser.global_name || discordUser.username);
+                                      if (success) {
+                                        showToast(t('joinRequestSent'), 'success');
+                                      }
+                                    } else {
+                                      setActivePartyId(user.partyId || user.discordId);
+                                      setIsGuest(true);
+                                      showToast(`Listening along with ${user.username}...`, 'success');
+                                    }
+                                  }}><Headphones size={12} style={{ marginRight: '4px' }}/> {user.status === 'idle' ? t('askToJoin') : t('listenAlong')}</button>
+                                )}
+                                {user.status === 'dnd' && (
+                                  <button className="listen-along-btn" disabled style={{ opacity: 0.5, cursor: 'not-allowed' }}>
+                                    <Headphones size={12} style={{ marginRight: '4px' }}/> {t('joinDisabled')}
+                                  </button>
+                                )}
+                              </>
+                            ) : (
+                              <div className="friend-song" style={{ color: 'var(--text-muted)' }}>Browsing...</div>
+                            )}
+                          </div>
+                        </div>
+                      ))
+                    )}
+                  </>
+                );
+              })()}
+            </div>
+            </div>
+          </div>
+        )}
+
         {/* RIGHT SIDEBAR */}
-        <div className={`right-sidebar ${!isRightSidebarOpen ? 'closed' : ''}`} style={showLyrics && currentSong ? {
+        <div className={`right-sidebar ${!isRightSidebarOpen && settings.theme !== 'minimalist' ? 'closed' : ''} ${settings.theme === 'minimalist' ? 'xbox-widget left-widget ' + (isRightSidebarOpen ? 'expanded' : 'collapsed') : ''}`} style={showLyrics && currentSong ? {
           backgroundImage: `url(${currentSong.thumbnail})`,
           backgroundSize: 'cover',
           backgroundPosition: 'center',
-          position: 'relative'
+          position: settings.theme === 'minimalist' ? 'fixed' : 'relative'
         } : undefined}>
+            {settings.theme === 'minimalist' && (
+              <div className="xbox-widget-header" onClick={() => setIsRightSidebarOpen(!isRightSidebarOpen)} style={{ position: 'relative', zIndex: 1, borderBottom: isRightSidebarOpen ? '1px solid rgba(255,255,255,0.05)' : 'none' }}>
+                <div className="xbox-widget-header-info">
+                  <div className="xbox-widget-title">{showLyrics ? t('lyricsPanel') : t('queue')}</div>
+                  {currentSong && <div className="xbox-widget-subtitle">{currentSong.title}</div>}
+                </div>
+                <div className="xbox-widget-actions">
+                  <button style={{ background: 'none', border: 'none', color: !showLyrics ? 'var(--accent-primary)' : 'var(--text-secondary)', cursor: 'pointer', marginRight: '8px' }} onClick={(e) => { e.stopPropagation(); setShowLyrics(false); }} title="Queue">
+                    <ListMusic size={16} />
+                  </button>
+                  <button style={{ background: 'none', border: 'none', color: showLyrics ? 'var(--accent-primary)' : 'var(--text-secondary)', cursor: 'pointer', marginRight: '12px' }} onClick={(e) => { e.stopPropagation(); setShowLyrics(true); }} title="Lyrics">
+                    <Mic2 size={16} />
+                  </button>
+                  {isRightSidebarOpen ? <ChevronDown size={20} /> : <ChevronUp size={20} />}
+                </div>
+              </div>
+            )}
+
             {showLyrics && currentSong && (
-              <div style={{
+              <div className="right-sidebar-overlay" style={{
                 position: 'absolute',
                 top: 0, left: 0, right: 0, bottom: 0,
                 backgroundColor: 'rgba(30, 31, 34, 0.5)',
@@ -3442,25 +3648,27 @@ function App() {
                 zIndex: 0
               }}></div>
             )}
-            <div className="sidebar-header" style={{ position: 'relative', zIndex: 1 }}>
-              <div>
-                <div className="sidebar-title">{showLyrics ? t('lyricsPanel') : t('queue')}</div>
-                <div className="sidebar-subtitle">
-                  {showLyrics ? (currentSong ? currentSong.title : 'No song') : `${Math.max(0, queue.length - Math.max(0, currentIndex))} ${t('songs')} • ${formatTime(queue.slice(Math.max(0, currentIndex)).reduce((acc, s) => acc + (s.duration || 0), 0))}`}
+            {settings.theme !== 'minimalist' && (
+              <div className="sidebar-header" style={{ position: 'relative', zIndex: 1 }}>
+                <div>
+                  <div className="sidebar-title">{showLyrics ? t('lyricsPanel') : t('queue')}</div>
+                  <div className="sidebar-subtitle">
+                    {showLyrics ? (currentSong ? currentSong.title : 'No song') : `${Math.max(0, queue.length - Math.max(0, currentIndex))} ${t('songs')} • ${formatTime(queue.slice(Math.max(0, currentIndex)).reduce((acc, s) => acc + (s.duration || 0), 0))}`}
+                  </div>
+                </div>
+                <div className="sidebar-actions">
+                  <button style={{ background: 'none', border: 'none', color: !showLyrics ? 'var(--accent-primary)' : 'var(--text-secondary)', cursor: 'pointer' }} onClick={() => setShowLyrics(false)} title="Queue">
+                    <ListMusic size={18} />
+                  </button>
+                  <button style={{ background: 'none', border: 'none', color: showLyrics ? 'var(--accent-primary)' : 'var(--text-secondary)', cursor: 'pointer' }} onClick={() => setShowLyrics(true)} title="Lyrics">
+                    <Mic2 size={18} />
+                  </button>
+                  <button style={{ background: 'none', border: 'none', color: 'var(--text-secondary)', cursor: 'pointer', marginLeft: '8px' }} onClick={() => setIsRightSidebarOpen(false)} title="Tutup">
+                    <X size={18} />
+                  </button>
                 </div>
               </div>
-              <div className="sidebar-actions">
-                <button style={{ background: 'none', border: 'none', color: !showLyrics ? 'var(--accent-primary)' : 'var(--text-secondary)', cursor: 'pointer' }} onClick={() => setShowLyrics(false)} title="Queue">
-                  <ListMusic size={18} />
-                </button>
-                <button style={{ background: 'none', border: 'none', color: showLyrics ? 'var(--accent-primary)' : 'var(--text-secondary)', cursor: 'pointer' }} onClick={() => setShowLyrics(true)} title="Lyrics">
-                  <Mic2 size={18} />
-                </button>
-                <button style={{ background: 'none', border: 'none', color: 'var(--text-secondary)', cursor: 'pointer', marginLeft: '8px' }} onClick={() => setIsRightSidebarOpen(false)} title="Tutup">
-                  <X size={18} />
-                </button>
-              </div>
-            </div>
+            )}
 
             {showLyrics ? (
               <div className="lyrics-mode" style={{ position: 'relative', zIndex: 1 }}>
@@ -3472,7 +3680,7 @@ function App() {
                       style={{ 
                         background: showRomanized ? 'var(--accent-primary)' : 'transparent', 
                         border: '1px solid var(--accent-primary)', 
-                        color: showRomanized ? 'white' : 'var(--accent-primary)', 
+                        color: showRomanized ? (settings.theme === 'minimalist' ? 'black' : 'white') : 'var(--accent-primary)', 
                         fontSize: '10px', padding: '2px 6px', borderRadius: '4px', cursor: 'pointer', fontWeight: 600
                       }}
                       title="Toggle Romanization"
@@ -3482,7 +3690,7 @@ function App() {
                   </div>
                   <div style={{ display: 'flex', gap: '4px', backgroundColor: 'var(--bg-card)', padding: '4px', borderRadius: '12px', border: '1px solid var(--border-color)' }}>
                     <button onClick={() => setLyricsOffset(prev => prev - 0.5)} style={{ background: 'transparent', border: 'none', color: 'var(--text-secondary)', fontSize: '11px', padding: '4px 8px', borderRadius: '8px', cursor: 'pointer' }}>-0.5s</button>
-                    <div style={{ backgroundColor: 'var(--accent-primary)', color: 'white', fontSize: '11px', fontWeight: 'bold', padding: '4px 12px', borderRadius: '8px', display: 'flex', alignItems: 'center' }}>{lyricsOffset}s</div>
+                    <div style={{ backgroundColor: 'var(--accent-primary)', color: settings.theme === 'minimalist' ? 'black' : 'white', fontSize: '11px', fontWeight: 'bold', padding: '4px 12px', borderRadius: '8px', display: 'flex', alignItems: 'center' }}>{lyricsOffset}s</div>
                     <button onClick={() => setLyricsOffset(prev => prev + 0.5)} style={{ background: 'transparent', border: 'none', color: 'var(--text-secondary)', fontSize: '11px', padding: '4px 8px', borderRadius: '8px', cursor: 'pointer' }}>+0.5s</button>
                   </div>
                 </div>
@@ -3515,47 +3723,53 @@ function App() {
               </div>
             ) : (
               <div className="queue-list">
-                {queue.map((song, idx) => {
-                  if (idx < currentIndex) return null;
-                  const isPlayingNow = currentSong?.id === song.id;
-                  return (
-                    <div key={idx} className={`queue-item ${isPlayingNow ? 'playing' : ''}`} style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                      <div style={{ display: 'flex', flex: 1, alignItems: 'center', gap: '12px', cursor: 'pointer', minWidth: 0 }} onClick={() => { setCurrentIndex(idx); executePlay(song); }}>
-                        <img src={getCleanThumbnail(song.thumbnail)} alt={song.title} style={{ width: '40px', height: '40px', borderRadius: '6px', objectFit: 'cover', flexShrink: 0 }} />
-                        <div style={{ flex: 1, overflow: 'hidden', minWidth: 0 }}>
-                          <div title={song.title} style={{ fontSize: "13px", fontWeight: 600, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{song.title}</div>
-                          <div style={{ fontSize: '12px', color: 'var(--text-secondary)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{song.artist}</div>
+                {queue.length - Math.max(0, currentIndex) <= 0 ? (
+                  <div style={{ color: 'var(--text-secondary)', fontSize: '13px', textAlign: 'center', marginTop: '32px' }}>{t('emptyQueue')}</div>
+                ) : (
+                  <>
+                    {queue.map((song, idx) => {
+                      if (idx < currentIndex) return null;
+                      const isPlayingNow = currentSong?.id === song.id;
+                      return (
+                        <div key={idx} className={`queue-item ${isPlayingNow ? 'playing' : ''}`} style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                          <div style={{ display: 'flex', flex: 1, alignItems: 'center', gap: '12px', cursor: 'pointer', minWidth: 0 }} onClick={() => { setCurrentIndex(idx); executePlay(song); }}>
+                            <img src={getCleanThumbnail(song.thumbnail)} alt={song.title} style={{ width: '40px', height: '40px', borderRadius: '6px', objectFit: 'cover', flexShrink: 0 }} />
+                            <div style={{ flex: 1, overflow: 'hidden', minWidth: 0 }}>
+                              <div title={song.title} style={{ fontSize: "13px", fontWeight: 600, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{song.title}</div>
+                              <div style={{ fontSize: '12px', color: 'var(--text-secondary)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{song.artist}</div>
+                            </div>
+                            <div style={{ fontSize: '12px', color: 'var(--text-muted)', flexShrink: 0 }}>{formatTime(song.duration)}</div>
+                          </div>
+                          
+                          {!isPlayingNow && !(isGuest && activePartyId) && (
+                            <button 
+                              className="queue-remove-btn"
+                              style={{
+                                background: 'transparent', border: 'none', color: 'var(--text-muted)', cursor: 'pointer', padding: '4px',
+                                display: 'flex', alignItems: 'center', justifyContent: 'center', borderRadius: '4px', flexShrink: 0
+                              }}
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setQueue(prev => {
+                                  const newQ = [...prev];
+                                  newQ.splice(idx, 1);
+                                  setOriginalQueue(newQ);
+                                  return newQ;
+                                });
+                              }}
+                              onMouseEnter={(e) => e.currentTarget.style.color = 'var(--accent-primary)'}
+                              onMouseLeave={(e) => e.currentTarget.style.color = 'var(--text-muted)'}
+                            >
+                              <X size={16} />
+                            </button>
+                          )}
                         </div>
-                        <div style={{ fontSize: '12px', color: 'var(--text-muted)', flexShrink: 0 }}>{formatTime(song.duration)}</div>
-                      </div>
-                      
-                      {!isPlayingNow && !(isGuest && activePartyId) && (
-                        <button 
-                          className="queue-remove-btn"
-                          style={{
-                            background: 'transparent', border: 'none', color: 'var(--text-muted)', cursor: 'pointer', padding: '4px',
-                            display: 'flex', alignItems: 'center', justifyContent: 'center', borderRadius: '4px', flexShrink: 0
-                          }}
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            setQueue(prev => {
-                              const newQ = [...prev];
-                              newQ.splice(idx, 1);
-                              setOriginalQueue(newQ);
-                              return newQ;
-                            });
-                          }}
-                          onMouseEnter={(e) => e.currentTarget.style.color = 'var(--accent-primary)'}
-                          onMouseLeave={(e) => e.currentTarget.style.color = 'var(--text-muted)'}
-                        >
-                          <X size={16} />
-                        </button>
-                      )}
-                    </div>
-                  );
-                })}
-                {queue.length > 0 && !(isGuest && activePartyId) && (
-                  <div className="clear-queue" onClick={() => { setQueue([]); setOriginalQueue([]); setCurrentIndex(-1); }}>{t('clearQueue')}</div>
+                      );
+                    })}
+                    {queue.length > 0 && !(isGuest && activePartyId) && (
+                      <div className="clear-queue" onClick={() => { setQueue([]); setOriginalQueue([]); setCurrentIndex(-1); }}>{t('clearQueue')}</div>
+                    )}
+                  </>
                 )}
               </div>
             )}

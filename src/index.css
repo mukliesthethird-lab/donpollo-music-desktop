@@ -601,7 +601,7 @@ body {
 
 .btn-primary {
   background-color: var(--accent-primary);
-  color: white;
+  color: var(--accent-text, white);
   border: none;
   border-radius: 20px;
   padding: 10px 24px;
@@ -915,7 +915,7 @@ body {
 
 .bento-play-btn:hover {
   background: var(--accent-primary);
-  color: white;
+  color: var(--accent-text, white);
   transform: scale(1.1) !important;
 }
 
@@ -1038,7 +1038,7 @@ body {
 
 .card-v2-play-btn:hover {
   background: var(--accent-primary);
-  color: white;
+  color: var(--accent-text, white);
 }
 
 .card-v2-eq {
