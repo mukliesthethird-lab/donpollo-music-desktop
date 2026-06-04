@@ -13,6 +13,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
   onUpdateAvailable: (callback: (event: any, info: any) => void) => ipcRenderer.on('update-available', callback),
   onUpdateDownloaded: (callback: (event: any, info: any) => void) => ipcRenderer.on('update-downloaded', callback),
   onDownloadProgress: (callback: (event: any, progressObj: any) => void) => ipcRenderer.on('download-progress', callback),
+  onUpdateError: (callback: (event: any, error: string) => void) => ipcRenderer.on('update-error', callback),
   downloadUpdate: () => ipcRenderer.send('download-update'),
   installUpdate: () => ipcRenderer.send('install-update'),
   updatePresence: (data: any) => ipcRenderer.invoke('update-presence', data),

@@ -110,7 +110,7 @@ function App() {
   }, [searchQuery]);
 
   // ─── Updater State ──────────────────────────────────────────
-  const [updateStatus, setUpdateStatus] = useState<'none' | 'available' | 'downloading' | 'downloaded'>('none');
+  const [updateStatus, setUpdateStatus] = useState<'none' | 'available' | 'downloading' | 'downloaded' | 'error'>('none');
   const [updateProgress, setUpdateProgress] = useState<number>(0);
 
   // ─── Listen Along State ─────────────────────────────────────
@@ -249,6 +249,12 @@ function App() {
           if (progressObj && progressObj.percent) {
             setUpdateProgress(Math.floor(progressObj.percent));
           }
+        });
+      }
+      if ((window as any).electronAPI.onUpdateError) {
+        (window as any).electronAPI.onUpdateError((_event: any, errorMsg: string) => {
+          console.error('Update error:', errorMsg);
+          setUpdateStatus('error');
         });
       }
     }
@@ -2699,6 +2705,7 @@ function App() {
                   <span>
                     {updateStatus === 'available' ? t('updateAvailable') : 
                      updateStatus === 'downloading' ? `${t('updateDownloading')} (${updateProgress}%)` : 
+                     updateStatus === 'error' ? 'Update Gagal' :
                      t('updateReady')}
                   </span>
                 </button>
