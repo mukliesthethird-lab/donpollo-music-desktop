@@ -2735,7 +2735,18 @@ function App() {
               <div className="player-left">
                 {currentSong ? (
                   <>
-                    <img src={getCleanThumbnail(currentSong.thumbnail)} className="player-cover" alt="cover" />
+                    <img 
+                      src={getCleanThumbnail(currentSong.thumbnail)} 
+                      className="player-cover" 
+                      alt="cover" 
+                      style={{
+                        animation: isPlaying ? 'spin 12s linear infinite' : 'none',
+                        borderRadius: '50%',
+                        border: '2px solid var(--surface-tertiary)',
+                        boxShadow: isPlaying ? '0 0 10px rgba(0, 255, 170, 0.2)' : 'none',
+                        transition: 'all 0.3s ease'
+                      }}
+                    />
                     <div className="player-info">
                       <span className="player-title" title={currentSong.title}>{currentSong.title}</span>
                       <span className="player-artist" style={{ color: 'var(--text-secondary)', fontSize: '12px' }}>{currentSong.artist}</span>
