@@ -447,16 +447,15 @@ function App() {
           if (!isGuest) {
             const queueReqs = await (window as any).electronAPI.pollQueueRequests(discordUser.id);
             if (queueReqs && queueReqs.length > 0) {
-              setQueue((prevQueue: any[]) => {
-                const newQueue = [...prevQueue];
-                for (const req of queueReqs) {
-                  newQueue.push(req.songData);
-                  showToast(`${req.guestName} menambahkan lagu ke antrean!`, 'success');
-                  (window as any).electronAPI.respondQueueRequest(req.id, 'consumed');
-                }
-                setOriginalQueue(newQueue);
-                return newQueue;
-              });
+              const newSongs = queueReqs.map((r: any) => r.songData);
+              
+              setQueue((prevQueue: any[]) => [...prevQueue, ...newSongs]);
+              setOriginalQueue((prevQueue: any[]) => [...prevQueue, ...newSongs]);
+              
+              for (const req of queueReqs) {
+                showToast(`${req.guestName} menambahkan lagu ke antrean!`, 'success');
+                (window as any).electronAPI.respondQueueRequest(req.id, 'consumed');
+              }
             }
           }
 
@@ -1273,8 +1272,13 @@ function App() {
 
   const togglePlay = () => {
     if (audioRef.current) {
-      if (isPlaying) audioRef.current.pause();
-      else audioRef.current.play();
+      if (isPlaying) {
+        audioRef.current.pause();
+        if (fadeAudioRef.current) fadeAudioRef.current.pause();
+      } else {
+        audioRef.current.play();
+        if (fadeAudioRef.current) fadeAudioRef.current.play();
+      }
       setIsPlaying(!isPlaying);
     }
   };
