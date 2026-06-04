@@ -617,6 +617,7 @@ ipcMain.on('clear-activity', () => {
 // AUTO UPDATER
 autoUpdater.autoDownload = false; // We want to ask the user to download or we can download automatically and notify
 autoUpdater.autoInstallOnAppQuit = true;
+autoUpdater.allowPrerelease = true;
 
 autoUpdater.on('update-available', (info) => {
   if (mainWindow) mainWindow.webContents.send('update-available', info);

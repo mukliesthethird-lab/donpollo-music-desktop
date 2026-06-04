@@ -1730,7 +1730,8 @@ function App() {
             <div className="settings-label">{t('appVersion')}</div>
             <div className="settings-desc">Don Pollo Music Desktop</div>
           </div>
-          <span style={{ color: 'var(--text-muted)', fontSize: '13px' }}>v1.0.0</span>
+          {/* @ts-ignore */}
+          <span style={{ color: 'var(--text-muted)', fontSize: '13px' }}>v{__APP_VERSION__ || '1.0.0-BETA'}</span>
         </div>
       </div>
     </div>
