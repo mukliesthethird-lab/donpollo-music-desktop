@@ -91,6 +91,9 @@ type TranslationKeys = {
   create: string;
   back: string;
   save: string;
+  importPlaylist: string;
+  importPlaylistPlaceholder: string;
+  importing: string;
 
   // Player
   nowPlaying: string;
@@ -131,6 +134,8 @@ type TranslationKeys = {
   playlistCount: string;
   deleteAllPlaylists: string;
   appVersion: string;
+  clearAudioCache: string;
+  audioCacheDesc: string;
 
   // Toast
   toastLogout: string;
@@ -139,10 +144,14 @@ type TranslationKeys = {
   hitsJp: string;
   hitsKr: string;
   hitsLatin: string;
+  playSong: string;
+  likeSong: string;
+  unlikeSong: string;
   trendingLocal: string;
   toastHistoryCleared: string;
   toastPlaylistDeleted: string;
   toastPlaylistCreated: string;
+  toastImportSuccess: string;
   toastAddedToPlaylist: string;
   toastAlreadyInPlaylist: string;
   toastLiked: string;
@@ -159,6 +168,7 @@ type TranslationKeys = {
   lyricsNotFound: string;
   lyricsNotLRC: string;
   lyricsFailed: string;
+  toastCacheCleared: string;
 };
 
 const translations: Record<Language, TranslationKeys> = {
@@ -251,6 +261,9 @@ const translations: Record<Language, TranslationKeys> = {
     create: 'Buat',
     back: 'Kembali',
     save: 'Simpan',
+    importPlaylist: 'Impor Playlist YouTube',
+    importPlaylistPlaceholder: 'URL Playlist YouTube...',
+    importing: 'Sedang Mengimpor...',
 
     // Player
     nowPlaying: 'Sedang Diputar',
@@ -291,6 +304,8 @@ const translations: Record<Language, TranslationKeys> = {
     playlistCount: 'playlist tersimpan',
     deleteAllPlaylists: 'Hapus Semua Playlist',
     appVersion: 'Versi Aplikasi',
+    clearAudioCache: 'Hapus Cache Lagu Lokal',
+    audioCacheDesc: 'Cache menyimpan lagu untuk memutar lebih cepat dan hemat kuota',
 
     // Toast
     toastLogout: 'Berhasil logout dan pemutaran dihentikan',
@@ -299,10 +314,14 @@ const translations: Record<Language, TranslationKeys> = {
     hitsJp: 'Lagu-lagu Hits Jepang',
     hitsKr: 'Lagu-lagu Hits Korea',
     hitsLatin: 'Lagu-lagu Hits Latin',
+    playSong: 'Putar Lagu',
+    likeSong: 'Sukai',
+    unlikeSong: 'Hapus dari Disukai',
     trendingLocal: 'Sedang Tren di',
     toastHistoryCleared: 'Riwayat dihapus.',
     toastPlaylistDeleted: 'Playlist dihapus.',
     toastPlaylistCreated: 'berhasil dibuat!',
+    toastImportSuccess: 'berhasil diimpor!',
     toastAddedToPlaylist: 'Lagu ditambahkan ke playlist!',
     toastAlreadyInPlaylist: 'Lagu sudah ada di playlist ini.',
     toastLiked: 'Ditambahkan ke Disukai',
@@ -319,6 +338,7 @@ const translations: Record<Language, TranslationKeys> = {
     lyricsNotFound: 'Lirik tidak ditemukan.',
     lyricsNotLRC: 'Lirik tidak berformat LRC.',
     lyricsFailed: 'Gagal mengambil lirik.',
+    toastCacheCleared: 'Cache lagu lokal berhasil dihapus!',
   },
 
   en: {
@@ -410,6 +430,9 @@ const translations: Record<Language, TranslationKeys> = {
     create: 'Create',
     back: 'Back',
     save: 'Save',
+    importPlaylist: 'Import YouTube Playlist',
+    importPlaylistPlaceholder: 'YouTube Playlist URL...',
+    importing: 'Importing...',
 
     // Player
     nowPlaying: 'Now Playing',
@@ -450,6 +473,8 @@ const translations: Record<Language, TranslationKeys> = {
     playlistCount: 'playlists saved',
     deleteAllPlaylists: 'Delete All Playlists',
     appVersion: 'App Version',
+    clearAudioCache: 'Clear Local Audio Cache',
+    audioCacheDesc: 'Cache saves songs for faster playback and data saving',
 
     // Toast
     toastLogout: 'Logged out and playback stopped',
@@ -458,10 +483,14 @@ const translations: Record<Language, TranslationKeys> = {
     hitsJp: 'J-Pop Hits',
     hitsKr: 'K-Pop Hits',
     hitsLatin: 'Latin Pop Hits',
+    playSong: 'Play Song',
+    likeSong: 'Like',
+    unlikeSong: 'Remove from Liked',
     trendingLocal: 'Trending in',
     toastHistoryCleared: 'History cleared.',
     toastPlaylistDeleted: 'Playlist deleted.',
     toastPlaylistCreated: 'created successfully!',
+    toastImportSuccess: 'imported successfully!',
     toastAddedToPlaylist: 'Song added to playlist!',
     toastAlreadyInPlaylist: 'Song is already in this playlist.',
     toastLiked: 'Added to Liked Songs',
@@ -478,6 +507,7 @@ const translations: Record<Language, TranslationKeys> = {
     lyricsNotFound: 'Lyrics not found.',
     lyricsNotLRC: 'Lyrics are not in LRC format.',
     lyricsFailed: 'Failed to fetch lyrics.',
+    toastCacheCleared: 'Local audio cache cleared successfully!',
   },
 
   ja: {
@@ -569,6 +599,9 @@ const translations: Record<Language, TranslationKeys> = {
     create: '作成',
     back: '戻る',
     save: '保存',
+    importPlaylist: 'YouTubeプレイリストをインポート',
+    importPlaylistPlaceholder: 'YouTubeプレイリストのURL...',
+    importing: 'インポート中...',
 
     // Player
     nowPlaying: '再生中',
@@ -609,18 +642,24 @@ const translations: Record<Language, TranslationKeys> = {
     playlistCount: 'プレイリストが保存されています',
     deleteAllPlaylists: 'すべてのプレイリストを削除',
     appVersion: 'アプリバージョン',
+    clearAudioCache: 'ローカルオーディオキャッシュをクリア',
+    audioCacheDesc: 'キャッシュは曲を保存して、より高速に再生し、データを節約します',
 
     // Toast
     toastLogout: 'ログアウトして再生を停止しました',
     hitsInt: 'グローバル・ヒット',
     hitsId: 'インドネシア・ヒット',
     hitsJp: 'J-Pop ヒット',
-    hitsKr: 'K-Pop ヒット',
+    hitsKr: 'K-Popトップ',
     hitsLatin: 'ラテン・ヒット',
+    playSong: '曲を再生',
+    likeSong: 'お気に入り',
+    unlikeSong: 'お気に入りから削除',
     trendingLocal: 'トレンド:',
     toastHistoryCleared: '履歴を削除しました。',
     toastPlaylistDeleted: 'プレイリストを削除しました。',
     toastPlaylistCreated: 'を作成しました！',
+    toastImportSuccess: 'を正常にインポートしました！',
     toastAddedToPlaylist: 'プレイリストに追加しました！',
     toastAlreadyInPlaylist: 'この曲はすでにプレイリストに含まれています。',
     toastLiked: 'お気に入りに追加しました',
@@ -637,6 +676,7 @@ const translations: Record<Language, TranslationKeys> = {
     lyricsNotFound: '歌詞が見つかりません。',
     lyricsNotLRC: 'LRC形式の歌詞ではありません。',
     lyricsFailed: '歌詞の取得に失敗しました。',
+    toastCacheCleared: 'ローカルオーディオキャッシュが正常にクリアされました！',
   },
 };
 

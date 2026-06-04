@@ -1,6 +1,8 @@
-import { app, BrowserWindow, ipcMain, Menu } from 'electron';
+import { app, BrowserWindow, ipcMain, Menu, protocol } from 'electron';
 import * as path from 'path';
 import * as fs from 'fs';
+import * as https from 'https';
+import * as http from 'http';
 import mysql from 'mysql2/promise';
 import dotenv from 'dotenv';
 import { autoUpdater } from 'electron-updater';
@@ -654,8 +656,117 @@ ipcMain.handle('romanize-lyrics', async (event, text: string, lang: 'ko' | 'ja')
   return text;
 });
 
+// CACHING SYSTEM
+const CACHE_LIMIT_BYTES = 1024 * 1024 * 1024; // 1 GB
+const cacheDir = path.join(app.getPath('userData'), 'AudioCache');
+if (!fs.existsSync(cacheDir)) {
+  fs.mkdirSync(cacheDir, { recursive: true });
+}
+
+function enforceCacheLimit() {
+  fs.readdir(cacheDir, (err, files) => {
+    if (err) return;
+    let totalSize = 0;
+    const fileStats = files.map(file => {
+      const filePath = path.join(cacheDir, file);
+      const stats = fs.statSync(filePath);
+      totalSize += stats.size;
+      return { filePath, size: stats.size, mtime: stats.mtime.getTime() };
+    });
+
+    if (totalSize > CACHE_LIMIT_BYTES) {
+      fileStats.sort((a, b) => a.mtime - b.mtime); // Oldest first
+      for (const file of fileStats) {
+        try {
+          fs.unlinkSync(file.filePath);
+          totalSize -= file.size;
+          if (totalSize <= CACHE_LIMIT_BYTES) break;
+        } catch (e) { }
+      }
+    }
+  });
+}
+
+function downloadToCache(songId: string, urlStr: string) {
+  const filePath = path.join(cacheDir, `${songId}.m4a`);
+  const tempPath = path.join(cacheDir, `${songId}.tmp`);
+  
+  // If already cached or currently downloading, skip
+  if (fs.existsSync(filePath) || fs.existsSync(tempPath)) return;
+
+  const url = new URL(urlStr);
+  const client = url.protocol === 'https:' ? https : http;
+
+  client.get(urlStr, (response) => {
+    // Only save if status is OK and content is audio/video
+    if (response.statusCode === 200) {
+      const fileStream = fs.createWriteStream(tempPath);
+      response.pipe(fileStream);
+
+      fileStream.on('finish', () => {
+        fileStream.close(() => {
+          try {
+            fs.renameSync(tempPath, filePath);
+            enforceCacheLimit();
+          } catch (e) {}
+        });
+      });
+      
+      fileStream.on('error', () => {
+        fs.unlink(tempPath, () => {});
+      });
+    } else {
+      // Consume response data to free up memory
+      response.resume();
+    }
+  }).on('error', () => {
+    fs.unlink(tempPath, () => {});
+  });
+}
+
+ipcMain.handle('check-cache', async (event, songId) => {
+  const filePath = path.join(cacheDir, `${songId}.m4a`);
+  return fs.existsSync(filePath);
+});
+
+ipcMain.on('cache-audio', (event, songId, url) => {
+  downloadToCache(songId, url);
+});
+
+ipcMain.handle('clear-cache', async () => {
+  try {
+    const files = fs.readdirSync(cacheDir);
+    for (const file of files) {
+      fs.unlinkSync(path.join(cacheDir, file));
+    }
+    return true;
+  } catch (e) {
+    return false;
+  }
+});
+
+ipcMain.handle('get-cache-size', async () => {
+  try {
+    const files = fs.readdirSync(cacheDir);
+    let totalSize = 0;
+    for (const file of files) {
+      totalSize += fs.statSync(path.join(cacheDir, file)).size;
+    }
+    return totalSize;
+  } catch (e) {
+    return 0;
+  }
+});
+
 // APP LIFECYCLE
 app.whenReady().then(async () => {
+  protocol.registerFileProtocol('donpollo-cache', (request, callback) => {
+    const url = request.url.replace('donpollo-cache://', '');
+    const songId = url.split('/')[0].split('?')[0];
+    const filePath = path.join(cacheDir, `${songId}.m4a`);
+    callback({ path: filePath });
+  });
+
   Menu.setApplicationMenu(null);
   await initDB();
   createWindow();

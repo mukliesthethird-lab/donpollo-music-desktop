@@ -30,4 +30,8 @@ contextBridge.exposeInMainWorld('electronAPI', {
   clearActivity: () => ipcRenderer.send('clear-activity'),
   onDiscordOAuthToken: (callback: (token: string) => void) =>
     ipcRenderer.on('discord-oauth-token', (_event, token) => callback(token)),
+  checkCache: (songId: string) => ipcRenderer.invoke('check-cache', songId),
+  cacheAudio: (songId: string, url: string) => ipcRenderer.send('cache-audio', songId, url),
+  clearCache: () => ipcRenderer.invoke('clear-cache'),
+  getCacheSize: () => ipcRenderer.invoke('get-cache-size'),
 });

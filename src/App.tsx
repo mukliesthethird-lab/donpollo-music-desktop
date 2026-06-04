@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react';
-import { Home, Library, Plus, Mic2, Settings, Play, Pause, SkipBack, SkipForward, Repeat, Shuffle, Volume2, VolumeX, ListMusic, UserCircle, ChevronRight, Search, AlertCircle, Headset, Loader2, Maximize2, X, ChevronLeft, Music, PanelRight, Trash2, Heart, LogIn, LogOut, Check, FolderPlus, Globe, Headphones } from 'lucide-react';
+import { Home, Library, Plus, Mic2, Settings, Play, Pause, SkipBack, SkipForward, Repeat, Shuffle, Volume2, VolumeX, ListMusic, UserCircle, ChevronRight, Search, AlertCircle, Headset, Loader2, Maximize2, X, ChevronLeft, Music, PanelRight, Trash2, Heart, LogIn, LogOut, Check, FolderPlus, Globe, Headphones, Download } from 'lucide-react';
 import './index.css';
 import { createTranslator } from './translations';
 import type { Language } from './translations';
@@ -115,6 +115,7 @@ function App() {
   // ─── Listen Along State ─────────────────────────────────────
   const [onlineUsers, setOnlineUsers] = useState<any[]>([]);
   const [activePartyId, setActivePartyId] = useState<string | null>(null);
+  const [cacheSize, setCacheSize] = useState<number>(0);
   const [isGuest, setIsGuest] = useState(false);
 
   // ─── Real Data ──────────────────────────────────────────────
@@ -301,6 +302,9 @@ function App() {
   const [playlistToDelete, setPlaylistToDelete] = useState<string | null>(null);
   const [isEditingPlaylistName, setIsEditingPlaylistName] = useState(false);
   const [editPlaylistNameValue, setEditPlaylistNameValue] = useState('');
+  const [showImportPlaylist, setShowImportPlaylist] = useState(false);
+  const [importPlaylistUrl, setImportPlaylistUrl] = useState('');
+  const [isImporting, setIsImporting] = useState(false);
   const [showAvatarPrompt, setShowAvatarPrompt] = useState(false);
   const [avatarUrlInput, setAvatarUrlInput] = useState('');
   const [playlistSearchQuery, setPlaylistSearchQuery] = useState('');
@@ -349,6 +353,28 @@ function App() {
   const [originalQueue, setOriginalQueue] = useState<any[]>([]);
   const [currentIndex, setCurrentIndex] = useState(-1);
   const [isShuffled, setIsShuffled] = useState(false);
+
+  // ─── Pre-fetch (Pre-cache) Next Song ───
+  useEffect(() => {
+    if (queue.length > 0 && currentIndex >= 0 && currentIndex < queue.length - 1) {
+      const nextSong = queue[currentIndex + 1];
+      if (!nextSong) return;
+      
+      const prefetch = async () => {
+        if ((window as any).electronAPI?.checkCache) {
+          const isCached = await (window as any).electronAPI.checkCache(nextSong.id);
+          if (!isCached) {
+            console.log(`[Prefetch] Memulai download diam-diam untuk lagu berikutnya: ${nextSong.title}`);
+            const streamUrl = `${API_BASE_URL}/api/stream?id=${nextSong.id}`;
+            (window as any).electronAPI.cacheAudio(nextSong.id, streamUrl);
+          }
+        }
+      };
+      // Delay sedikit agar tidak mengganggu proses load lagu utama
+      const timer = setTimeout(prefetch, 8000); 
+      return () => clearTimeout(timer);
+    }
+  }, [currentIndex, queue]);
 
   // ─── Listen Along & Presence Sync ───
   useEffect(() => {
@@ -579,6 +605,9 @@ function App() {
 
   useEffect(() => {
     const audio = new Audio();
+    // Initialize with current state values so it respects saved settings
+    audio.volume = isMuted ? 0 : volume;
+    audio.loop = isLooping;
     audioRef.current = audio;
     setupAudioListeners(audio);
     return () => {
@@ -643,6 +672,12 @@ function App() {
       audioRef.current.loop = isLooping;
     }
   }, [volume, isMuted, isLooping]);
+
+  useEffect(() => {
+    if (activePage === 'settings' && (window as any).electronAPI?.getCacheSize) {
+      (window as any).electronAPI.getCacheSize().then(setCacheSize);
+    }
+  }, [activePage]);
 
   // ─── Lyrics Auto-Scroll ──────────────────────────────────────
   useEffect(() => {
@@ -792,6 +827,45 @@ function App() {
     setActivePage('playlist');
     setPlaylistToDelete(null);
     showToast(t('toastPlaylistDeleted'));
+  };
+
+  const handleClearCache = async () => {
+    if ((window as any).electronAPI?.clearCache) {
+      await (window as any).electronAPI.clearCache();
+      setCacheSize(0);
+      showToast(t('toastCacheCleared'));
+    }
+  };
+
+  const handleImportPlaylist = async () => {
+    if (!importPlaylistUrl.trim()) return;
+    setIsImporting(true);
+    showToast(t('importing'));
+    try {
+      const res = await fetch(`${API_BASE_URL}/api/playlist?url=${encodeURIComponent(importPlaylistUrl)}`);
+      if (!res.ok) throw new Error('Failed to connect to backend');
+      const data = await res.json();
+      if (data.error) throw new Error(data.error);
+      
+      const newPlaylist: Playlist = {
+        id: `playlist-${Date.now()}`,
+        name: data.name || 'Imported Playlist',
+        avatar: data.cover || '',
+        songs: data.songs || [],
+        createdAt: Date.now()
+      };
+      
+      setPlaylists((prev: any) => [...prev, newPlaylist]);
+      showToast(`"${newPlaylist.name}" ${t('toastImportSuccess')}`);
+      setShowImportPlaylist(false);
+      setImportPlaylistUrl('');
+      setActivePlaylistId(newPlaylist.id);
+      setActivePage('playlist');
+    } catch (e: any) {
+      showToast(e.message || 'Import failed', 'error');
+    } finally {
+      setIsImporting(false);
+    }
   };
 
   const handleEditPlaylistName = async (playlistId: string) => {
@@ -1017,19 +1091,42 @@ function App() {
     try {
       setLyricsData(null);
       setLyricsOffset(0);
+      
+      // 1. Update UI langsung agar terasa lebih cepat
+      setCurrentSong(song);
+      setDuration(song.duration || 0);
+      setIsPlaying(true);
+      
+      // 2. Fetch lyrics berjalan di background
       fetchLyrics(song.title, song.artist, song.duration || 0);
-      const data = await (await fetch(`${API_BASE_URL}/api/stream?id=${song.id}&raw=true`)).json();
-      if (data.url && audioRef.current) {
-        setCurrentSong(song);
-        setDuration(song.duration || 0);
-        audioRef.current.src = `${API_BASE_URL}/api/stream?id=${song.id}`;
+
+      // 3. Cek cache lokal atau stream langsung
+      if (audioRef.current) {
+        let streamUrl = `${API_BASE_URL}/api/stream?id=${song.id}`;
+        let isCached = false;
+        
+        if ((window as any).electronAPI?.checkCache) {
+           isCached = await (window as any).electronAPI.checkCache(song.id);
+        }
+
+        if (isCached) {
+          audioRef.current.src = `donpollo-cache://${song.id}`;
+        } else {
+          audioRef.current.src = streamUrl;
+          if ((window as any).electronAPI?.cacheAudio) {
+             (window as any).electronAPI.cacheAudio(song.id, streamUrl);
+          }
+        }
+        
         if (startTime !== undefined) {
           audioRef.current.currentTime = startTime;
         }
+        
         audioRef.current.play().catch(async (err) => {
           if (err.name === 'AbortError') return;
           showToast(t('toastServerBlocked'));
           try {
+            // Fallback Piped API
             const pipedData = await (await fetch(`https://pipedapi.kavin.rocks/streams/${song.id}`)).json();
             if (pipedData.error) throw new Error(pipedData.error);
             const bestAudio = pipedData.audioStreams?.find((s: any) => s.mimeType?.includes('audio/mp4')) || pipedData.audioStreams?.[0];
@@ -1044,10 +1141,10 @@ function App() {
             setIsPlaying(false);
           }
         });
-        setIsPlaying(true);
       }
     } catch (err: any) {
       showToast(`Error: ${err.message}`);
+      setIsPlaying(false);
     }
   };
 
@@ -1615,6 +1712,20 @@ function App() {
         </div>
         <div className="settings-row">
           <div>
+            <div className="settings-label">{t('clearAudioCache')}</div>
+            <div className="settings-desc">{t('audioCacheDesc')}</div>
+          </div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+            <span style={{ color: 'var(--text-muted)', fontSize: '13px' }}>
+              {(cacheSize / (1024 * 1024)).toFixed(1)} MB
+            </span>
+            <button className="btn-secondary" onClick={handleClearCache}>
+              <Trash2 size={14} /> {t('delete')}
+            </button>
+          </div>
+        </div>
+        <div className="settings-row">
+          <div>
             <div className="settings-label">{t('appVersion')}</div>
             <div className="settings-desc">Don Pollo Music Desktop</div>
           </div>
@@ -2131,6 +2242,33 @@ function App() {
         </div>
       )}
 
+      {/* Modal: Impor Playlist YouTube */}
+      {showImportPlaylist && (
+        <div className="modal-overlay" onClick={() => !isImporting && setShowImportPlaylist(false)}>
+          <div className="modal" onClick={e => e.stopPropagation()}>
+            <h3 className="modal-title">{t('importPlaylist')}</h3>
+            <input
+              className="modal-input"
+              type="text"
+              placeholder={t('importPlaylistPlaceholder')}
+              value={importPlaylistUrl}
+              onChange={e => setImportPlaylistUrl(e.target.value)}
+              onKeyDown={e => e.key === 'Enter' && !isImporting && handleImportPlaylist()}
+              autoFocus
+              disabled={isImporting}
+              style={{ marginBottom: '16px' }}
+            />
+            <div className="modal-actions">
+              <button className="btn-secondary" onClick={() => setShowImportPlaylist(false)} disabled={isImporting}>{t('cancel')}</button>
+              <button className="btn-primary" onClick={handleImportPlaylist} disabled={isImporting}>
+                {isImporting ? <Loader2 size={16} className="spin" /> : <Download size={16} />}
+                {isImporting ? t('importing') : t('importPlaylist')}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Modal: Buat Playlist */}
       {showCreatePlaylist && (
         <div className="modal-overlay" onClick={() => setShowCreatePlaylist(false)}>
@@ -2242,9 +2380,14 @@ function App() {
                 <ListMusic size={24} />
                 <span>{t('yourLibrary')}</span>
               </div>
-              <button className="library-header-btn" onClick={() => setShowCreatePlaylist(true)} title="Buat Playlist Baru">
-                <Plus size={20} />
-              </button>
+              <div style={{ display: 'flex', gap: '4px' }}>
+                <button className="library-header-btn" onClick={() => setShowCreatePlaylist(true)} title="Buat Playlist Baru">
+                  <Plus size={20} />
+                </button>
+                <button className="library-header-btn" onClick={() => setShowImportPlaylist(true)} title={t('importPlaylist')}>
+                  <Download size={20} />
+                </button>
+              </div>
             </div>
 
             <div className="library-pills">
@@ -2470,7 +2613,7 @@ function App() {
                           <div className="suggestion-actions">
                             <button
                               className="suggestion-btn"
-                              title="Putar Lagu"
+                              title={t('playSong')}
                               onClick={(e) => {
                                 e.stopPropagation();
                                 playSingleSong(song);
@@ -2482,7 +2625,7 @@ function App() {
                             </button>
                             <button
                               className={`suggestion-btn ${isLiked(song.id) ? 'liked' : ''}`}
-                              title={isLiked(song.id) ? "Hapus dari Disukai" : "Sukai"}
+                              title={isLiked(song.id) ? t('unlikeSong') : t('likeSong')}
                               onClick={(e) => {
                                 e.stopPropagation();
                                 toggleLike(song);
@@ -2492,7 +2635,25 @@ function App() {
                             </button>
                             <button
                               className="suggestion-btn"
-                              title="Tambah ke Playlist"
+                              title={t('addToQueue')}
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setQueue(prev => [...prev, song]);
+                                setOriginalQueue(prev => [...prev, song]);
+                                if (currentIndex === -1) {
+                                  setCurrentIndex(0);
+                                  executePlay(song);
+                                } else {
+                                  showToast(t('toastAddedToQueue'));
+                                }
+                                setShowSuggestions(false);
+                              }}
+                            >
+                              <ListMusic size={16} />
+                            </button>
+                            <button
+                              className="suggestion-btn"
+                              title={t('addToPlaylist')}
                               onClick={(e) => {
                                 e.stopPropagation();
                                 setAddToPlaylistSong(song);
