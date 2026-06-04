@@ -367,7 +367,7 @@ function App() {
   const [joinRequests, setJoinRequests] = useState<{incoming: any[], outgoing: any[]}>({ incoming: [], outgoing: [] });
 
   const [downloadedSongs, setDownloadedSongs] = useState<any[]>([]);
-  const [activeDownloads, setActiveDownloads] = useState<Record<string, { progress: number, songData: any }>>({});
+  // const [activeDownloads, setActiveDownloads] = useState<Record<string, { progress: number, songData: any }>>({});
 
   useEffect(() => {
     if ((window as any).electronAPI?.getDownloadedSongs) {
@@ -376,16 +376,16 @@ function App() {
   }, [cacheSize, activePage]);
 
   useEffect(() => {
-    const handleProgress = (_event: any, data: { songId: string, progress: number, songData: any }) => {
-      setActiveDownloads(prev => ({ ...prev, [data.songId]: { progress: data.progress, songData: data.songData } }));
+    const handleProgress = (_event: any, _data: { songId: string, progress: number, songData: any }) => {
+      // setActiveDownloads(prev => ({ ...prev, [data.songId]: { progress: data.progress, songData: data.songData } }));
     };
     
     const handleComplete = (_event: any, songData: any) => {
-      setActiveDownloads(prev => {
+      /* setActiveDownloads(prev => {
         const next = { ...prev };
         delete next[songData.id];
         return next;
-      });
+      }); */
       if ((window as any).electronAPI?.getDownloadedSongs) {
         (window as any).electronAPI.getDownloadedSongs().then(setDownloadedSongs);
       }
@@ -417,7 +417,7 @@ function App() {
           const isCached = await (window as any).electronAPI.checkCache(nextSong.id);
           if (!isCached) {
             console.log(`[Prefetch] Memulai download diam-diam untuk lagu berikutnya: ${nextSong.title}`);
-            const streamUrl = `${API_BASE_URL}/api/stream?id=${nextSong.id}`;
+            // const streamUrl = `${API_BASE_URL}/api/stream?id=${nextSong.id}`;
             /* (window as any).electronAPI.cacheAudio(nextSong, streamUrl, true); */
           }
         }
