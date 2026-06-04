@@ -627,6 +627,10 @@ autoUpdater.on('update-downloaded', (info) => {
   if (mainWindow) mainWindow.webContents.send('update-downloaded', info);
 });
 
+autoUpdater.on('download-progress', (progressObj) => {
+  if (mainWindow) mainWindow.webContents.send('download-progress', progressObj);
+});
+
 ipcMain.on('download-update', () => {
   autoUpdater.downloadUpdate();
 });

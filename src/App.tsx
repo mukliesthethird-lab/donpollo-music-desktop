@@ -111,6 +111,7 @@ function App() {
 
   // ─── Updater State ──────────────────────────────────────────
   const [updateStatus, setUpdateStatus] = useState<'none' | 'available' | 'downloading' | 'downloaded'>('none');
+  const [updateProgress, setUpdateProgress] = useState<number>(0);
 
   // ─── Listen Along State ─────────────────────────────────────
   const [onlineUsers, setOnlineUsers] = useState<any[]>([]);
@@ -241,6 +242,13 @@ function App() {
       if ((window as any).electronAPI.onUpdateDownloaded) {
         (window as any).electronAPI.onUpdateDownloaded(() => {
           setUpdateStatus('downloaded');
+        });
+      }
+      if ((window as any).electronAPI.onDownloadProgress) {
+        (window as any).electronAPI.onDownloadProgress((_event: any, progressObj: any) => {
+          if (progressObj && progressObj.percent) {
+            setUpdateProgress(Math.floor(progressObj.percent));
+          }
         });
       }
     }
@@ -2687,10 +2695,10 @@ function App() {
                   }}
                   disabled={updateStatus === 'downloading'}
                 >
-                  <div className={`update-dot ${updateStatus === 'downloaded' ? 'pulse' : ''}`} />
+                  <Download size={16} />
                   <span>
                     {updateStatus === 'available' ? t('updateAvailable') : 
-                     updateStatus === 'downloading' ? t('updateDownloading') : 
+                     updateStatus === 'downloading' ? `${t('updateDownloading')} (${updateProgress}%)` : 
                      t('updateReady')}
                   </span>
                 </button>

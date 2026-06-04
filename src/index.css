@@ -3227,20 +3227,22 @@ body {
   display: flex;
   align-items: center;
   gap: 8px;
-  background: var(--bg-card);
-  color: var(--text-primary);
-  border: 1px solid var(--border-color);
-  padding: 6px 12px;
-  border-radius: 20px;
+  background: #23a559; /* Discord green */
+  color: white;
+  border: none;
+  padding: 6px 14px;
+  border-radius: 4px;
   font-size: 13px;
-  font-weight: 500;
+  font-weight: 600;
   cursor: pointer;
   transition: all 0.2s ease;
+  box-shadow: 0 4px 12px rgba(35, 165, 89, 0.2);
 }
 
 .update-badge:hover {
-  background: rgba(255, 255, 255, 0.1);
+  background: #1a7a42;
   transform: translateY(-1px);
+  box-shadow: 0 6px 16px rgba(35, 165, 89, 0.3);
 }
 
 .update-badge:active {
@@ -3250,12 +3252,7 @@ body {
 .update-badge:disabled {
   opacity: 0.7;
   cursor: not-allowed;
-}
-
-.update-badge.ready {
-  background: var(--accent-primary);
-  color: #fff;
-  border-color: var(--accent-primary);
+  filter: grayscale(0.5);
 }
 
 .update-badge.ready:hover {
@@ -3266,7 +3263,7 @@ body {
   width: 8px;
   height: 8px;
   border-radius: 50%;
-  background: var(--accent-primary);
+  background: rgba(255, 255, 255, 0.7);
 }
 
 .update-badge.ready .update-dot {
