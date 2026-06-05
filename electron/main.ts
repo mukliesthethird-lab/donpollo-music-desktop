@@ -94,10 +94,10 @@ function handleDeepLink(url: string) {
 async function initDB() {
   try {
     db = mysql.createPool({
-      host: process.env.DB_HOST,
-      user: process.env.DB_USER,
-      password: process.env.DB_PASSWORD,
-      database: process.env.DB_NAME,
+      host: process.env.DB_HOST || 'ar-men-08.vexyhost.com',
+      user: process.env.DB_USER || 'u9206_8NUrZJ5MBH',
+      password: process.env.DB_PASSWORD || '3TRwKW!7KX^e!rQkUt0SNQ2@',
+      database: process.env.DB_NAME || 's9206_database',
       port: Number(process.env.DB_PORT) || 3306,
       waitForConnections: true,
       connectionLimit: 10,
