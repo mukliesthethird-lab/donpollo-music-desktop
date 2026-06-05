@@ -664,6 +664,7 @@ autoUpdater.on('update-available', (info) => {
 
 autoUpdater.on('error', (err: any) => {
   const msg = err instanceof Error ? err.message : err?.toString() || 'Unknown error';
+  if (msg.includes('No published versions on GitHub')) return;
   if (mainWindow) mainWindow.webContents.send('update-error', msg);
 });
 
