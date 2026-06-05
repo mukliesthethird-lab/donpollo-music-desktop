@@ -1,4 +1,4 @@
-import { app, BrowserWindow, ipcMain, Menu, protocol, globalShortcut } from 'electron';
+import { app, BrowserWindow, ipcMain, Menu, protocol, globalShortcut, Tray, nativeImage } from 'electron';
 import * as path from 'path';
 import * as fs from 'fs';
 import * as https from 'https';
@@ -16,6 +16,31 @@ let db: mysql.Pool | null = null;
 let minimizeToMiniPlayerEnabled = false;
 let isMiniPlayerMode = false;
 let previousBounds = { width: 1280, height: 800, x: 0, y: 0 };
+let tray: Tray | null = null;
+let trayLabels: any = {
+  play: 'Play',
+  pause: 'Pause',
+  next: 'Next Track',
+  prev: 'Previous Track',
+  showApp: 'Show App',
+  quit: 'Quit'
+};
+
+function updateTrayMenu(songTitle: string, isPlaying: boolean) {
+  if (!tray) return;
+  const contextMenu = Menu.buildFromTemplate([
+    { label: songTitle || 'DonPollo Music', enabled: false },
+    { type: 'separator' },
+    { label: isPlaying ? trayLabels.pause : trayLabels.play, click: () => mainWindow?.webContents.send('tray-control', isPlaying ? 'pause' : 'play') },
+    { label: trayLabels.next, click: () => mainWindow?.webContents.send('tray-control', 'next') },
+    { label: trayLabels.prev, click: () => mainWindow?.webContents.send('tray-control', 'prev') },
+    { type: 'separator' },
+    { label: trayLabels.showApp, click: () => mainWindow?.show() },
+    { label: trayLabels.quit, click: () => app.quit() }
+  ]);
+  tray.setContextMenu(contextMenu);
+  tray.setToolTip(songTitle || 'DonPollo Music');
+}
 
 // Register custom protocol for OAuth deep-linking
 if (process.defaultApp) {
@@ -341,6 +366,13 @@ ipcMain.handle('update-presence', async (event, data) => {
   if (!db) return false;
   try {
     const { discordId, username, avatarUrl, currentSong, partyId, status, queue } = data;
+    
+    if (currentSong) {
+      updateTrayMenu(currentSong.title || 'Unknown', !!currentSong.isPlaying);
+    } else {
+      updateTrayMenu('Not Playing', false);
+    }
+
     const songDataStr = currentSong ? JSON.stringify(currentSong) : '';
     const queueStr = queue ? JSON.stringify(queue) : '';
     await db.execute(
@@ -805,7 +837,33 @@ ipcMain.handle('get-cache-size', async () => {
 });
 
 // APP LIFECYCLE
+ipcMain.on('set-tray-labels', (event, labels) => {
+  trayLabels = labels;
+});
+
+ipcMain.on('notify-closing', async (event, discordId) => {
+  if (!db) return;
+  try {
+    await db.execute('DELETE FROM online_users WHERE discord_id = ?', [discordId]);
+    await db.execute('DELETE FROM listen_parties WHERE host_discord_id = ?', [discordId]);
+    await db.execute('DELETE FROM join_requests WHERE host_id = ? OR guest_id = ?', [discordId, discordId]);
+  } catch (e) {
+    console.error('Error cleaning up on closing', e);
+  }
+});
+
 app.whenReady().then(async () => {
+  const iconPath = path.join(__dirname, isDev ? '../public/icon.png' : '../dist/icon.png');
+  const trayIcon = nativeImage.createFromPath(iconPath).resize({ width: 16, height: 16 });
+  tray = new Tray(trayIcon);
+  updateTrayMenu('Not Playing', false);
+  tray.on('click', () => {
+    if (mainWindow) {
+      if (mainWindow.isMinimized()) mainWindow.restore();
+      mainWindow.show();
+      mainWindow.focus();
+    }
+  });
   protocol.registerFileProtocol('donpollo-cache', (request, callback) => {
     const url = request.url.replace('donpollo-cache://', '');
     const songId = url.split('/')[0].split('?')[0];

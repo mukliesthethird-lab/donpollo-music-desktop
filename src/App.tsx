@@ -421,6 +421,48 @@ function App() {
     };
   }, []);
 
+  // ─── System Tray & Lifecycle ──────────────────────────────────
+  useEffect(() => {
+    let unsub: any;
+    if ((window as any).electronAPI?.onTrayControl) {
+      unsub = (window as any).electronAPI.onTrayControl((action: string) => {
+        if (action === 'play' || action === 'pause') {
+          togglePlayRef.current();
+        } else if (action === 'next') {
+          handleNextRef.current();
+        } else if (action === 'prev') {
+          handlePrevRef.current();
+        }
+      });
+    }
+
+    const handleBeforeUnload = () => {
+      if (discordUser && (window as any).electronAPI?.notifyClosing) {
+        (window as any).electronAPI.notifyClosing(discordUser.id);
+      }
+    };
+    window.addEventListener('beforeunload', handleBeforeUnload);
+
+    return () => {
+      if (unsub) unsub();
+      window.removeEventListener('beforeunload', handleBeforeUnload);
+    };
+  }, [discordUser]);
+
+  useEffect(() => {
+    if ((window as any).electronAPI?.setTrayLabels) {
+      (window as any).electronAPI.setTrayLabels({
+        play: t('trayPlay' as any),
+        pause: t('trayPause' as any),
+        next: t('trayNext' as any),
+        prev: t('trayPrev' as any),
+        showApp: t('trayShow' as any),
+        quit: t('trayQuit' as any)
+      });
+    }
+  }, [language]);
+
+
   // ─── Queue ───────────────────────────────────────────────────
   const [queue, setQueue] = useState<any[]>([]);
   const [originalQueue, setOriginalQueue] = useState<any[]>([]);
@@ -525,7 +567,7 @@ function App() {
     };
 
     syncPresence();
-    const intervalMs = isGuest ? 1000 : 5000;
+    const intervalMs = 1000;
     const presenceInterval = setInterval(syncPresence, intervalMs);
     return () => clearInterval(presenceInterval);
   }, [discordUser, currentSong, activePartyId, userStatus, isGuest, queue]);

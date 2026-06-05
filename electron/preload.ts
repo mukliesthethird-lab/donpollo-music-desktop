@@ -62,5 +62,12 @@ contextBridge.exposeInMainWorld('electronAPI', {
   onDownloadCacheComplete: (callback: (event: any, song: any) => void) => {
     ipcRenderer.on('download-cache-complete', callback);
     return () => ipcRenderer.off('download-cache-complete', callback);
-  }
+  },
+  onTrayControl: (callback: (action: string) => void) => {
+    const wrapped = (_event: any, action: string) => callback(action);
+    ipcRenderer.on('tray-control', wrapped);
+    return () => ipcRenderer.off('tray-control', wrapped);
+  },
+  setTrayLabels: (labels: any) => ipcRenderer.send('set-tray-labels', labels),
+  notifyClosing: (discordId: string) => ipcRenderer.send('notify-closing', discordId)
 });

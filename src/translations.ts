@@ -197,6 +197,12 @@ type TranslationKeys = {
   lyricsNotLRC: string;
   lyricsFailed: string;
   toastCacheCleared: string;
+  trayPlay: string;
+  trayPause: string;
+  trayNext: string;
+  trayPrev: string;
+  trayShow: string;
+  trayQuit: string;
 };
 
 const translations: Record<Language, TranslationKeys> = {
@@ -395,6 +401,12 @@ const translations: Record<Language, TranslationKeys> = {
     lyricsNotLRC: 'Lirik tidak berformat LRC.',
     lyricsFailed: 'Gagal mengambil lirik.',
     toastCacheCleared: 'Cache lagu lokal berhasil dihapus!',
+    trayPlay: 'Putar',
+    trayPause: 'Jeda',
+    trayNext: 'Lagu Selanjutnya',
+    trayPrev: 'Lagu Sebelumnya',
+    trayShow: 'Tampilkan Aplikasi',
+    trayQuit: 'Keluar',
   },
 
   en: {
@@ -592,6 +604,12 @@ const translations: Record<Language, TranslationKeys> = {
     lyricsNotLRC: 'Lyrics are not in LRC format.',
     lyricsFailed: 'Failed to fetch lyrics.',
     toastCacheCleared: 'Local audio cache cleared successfully!',
+    trayPlay: 'Play',
+    trayPause: 'Pause',
+    trayNext: 'Next Track',
+    trayPrev: 'Previous Track',
+    trayShow: 'Show App',
+    trayQuit: 'Quit',
   },
 
   ja: {
@@ -789,6 +807,12 @@ const translations: Record<Language, TranslationKeys> = {
     lyricsNotLRC: 'LRC形式の歌詞ではありません。',
     lyricsFailed: '歌詞の取得に失敗しました。',
     toastCacheCleared: 'ローカルオーディオキャッシュが正常にクリアされました！',
+    trayPlay: '再生',
+    trayPause: '一時停止',
+    trayNext: '次の曲',
+    trayPrev: '前の曲',
+    trayShow: 'アプリを表示',
+    trayQuit: '終了',
   },
 };
 
