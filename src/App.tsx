@@ -85,6 +85,35 @@ function App() {
   const [isFetchingSuggestions, setIsFetchingSuggestions] = useState(false);
   const searchContainerRef = useRef<HTMLDivElement>(null);
 
+  const [updateInfo, setUpdateInfo] = useState<{ available: boolean, downloading: boolean, progress: number, ready: boolean, error: string }>({ available: false, downloading: false, progress: 0, ready: false, error: '' });
+
+  useEffect(() => {
+    let unbind1: any, unbind2: any, unbind3: any, unbind4: any;
+    if ((window as any).electronAPI && (window as any).electronAPI.onUpdateAvailable) {
+       unbind1 = (window as any).electronAPI.onUpdateAvailable(() => {
+          setUpdateInfo(prev => ({ ...prev, available: true }));
+          setToastData({ msg: 'Versi baru Don Pollo Music tersedia! Cek Pengaturan.', type: 'success', icon: <DownloadCloud size={20} /> });
+       });
+       unbind2 = (window as any).electronAPI.onDownloadProgress((_e: any, progressObj: any) => {
+          setUpdateInfo(prev => ({ ...prev, downloading: true, progress: progressObj.percent }));
+       });
+       unbind3 = (window as any).electronAPI.onUpdateDownloaded(() => {
+          setUpdateInfo(prev => ({ ...prev, downloading: false, ready: true }));
+          setToastData({ msg: 'Pembaruan siap diinstal!', type: 'success', icon: <CheckCircle2 size={20} /> });
+       });
+       unbind4 = (window as any).electronAPI.onUpdateError((_e: any, err: string) => {
+          setUpdateInfo(prev => ({ ...prev, error: err, downloading: false }));
+          setToastData({ msg: `Update Error: ${err}`, type: 'error', icon: <AlertCircle size={20} /> });
+       });
+    }
+    return () => {
+      if (unbind1) unbind1();
+      if (unbind2) unbind2();
+      if (unbind3) unbind3();
+      if (unbind4) unbind4();
+    };
+  }, []);
+
 
 
 
@@ -2016,6 +2045,41 @@ function App() {
       <div className="page-header">
         <h1>{t('settingsTitle')}</h1>
       </div>
+
+      {updateInfo.available && (
+        <div className="settings-section" style={{ background: 'rgba(35, 165, 89, 0.1)', border: '1px solid rgba(35, 165, 89, 0.3)' }}>
+          <div className="settings-section-title" style={{ color: '#23a559' }}>
+            <DownloadCloud size={20} style={{ marginRight: 8 }} /> Pembaruan Tersedia
+          </div>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 12 }}>
+            <div style={{ color: 'var(--text-secondary)' }}>
+              {updateInfo.error ? (
+                <span style={{ color: '#f23f43' }}>Error: {updateInfo.error}</span>
+              ) : updateInfo.ready ? (
+                'Pembaruan telah selesai diunduh dan siap dipasang!'
+              ) : updateInfo.downloading ? (
+                `Mengunduh pembaruan... ${Math.round(updateInfo.progress)}%`
+              ) : (
+                'Versi terbaru Don Pollo Music telah tersedia.'
+              )}
+            </div>
+            
+            {updateInfo.downloading ? (
+              <div style={{ width: 100, height: 6, background: 'rgba(255,255,255,0.1)', borderRadius: 3, overflow: 'hidden' }}>
+                <div style={{ width: `${updateInfo.progress}%`, height: '100%', background: '#23a559', transition: 'width 0.2s' }} />
+              </div>
+            ) : updateInfo.ready ? (
+              <button className="btn-primary" style={{ background: '#23a559' }} onClick={() => (window as any).electronAPI.installUpdate()}>
+                Mulai Ulang Aplikasi
+              </button>
+            ) : (
+              <button className="btn-primary" onClick={() => { (window as any).electronAPI.downloadUpdate(); setUpdateInfo(prev => ({ ...prev, downloading: true })); }}>
+                Unduh Sekarang
+              </button>
+            )}
+          </div>
+        </div>
+      )}
 
       {/* Tema Tampilan */}
       <div className="settings-section">
