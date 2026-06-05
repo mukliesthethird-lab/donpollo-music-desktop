@@ -51,5 +51,10 @@ The compiled installer will be available in the `release/` directory.
 
 Contributions, issues, and feature requests are welcome! Feel free to check the [issues page](https://github.com/mukliesthethird-lab/donpollo-music-desktop/issues).
 
+
+## 💬 Community & Support
+Need help, have a feature request? 
+**Join our official Discord Server: [https://discord.gg/usn49FDhMr](https://discord.gg/usn49FDhMr)**
+
 ---
 *Built with ❤️ by the DonPollo Team.*
