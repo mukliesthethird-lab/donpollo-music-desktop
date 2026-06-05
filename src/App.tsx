@@ -2115,10 +2115,10 @@ function App() {
             </div>
             <button className="btn-secondary" onClick={async () => {
               try {
-                setToastData({ msg: 'Mengecek pembaruan...', type: 'info', icon: <DownloadCloud size={20} /> });
+                setToastData({ msg: 'Mengecek pembaruan...', type: 'success', icon: <DownloadCloud size={20} /> });
                 await (window as any).electronAPI.checkForUpdates();
               } catch (err: any) {
-                setToastData({ msg: `Gagal mengecek: ${err.message || err}`, type: 'error' });
+                setToastData({ msg: `Gagal mengecek: ${err.message || err}`, type: 'error', icon: <AlertCircle size={20} /> });
               }
             }}>
               Periksa Pembaruan
