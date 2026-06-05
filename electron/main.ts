@@ -42,6 +42,34 @@ function updateTrayMenu(songTitle: string, isPlaying: boolean) {
   tray.setToolTip(songTitle || 'DonPollo Music');
 }
 
+let thumbarIcons: any = {};
+function updateThumbar(isPlaying: boolean, hasSong: boolean = true) {
+  if (!mainWindow || !thumbarIcons.play) return;
+  
+  const flags: string[] = hasSong ? [] : ['disabled'];
+  
+  mainWindow.setThumbarButtons([
+    {
+      tooltip: trayLabels.prev,
+      icon: thumbarIcons.prev,
+      flags,
+      click() { mainWindow?.webContents.send('tray-control', 'prev'); }
+    },
+    {
+      tooltip: isPlaying ? trayLabels.pause : trayLabels.play,
+      icon: isPlaying ? thumbarIcons.pause : thumbarIcons.play,
+      flags,
+      click() { mainWindow?.webContents.send('tray-control', isPlaying ? 'pause' : 'play'); }
+    },
+    {
+      tooltip: trayLabels.next,
+      icon: thumbarIcons.next,
+      flags,
+      click() { mainWindow?.webContents.send('tray-control', 'next'); }
+    }
+  ]);
+}
+
 // Register custom protocol for OAuth deep-linking
 if (process.defaultApp) {
   if (process.argv.length >= 2) {
@@ -369,8 +397,10 @@ ipcMain.handle('update-presence', async (event, data) => {
     
     if (currentSong) {
       updateTrayMenu(currentSong.title || 'Unknown', !!currentSong.isPlaying);
+      updateThumbar(!!currentSong.isPlaying, true);
     } else {
       updateTrayMenu('Not Playing', false);
+      updateThumbar(false, false);
     }
 
     const songDataStr = currentSong ? JSON.stringify(currentSong) : '';
@@ -839,6 +869,15 @@ ipcMain.handle('get-cache-size', async () => {
 // APP LIFECYCLE
 ipcMain.on('set-tray-labels', (event, labels) => {
   trayLabels = labels;
+});
+
+ipcMain.on('set-thumbar-icons', (event, icons) => {
+  thumbarIcons = {
+    play: nativeImage.createFromDataURL(icons.play),
+    pause: nativeImage.createFromDataURL(icons.pause),
+    next: nativeImage.createFromDataURL(icons.next),
+    prev: nativeImage.createFromDataURL(icons.prev),
+  };
 });
 
 ipcMain.on('notify-closing', async (event, discordId) => {

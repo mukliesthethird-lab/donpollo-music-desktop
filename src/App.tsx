@@ -79,6 +79,9 @@ function App() {
   const [isFetchingSuggestions, setIsFetchingSuggestions] = useState(false);
   const searchContainerRef = useRef<HTMLDivElement>(null);
 
+
+
+
   // ─── Debounced Search ───────────────────────────────────────
   const searchCacheRef = useRef<Record<string, any[]>>({});
 
@@ -264,7 +267,8 @@ function App() {
       if ((window as any).electronAPI.onUpdateError) {
         unsubs.push((window as any).electronAPI.onUpdateError((_event: any, errorMsg: string) => {
           console.error('Update error:', errorMsg);
-          setUpdateStatus('error');
+          // Abaikan error palsu jika update sudah berhasil diunduh (sering terjadi di electron-updater)
+          setUpdateStatus(prev => prev === 'downloaded' ? 'downloaded' : 'error');
         }));
       }
     }
@@ -448,6 +452,39 @@ function App() {
       window.removeEventListener('beforeunload', handleBeforeUnload);
     };
   }, [discordUser]);
+
+  useEffect(() => {
+    // Generate Thumbar Icons via Canvas
+    const createIcon = (type: 'play' | 'pause' | 'next' | 'prev') => {
+      const canvas = document.createElement('canvas');
+      canvas.width = 32; canvas.height = 32;
+      const ctx = canvas.getContext('2d');
+      if (!ctx) return '';
+      ctx.fillStyle = 'white';
+      
+      if (type === 'play') {
+        ctx.beginPath(); ctx.moveTo(8, 6); ctx.lineTo(26, 16); ctx.lineTo(8, 26); ctx.fill();
+      } else if (type === 'pause') {
+        ctx.fillRect(8, 6, 6, 20); ctx.fillRect(18, 6, 6, 20);
+      } else if (type === 'next') {
+        ctx.beginPath(); ctx.moveTo(6, 6); ctx.lineTo(20, 16); ctx.lineTo(6, 26); ctx.fill();
+        ctx.fillRect(20, 6, 4, 20);
+      } else if (type === 'prev') {
+        ctx.beginPath(); ctx.moveTo(26, 6); ctx.lineTo(12, 16); ctx.lineTo(26, 26); ctx.fill();
+        ctx.fillRect(8, 6, 4, 20);
+      }
+      return canvas.toDataURL('image/png');
+    };
+
+    if ((window as any).electronAPI?.setThumbarIcons) {
+      (window as any).electronAPI.setThumbarIcons({
+        play: createIcon('play'),
+        pause: createIcon('pause'),
+        next: createIcon('next'),
+        prev: createIcon('prev')
+      });
+    }
+  }, []);
 
   useEffect(() => {
     if ((window as any).electronAPI?.setTrayLabels) {
@@ -3293,7 +3330,7 @@ function App() {
             </div>
             
             <div className="search-container" ref={searchContainerRef} style={settings.theme === 'minimalist' ? { marginLeft: 'auto' } : { position: 'relative' }}>
-              <form onSubmit={e => e.preventDefault()}>
+              <form onSubmit={e => e.preventDefault()} style={{ display: 'flex', alignItems: 'center', position: 'relative' }}>
                 <Search size={16} className="search-icon" />
                 <input
                   type="text"

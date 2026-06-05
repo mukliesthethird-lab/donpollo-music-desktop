@@ -203,6 +203,8 @@ type TranslationKeys = {
   trayPrev: string;
   trayShow: string;
   trayQuit: string;
+
+
 };
 
 const translations: Record<Language, TranslationKeys> = {
@@ -407,6 +409,8 @@ const translations: Record<Language, TranslationKeys> = {
     trayPrev: 'Lagu Sebelumnya',
     trayShow: 'Tampilkan Aplikasi',
     trayQuit: 'Keluar',
+
+
   },
 
   en: {
@@ -610,6 +614,8 @@ const translations: Record<Language, TranslationKeys> = {
     trayPrev: 'Previous Track',
     trayShow: 'Show App',
     trayQuit: 'Quit',
+
+
   },
 
   ja: {
@@ -813,7 +819,9 @@ const translations: Record<Language, TranslationKeys> = {
     trayPrev: '前の曲',
     trayShow: 'アプリを表示',
     trayQuit: '終了',
-  },
+
+
+  }
 };
 
 export function createTranslator(lang: Language) {
