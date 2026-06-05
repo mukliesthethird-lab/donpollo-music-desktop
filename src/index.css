@@ -3456,6 +3456,11 @@ body {
   font-size: 11px;
   color: var(--text-muted);
   flex-shrink: 0;
+  display: block;
+}
+
+.suggestion-item:hover .suggestion-duration {
+  display: none;
 }
 
 .suggestion-loading,
@@ -3494,22 +3499,20 @@ body {
 }
 
 .suggestion-actions {
-  display: flex;
+  display: none;
   align-items: center;
-  gap: 8px;
-  opacity: 0;
-  transition: opacity 0.2s;
+  gap: 4px;
 }
 
 .suggestion-item:hover .suggestion-actions {
-  opacity: 1;
+  display: flex;
 }
 
 .suggestion-btn {
   background: rgba(255, 255, 255, 0.05);
   border: none;
-  width: 28px;
-  height: 28px;
+  width: 26px;
+  height: 26px;
   border-radius: 50%;
   display: flex;
   align-items: center;

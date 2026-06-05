@@ -60,6 +60,23 @@ function App() {
   // ─── Page Navigation ────────────────────────────────────────
   const [activePage, setActivePage] = useState<Page>('home');
   const [activePlaylistId, setActivePlaylistId] = useState<string | null>(null);
+
+  const [isOffline, setIsOffline] = useState(!navigator.onLine);
+
+  useEffect(() => {
+    const handleOffline = () => {
+      setIsOffline(true);
+      setActivePage(prev => (prev === 'home' || prev === 'artist' ? 'library' : prev));
+    };
+    const handleOnline = () => setIsOffline(false);
+    window.addEventListener('offline', handleOffline);
+    window.addEventListener('online', handleOnline);
+    if (!navigator.onLine) handleOffline();
+    return () => {
+      window.removeEventListener('offline', handleOffline);
+      window.removeEventListener('online', handleOnline);
+    };
+  }, []);
   
   // ─── Artist Page State ──────────────────────────────────────
   const [activeArtist, setActiveArtist] = useState<string | null>(null);
@@ -1772,7 +1789,10 @@ function App() {
                                </div>
                              </div>
                              <div style={{ display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
-                                <span style={{ fontWeight: '600', fontSize: '14px', color: currentSong?.id === song.id ? 'var(--accent-primary)' : 'var(--text-primary)', whiteSpace: 'nowrap', textOverflow: 'ellipsis', overflow: 'hidden' }}>{song.title}</span>
+                                <span style={{ fontWeight: '600', fontSize: '14px', color: currentSong?.id === song.id ? 'var(--accent-primary)' : 'var(--text-primary)', whiteSpace: 'nowrap', textOverflow: 'ellipsis', overflow: 'hidden', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                                  {song.title}
+                                  {downloadedSongs.some(ds => ds.id === song.id) && <span title="Tersedia Offline"><CheckCircle2 size={14} color="#23a559" /></span>}
+                                </span>
                                 <span style={{ fontSize: '12px', color: 'var(--text-secondary)' }}>{song.artist}</span>
                              </div>
                           </div>
@@ -2458,7 +2478,7 @@ function App() {
   const renderDownloadsPage = () => (
     <div className="page-content offline-mode" style={{ minHeight: '100%', display: 'flex', flexDirection: 'column', background: 'var(--bg-primary)' }}>
       <div style={{ padding: '32px 32px 16px 32px' }}>
-        <h1 style={{ fontSize: '28px', fontWeight: '800', marginBottom: '24px', color: 'var(--text-primary)' }}>{t('offlineMode')}</h1>
+        <h1 style={{ fontSize: '28px', fontWeight: '800', marginBottom: '24px', color: 'var(--text-primary)' }}>Offline Vault</h1>
         
         {/* Dashboard Cards */}
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(250px, 1fr))', gap: '16px', marginBottom: '32px' }}>
@@ -2499,54 +2519,66 @@ function App() {
             <p style={{ fontSize: '13px' }}>Lagu yang selesai diputar akan ter-cache dan muncul di sini.</p>
           </div>
         ) : (
-          <div style={{ background: 'var(--bg-card)', borderRadius: '12px', border: '1px solid var(--border-color)', overflow: 'hidden' }}>
-            <div style={{ display: 'grid', gridTemplateColumns: '40px 1fr 120px 40px', padding: '16px 24px', borderBottom: '1px solid var(--border-color)', fontSize: '11px', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '1px', fontWeight: '700' }}>
-              <span>#</span>
-              <span>Detail Lagu</span>
-              <span>Status</span>
-              <span></span>
-            </div>
-            
-            <div style={{ display: 'flex', flexDirection: 'column' }}>
-               {downloadedSongs.map((song, i) => (
-                 <div key={i} className="offline-row" style={{ display: 'grid', gridTemplateColumns: '40px 1fr 120px 40px', padding: '12px 24px', alignItems: 'center', transition: 'background 0.2s', cursor: 'pointer', borderBottom: i === downloadedSongs.length - 1 ? 'none' : '1px solid rgba(255,255,255,0.03)' }} onClick={() => executePlay(song)}>
-                    <span style={{ color: 'var(--text-muted)', fontSize: '13px', fontWeight: '600' }}>{String(i + 1).padStart(2, '0')}</span>
-                    <div style={{ display: 'flex', gap: '16px', alignItems: 'center' }}>
-                       <div style={{ position: 'relative', width: '40px', height: '40px', borderRadius: '6px', overflow: 'hidden', flexShrink: 0 }}>
-                         <img src={song.thumbnail || getHighResImage(song.cover)} style={{ width: '100%', height: '100%', objectFit: 'cover' }} alt="Cover" />
-                         <div className="play-overlay" style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(0,0,0,0.6)', display: 'flex', alignItems: 'center', justifyContent: 'center', opacity: 0, transition: 'opacity 0.2s' }}>
-                           <Play fill="currentColor" size={16} />
-                         </div>
-                       </div>
-                       <div style={{ display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
-                          <span style={{ fontWeight: '600', fontSize: '14px', whiteSpace: 'nowrap', textOverflow: 'ellipsis', overflow: 'hidden' }}>{song.title}</span>
-                          <span style={{ fontSize: '12px', color: 'var(--text-secondary)' }}>{song.artist}</span>
-                       </div>
-                    </div>
-                    <div>
-                      <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', background: 'rgba(46, 204, 113, 0.1)', color: '#2ecc71', padding: '4px 8px', borderRadius: '4px', fontSize: '11px', fontWeight: '700' }}>
-                        <CheckCircle2 size={12} /> Tersedia
-                      </span>
-                    </div>
-                    <button 
-                      className="btn-icon delete-btn" 
-                      onClick={(e) => { 
-                        e.stopPropagation(); 
-                        if ((window as any).electronAPI) {
-                          (window as any).electronAPI.deleteDownloadedSong(song.id).then(() => {
-                            setDownloadedSongs(prev => prev.filter(s => s.id !== song.id));
-                          });
-                        }
-                      }}
-                      style={{ opacity: 0.5, color: 'var(--text-secondary)' }}
-                      onMouseEnter={(e) => { e.currentTarget.style.opacity = '1'; e.currentTarget.style.color = '#ff4d4d'; }}
-                      onMouseLeave={(e) => { e.currentTarget.style.opacity = '0.5'; e.currentTarget.style.color = 'var(--text-secondary)'; }}
-                    >
-                      <Trash2 size={16} />
-                    </button>
-                 </div>
-               ))}
-            </div>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '32px' }}>
+            <section>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
+                <h2 style={{ fontSize: '18px', fontWeight: '700', color: 'var(--text-primary)', display: 'flex', alignItems: 'center', gap: '8px' }}><FolderPlus size={20} color="#00c6ff" /> Unduhan Offline</h2>
+                <span style={{ fontSize: '12px', color: 'var(--accent-primary)', cursor: 'pointer', fontWeight: '600' }} onClick={() => startPlayingFromList(downloadedSongs, 0)}>{t('playAll')}</span>
+              </div>
+              
+              <div style={{ background: 'var(--bg-card)', borderRadius: '12px', border: '1px solid var(--border-color)', overflow: 'hidden' }}>
+                <div style={{ display: 'grid', gridTemplateColumns: '40px 1fr 100px 80px', padding: '16px 24px', borderBottom: '1px solid var(--border-color)', fontSize: '11px', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '1px', fontWeight: '700' }}>
+                  <span>#</span>
+                  <span>Detail Lagu</span>
+                  <span>Durasi</span>
+                  <span></span>
+                </div>
+                
+                <div style={{ display: 'flex', flexDirection: 'column' }}>
+                   {downloadedSongs.map((song, i) => (
+                     <div key={i} className={`offline-row ${currentSong?.id === song.id ? 'active-row' : ''}`} style={{ display: 'grid', gridTemplateColumns: '40px 1fr 100px 80px', padding: '12px 24px', alignItems: 'center', transition: 'background 0.2s', cursor: 'pointer', borderBottom: i === downloadedSongs.length - 1 ? 'none' : '1px solid rgba(255,255,255,0.03)' }} onClick={() => startPlayingFromList(downloadedSongs, i)}>
+                        <span style={{ color: currentSong?.id === song.id ? 'var(--accent-primary)' : 'var(--text-muted)', fontSize: '13px', fontWeight: '600' }}>{currentSong?.id === song.id ? <Play size={14} fill="currentColor" /> : String(i + 1).padStart(2, '0')}</span>
+                        <div style={{ display: 'flex', gap: '16px', alignItems: 'center' }}>
+                           <div style={{ position: 'relative', width: '40px', height: '40px', borderRadius: '6px', overflow: 'hidden', flexShrink: 0 }}>
+                             <img src={getCleanThumbnail(song.thumbnail) || getHighResImage(song.cover)} style={{ width: '100%', height: '100%', objectFit: 'cover' }} alt="Cover" />
+                             <div className="play-overlay" style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(0,0,0,0.6)', display: 'flex', alignItems: 'center', justifyContent: 'center', opacity: 0, transition: 'opacity 0.2s' }}>
+                               <Play fill="currentColor" size={16} />
+                             </div>
+                           </div>
+                           <div style={{ display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+                              <span style={{ fontWeight: '600', fontSize: '14px', color: currentSong?.id === song.id ? 'var(--accent-primary)' : 'var(--text-primary)', whiteSpace: 'nowrap', textOverflow: 'ellipsis', overflow: 'hidden', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                                {song.title}
+                                <span title="Tersedia Offline"><CheckCircle2 size={14} color="#23a559" /></span>
+                              </span>
+                              <span style={{ fontSize: '12px', color: 'var(--text-secondary)' }}>{song.artist}</span>
+                           </div>
+                        </div>
+                        <div>
+                          <span style={{ fontSize: '13px', color: 'var(--text-secondary)' }}>{formatTime(song.duration)}</span>
+                        </div>
+                        <div style={{ display: 'flex', gap: '8px', justifyContent: 'flex-end' }}>
+                          <button 
+                            className="btn-icon delete-btn" 
+                            onClick={(e) => { 
+                              e.stopPropagation(); 
+                              if ((window as any).electronAPI) {
+                                (window as any).electronAPI.deleteDownloadedSong(song.id).then(() => {
+                                  setDownloadedSongs(prev => prev.filter(s => s.id !== song.id));
+                                });
+                              }
+                            }}
+                            style={{ color: 'var(--text-secondary)' }}
+                            onMouseEnter={(e) => { e.currentTarget.style.color = '#ff4d4d'; }}
+                            onMouseLeave={(e) => { e.currentTarget.style.color = 'var(--text-secondary)'; }}
+                          >
+                            <Trash2 size={16} />
+                          </button>
+                        </div>
+                     </div>
+                   ))}
+                </div>
+              </div>
+            </section>
           </div>
         )}
       </div>
@@ -3344,17 +3376,15 @@ function App() {
                 </div>
               </button>
 
-              {/* 
               <button className={`sidebar-list-item ${activePage === 'downloads' ? 'active' : ''}`} onClick={() => setActivePage('downloads')}>
-                <div className="sidebar-item-img" style={{ background: 'linear-gradient(135deg, #102a24, #121212)' }}>
-                  <FolderPlus size={20} color="#8ba69c" />
+                <div className="sidebar-item-img" style={{ background: 'linear-gradient(135deg, #00c6ff, #0072ff)' }}>
+                  <FolderPlus size={20} color="white" />
                 </div>
                 <div className="sidebar-item-info">
-                  <div className="sidebar-item-title">{t('downloads')}</div>
-                  <div className="sidebar-item-subtitle">{t('offlineMode')} • {downloadedSongs.length} {t('songs')}</div>
+                  <div className="sidebar-item-title">Offline Vault</div>
+                  <div className="sidebar-item-subtitle">{downloadedSongs.length} Lagu Tersedia</div>
                 </div>
               </button>
-              */}
 
               {/* Playlists */}
               {playlists.map(pl => (
@@ -3600,14 +3630,20 @@ function App() {
 
         {/* MAIN CONTENT */}
         <div className="main-area">
+          {isOffline && (
+            <div className="offline-banner" style={{ background: 'var(--accent-primary)', color: 'black', textAlign: 'center', padding: '10px', fontWeight: 'bold', fontSize: '14px', display: 'flex', justifyContent: 'center', alignItems: 'center', gap: '8px' }}>
+              <WifiOff size={18} /> Anda sedang dalam Mode Offline. Fitur pencarian dan rekomendasi dinonaktifkan.
+            </div>
+          )}
           {/* Top Bar */}
           <div className="top-bar" style={settings.theme === 'minimalist' ? { display: 'flex', justifyContent: 'space-between', alignItems: 'center' } : {}}>
             <div style={{ display: 'flex', alignItems: 'center' }}>
               {settings.theme === 'minimalist' && (
                 <div className="minimalist-nav" style={{ display: 'flex', gap: '8px', marginRight: '8px', alignItems: 'center' }}>
-                  <button className="btn-icon" onClick={goHome} style={{ 
+                  <button className="btn-icon" onClick={goHome} disabled={isOffline} style={{ 
                     color: activePage === 'home' ? (settings.theme === 'minimalist' ? 'var(--accent-text, black)' : 'var(--accent-primary)') : 'var(--text-primary)',
-                    background: activePage === 'home' && settings.theme === 'minimalist' ? 'var(--accent-primary)' : ''
+                    background: activePage === 'home' && settings.theme === 'minimalist' ? 'var(--accent-primary)' : '',
+                    opacity: isOffline ? 0.5 : 1
                   }} title="Home"><Home size={20} /></button>
                   <button className="btn-icon" onClick={() => setActivePage('library')} style={{ 
                     color: activePage === 'library' ? (settings.theme === 'minimalist' ? 'var(--accent-text, black)' : 'var(--accent-primary)') : 'var(--text-primary)',
@@ -3631,9 +3667,10 @@ function App() {
             </div>
             
             <div className="search-container" ref={searchContainerRef} style={settings.theme === 'minimalist' ? { marginLeft: 'auto' } : { position: 'relative' }}>
-              <form onSubmit={e => e.preventDefault()} style={{ display: 'flex', alignItems: 'center', position: 'relative' }}>
+              <form onSubmit={e => e.preventDefault()} style={{ display: 'flex', alignItems: 'center', position: 'relative', opacity: isOffline ? 0.5 : 1, pointerEvents: isOffline ? 'none' : 'auto' }}>
                 <Search size={16} className="search-icon" />
                 <input
+                  disabled={isOffline}
                   type="text"
                   className="search-input"
                   placeholder={t('searchPlaceholder')}
@@ -3739,6 +3776,21 @@ function App() {
                               }}
                             >
                               <Plus size={16} />
+                            </button>
+                            <button
+                              className="suggestion-btn"
+                              title="Unduh Lagu"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                if ((window as any).electronAPI) {
+                                  const streamUrl = `${API_BASE_URL}/api/stream?id=${song.id}`;
+                                  (window as any).electronAPI.cacheAudio(song, streamUrl);
+                                  showToast(`Mulai mengunduh "${song.title}"...`, 'success');
+                                }
+                                setShowSuggestions(false);
+                              }}
+                            >
+                              <Download size={16} />
                             </button>
                           </div>
                           <div className="suggestion-duration">{formatTime(song.duration)}</div>
