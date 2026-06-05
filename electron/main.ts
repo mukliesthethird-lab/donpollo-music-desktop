@@ -683,6 +683,7 @@ ipcMain.on('install-update', () => {
   autoUpdater.quitAndInstall();
 });
 
+ipcMain.handle('fetch-url', async (event, url: string) => { try { const res = await fetch(url); return await res.json(); } catch (err: any) { throw err; } }); 
 // ROMANIZATION IPC
 let kuroshiroInstance: any = null;
 ipcMain.handle('romanize-lyrics', async (event, text: string, lang: 'ko' | 'ja') => {

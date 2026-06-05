@@ -13,7 +13,7 @@ const DISCORD_REDIRECT_URI = window.location.hostname === 'localhost'
   ? 'http://localhost:5173/callback.html'
   : 'https://donpollo-music-desktop.vercel.app/callback';
 
-type Page = 'home' | 'library' | 'playlist' | 'playlist-detail' | 'settings' | 'downloads';
+type Page = 'home' | 'library' | 'playlist' | 'playlist-detail' | 'settings' | 'downloads' | 'artist';
 
 interface Playlist {
   id: string;
@@ -60,6 +60,12 @@ function App() {
   // ─── Page Navigation ────────────────────────────────────────
   const [activePage, setActivePage] = useState<Page>('home');
   const [activePlaylistId, setActivePlaylistId] = useState<string | null>(null);
+  
+  // ─── Artist Page State ──────────────────────────────────────
+  const [activeArtist, setActiveArtist] = useState<string | null>(null);
+  const [artistSongs, setArtistSongs] = useState<any[]>([]);
+  const [artistFilter, setArtistFilter] = useState<'popular' | 'newest'>('popular');
+  const [isArtistLoading, setIsArtistLoading] = useState(false);
   const [isRecentExpanded, setIsRecentExpanded] = useState(false);
   const [isRecsExpanded, setIsRecsExpanded] = useState(false);
   const [isIntExpanded, setIsIntExpanded] = useState(false);
@@ -1419,6 +1425,11 @@ function App() {
     if (!list || list.length === 0) return;
     const song = list[startIndex];
     
+    if (!song.id) {
+       showToast(`Sedang menautkan "${song.title}" ke YouTube... Mohon tunggu sesaat lalu coba lagi.`, 'error');
+       return;
+    }
+
     if (isGuest && activePartyId) {
        await (window as any).electronAPI.sendQueueRequest(activePartyId, discordUser?.id, discordUser?.global_name || discordUser?.username, song);
        showToast(`Berhasil meminta Host untuk menambahkan "${song.title}" ke antrean!`, 'success');
@@ -1455,6 +1466,11 @@ function App() {
   handleNextRef.current = handleNext;
 
   const playSingleSong = async (song: any) => {
+    if (!song.id) {
+       showToast(`Sedang menautkan "${song.title}" ke YouTube... Mohon tunggu sesaat lalu coba lagi.`, 'error');
+       return;
+    }
+
     if (isGuest && activePartyId) {
        await (window as any).electronAPI.sendQueueRequest(activePartyId, discordUser?.id, discordUser?.global_name || discordUser?.username, song);
        showToast(`Berhasil meminta Host untuk menambahkan "${song.title}" ke antrean!`, 'success');
@@ -1530,6 +1546,126 @@ function App() {
   };
 
   const goHome = () => { setActivePage('home'); setSearchQuery(''); setSearchResults([]); };
+
+  const fetchArtistSongs = async (artist: string, filter: 'popular' | 'newest') => {
+    setIsArtistLoading(true);
+    setArtistSongs([]);
+    try {
+      let queries: string[] = [];
+      try {
+        const targetUrl = `https://itunes.apple.com/search?term=${encodeURIComponent(artist)}&entity=song&limit=100`;
+        const itunesData = (window as any).electronAPI 
+          ? await (window as any).electronAPI.fetchUrl(targetUrl)
+          : await (await fetch(`https://api.allorigins.win/raw?url=${encodeURIComponent(targetUrl)}`)).json();
+        
+        if (itunesData.results && itunesData.results.length > 0) {
+          let tracks = itunesData.results.filter((t: any) => t.artistName && t.artistName.toLowerCase().includes(artist.toLowerCase()));
+          
+          if (filter === 'newest') {
+            tracks.sort((a: any, b: any) => new Date(b.releaseDate).getTime() - new Date(a.releaseDate).getTime());
+          }
+          
+          const uniqueTracks = new Map<string, any>();
+          for (const t of tracks) {
+            if (!uniqueTracks.has(t.trackName)) uniqueTracks.set(t.trackName, t);
+          }
+          
+          const topTracks = Array.from(uniqueTracks.values()).slice(0, 30);
+          
+          // 1. INSTANT LOAD using iTunes metadata
+          const initialSongs = topTracks.map((t: any) => ({
+            id: null,
+            title: t.trackName,
+            artist: t.artistName,
+            thumbnail: t.artworkUrl100 ? t.artworkUrl100.replace('100x100bb.jpg', '500x500bb.jpg') : '',
+            duration: Math.round((t.trackTimeMillis || 0) / 1000),
+            originalQuery: `${t.artistName} ${t.trackName} official audio`
+          }));
+          
+          setArtistSongs(initialSongs);
+          setIsArtistLoading(false); // Stop loader instantly!
+          
+          // 2. BACKGROUND MAPPING using high-speed IPC
+          initialSongs.forEach((song, idx) => {
+            const url = `${API_BASE_URL}/api/search?q=${encodeURIComponent(song.originalQuery)}`;
+            const fetchPromise = (window as any).electronAPI
+              ? (window as any).electronAPI.fetchUrl(url)
+              : fetch(url).then(r => r.json());
+              
+            fetchPromise.then((data: any) => {
+              if (data && data.results) {
+                const validYt = data.results.find((item: any) => item.duration >= 60 && item.duration <= 480);
+                if (validYt) {
+                  setArtistSongs(prev => {
+                    const next = [...prev];
+                    if (next[idx] && next[idx].title === song.title) {
+                      next[idx] = { ...next[idx], id: validYt.id }; // Insert the real YouTube ID
+                    }
+                    return next;
+                  });
+                }
+              }
+            }).catch(console.error);
+          });
+          
+          return; // Early return, success!
+        }
+      } catch (err) {
+        console.error('iTunes API fallback', err);
+      }
+
+      // Fallback if iTunes fails
+      if (queries.length === 0) {
+        queries = filter === 'popular' 
+          ? [`${artist} popular songs`, `${artist} hit songs`, `${artist} best songs`, `${artist} top hits`]
+          : [`${artist} newest songs 2024`, `${artist} new release`, `${artist} comeback`, `${artist} latest mv`];
+      }
+
+      // Progressive loading for fallback
+      let firstBatchLoaded = false;
+
+      const fetchPromises = queries.map((query) => {
+        return fetch(`${API_BASE_URL}/api/search?q=${encodeURIComponent(query)}`)
+          .then(res => res.json())
+          .then(data => {
+            if (data.results) {
+              const validSong = data.results.find((item: any) => item.duration >= 60 && item.duration <= 480);
+              
+              if (validSong) {
+                if (!firstBatchLoaded) {
+                  setIsArtistLoading(false);
+                  firstBatchLoaded = true;
+                }
+                
+                setArtistSongs(prev => {
+                  if (!prev.find(s => s.id === validSong.id)) {
+                    return [...prev, validSong].slice(0, 30);
+                  }
+                  return prev;
+                });
+              }
+            }
+          })
+          .catch(err => {
+            console.error('Error fetching query:', query, err);
+          });
+      });
+
+      await Promise.all(fetchPromises);
+    } catch (e) {
+      console.error('Failed to fetch artist songs', e);
+    } finally {
+      setIsArtistLoading(false);
+    }
+  };
+
+  const openArtistPage = (artistName: string) => {
+    setActiveArtist(artistName);
+    setActivePage('artist');
+    setArtistFilter('popular');
+    setShowSuggestions(false);
+    fetchArtistSongs(artistName, 'popular');
+  };
 
   // ═══════════════════════════════════════════════════════════════
   // PAGE RENDERERS
@@ -2357,6 +2493,104 @@ function App() {
       `}</style>
     </div>
   );
+
+  const renderArtistPage = () => {
+    return (
+      <div className="main-scroll artist-page" style={{ position: 'relative' }}>
+        {artistSongs.length > 0 && (
+          <div className="artist-hero-mosaic">
+            <div className="mosaic-grid">
+              {artistSongs.slice(0, 30).map((song, i) => (
+                <img key={i} src={getCleanThumbnail(song.thumbnail)} alt="" />
+              ))}
+            </div>
+            <div className="mosaic-overlay" />
+          </div>
+        )}
+        <div className="artist-hero" style={{ position: 'relative', zIndex: 1 }}>
+        <div className="artist-hero-info">
+          <h1 className="artist-hero-name">{activeArtist}</h1>
+          <p className="artist-hero-label">{t('artistPage')}</p>
+          <div className="artist-hero-actions">
+            <button className="btn-primary" onClick={() => {
+              if (artistSongs.length > 0) startPlayingFromList(artistSongs, 0);
+            }}>
+              <Play size={20} fill="currentColor" /> {t('playAll')}
+            </button>
+            <div className="artist-filters">
+              <button 
+                className={`filter-btn ${artistFilter === 'popular' ? 'active' : ''}`}
+                onClick={() => {
+                  setArtistFilter('popular');
+                  if (activeArtist) fetchArtistSongs(activeArtist, 'popular');
+                }}
+              >
+                {t('filterPopular')}
+              </button>
+              <button 
+                className={`filter-btn ${artistFilter === 'newest' ? 'active' : ''}`}
+                onClick={() => {
+                  setArtistFilter('newest');
+                  if (activeArtist) fetchArtistSongs(activeArtist, 'newest');
+                }}
+              >
+                {t('filterNewest')}
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div className="artist-content" style={{ position: 'relative', zIndex: 1 }}>
+        {isArtistLoading ? (
+          <div className="loading-state">
+            <Loader2 size={48} className="spin-icon" />
+            <p>{t('loadingSongs')}</p>
+          </div>
+        ) : artistSongs.length > 0 ? (
+          <div className="song-list-container">
+            {artistSongs.map((song, idx) => (
+              <div 
+                key={idx} 
+                className={`song-row ${currentSong?.id === song.id ? 'active' : ''}`}
+                onClick={() => playSingleSong(song)}
+                onContextMenu={(e) => handleContextMenu(e, song)}
+              >
+                <div className="song-index">
+                  {currentSong?.id === song.id && isPlaying ? (
+                    <div className="playing-eq"><div/><div/><div/></div>
+                  ) : (
+                    <span>{idx + 1}</span>
+                  )}
+                  <div className="play-overlay"><Play size={12} fill="currentColor"/></div>
+                </div>
+                <div className="song-thumb-wrapper">
+                  <img src={getCleanThumbnail(song.thumbnail)} alt={song.title} className="song-thumb" />
+                </div>
+                <div className="song-info">
+                  <div className="song-title">{song.title}</div>
+                  <div className="song-artist" onClick={(e) => {
+                    e.stopPropagation();
+                  }}>{song.artist}</div>
+                </div>
+                <div className="song-duration">{song.duration ? formatTime(song.duration) : ''}</div>
+                <div className="song-actions">
+                  <button className={`action-btn ${isLiked(song.id) ? 'active' : ''}`} onClick={(e) => { e.stopPropagation(); toggleLike(song); }}>
+                    <Heart size={16} fill={isLiked(song.id) ? 'currentColor' : 'none'} />
+                  </button>
+                </div>
+              </div>
+            ))}
+          </div>
+        ) : !isArtistLoading ? (
+          <div className="empty-state">
+            <Music size={40} />
+            <p>{t('noResults')}</p>
+          </div>
+        ) : null}
+      </div>
+    </div>
+  );
+};
 
   const renderHomePage = () => (
     <div className="main-scroll">
@@ -3348,6 +3582,20 @@ function App() {
               {/* Live Search Dropdown */}
               {showSuggestions && searchQuery.length >= 2 && (
                 <div className="search-suggestions-dropdown">
+                  <div 
+                    className="suggestion-intent-row" 
+                    onMouseDown={e => e.preventDefault()}
+                    onClick={() => {
+                      openArtistPage(searchQuery);
+                    }}
+                  >
+                    <div className="intent-icon"><UserCircle size={18} /></div>
+                    <div className="intent-text">
+                      <span className="intent-prefix">{t('seeAllSongsBy')}</span>
+                      <span className="intent-keyword">"{searchQuery}"</span>
+                    </div>
+                  </div>
+
                   {isFetchingSuggestions ? (
                     <div className="suggestion-loading">
                       <Loader2 size={14} className="spin-icon" />
@@ -3465,6 +3713,7 @@ function App() {
 
           {/* Page Router */}
           {activePage === 'home' && renderHomePage()}
+          {activePage === 'artist' && renderArtistPage()}
           {activePage === 'library' && (
             <div className="main-scroll">{renderLibraryPage()}</div>
           )}

@@ -63,6 +63,11 @@ type TranslationKeys = {
   searchPlaceholder: string;
   searchResultsFor: string;
   noResults: string;
+  seeAllSongsBy: string;
+  artistPage: string;
+  filterPopular: string;
+  filterNewest: string;
+  loadingSongs: string;
 
   // Library / Playlist
   myLibrary: string;
@@ -269,6 +274,11 @@ const translations: Record<Language, TranslationKeys> = {
     searchPlaceholder: 'Cari lagu, artis, album...',
     searchResultsFor: 'Hasil untuk',
     noResults: 'Tidak ada hasil ditemukan.',
+    seeAllSongsBy: 'Lihat semua lagu dari',
+    artistPage: 'Halaman Artis',
+    filterPopular: 'Terpopuler',
+    filterNewest: 'Terbaru',
+    loadingSongs: 'Memuat lagu...',
 
     // Library / Playlist
     myLibrary: 'Koleksi Saya',
@@ -474,6 +484,11 @@ const translations: Record<Language, TranslationKeys> = {
     searchPlaceholder: 'Search songs, artists, albums...',
     searchResultsFor: 'Results for',
     noResults: 'No results found.',
+    seeAllSongsBy: 'See all songs by',
+    artistPage: 'Artist Page',
+    filterPopular: 'Popular',
+    filterNewest: 'Newest',
+    loadingSongs: 'Loading songs...',
 
     // Library / Playlist
     myLibrary: 'My Library',
@@ -679,6 +694,11 @@ const translations: Record<Language, TranslationKeys> = {
     searchPlaceholder: '曲・アーティスト・アルバムを検索...',
     searchResultsFor: '検索結果：',
     noResults: '結果が見つかりませんでした。',
+    seeAllSongsBy: 'のすべての曲を見る',
+    artistPage: 'アーティストページ',
+    filterPopular: '人気',
+    filterNewest: '最新',
+    loadingSongs: '曲を読み込み中...',
 
     // Library / Playlist
     myLibrary: 'マイライブラリ',

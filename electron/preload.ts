@@ -71,4 +71,4 @@ contextBridge.exposeInMainWorld('electronAPI', {
   setTrayLabels: (labels: any) => ipcRenderer.send('set-tray-labels', labels),
   setThumbarIcons: (icons: any) => ipcRenderer.send('set-thumbar-icons', icons),
   notifyClosing: (discordId: string) => ipcRenderer.send('notify-closing', discordId)
-});
+, fetchUrl: (url: string) => ipcRenderer.invoke('fetch-url', url) });
