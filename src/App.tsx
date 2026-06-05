@@ -2084,19 +2084,45 @@ function App() {
               )}
             </div>
             
-            {updateInfo.downloading ? (
-              <div style={{ width: 100, height: 6, background: 'rgba(255,255,255,0.1)', borderRadius: 3, overflow: 'hidden' }}>
-                <div style={{ width: `${updateInfo.progress}%`, height: '100%', background: '#23a559', transition: 'width 0.2s' }} />
-              </div>
-            ) : updateInfo.ready ? (
-              <button className="btn-primary" style={{ background: '#23a559' }} onClick={() => (window as any).electronAPI.installUpdate()}>
-                Mulai Ulang Aplikasi
-              </button>
-            ) : (
-              <button className="btn-primary" onClick={() => { (window as any).electronAPI.downloadUpdate(); setUpdateInfo(prev => ({ ...prev, downloading: true })); }}>
-                Unduh Sekarang
-              </button>
-            )}
+            <div style={{ display: 'flex', gap: '8px' }}>
+              {updateInfo.downloading ? (
+                <div style={{ width: 100, height: 6, background: 'rgba(255,255,255,0.1)', borderRadius: 3, overflow: 'hidden' }}>
+                  <div style={{ width: `${updateInfo.progress}%`, height: '100%', background: '#23a559', transition: 'width 0.2s' }} />
+                </div>
+              ) : updateInfo.ready ? (
+                <button className="btn-primary" style={{ background: '#23a559' }} onClick={() => (window as any).electronAPI.installUpdate()}>
+                  Mulai Ulang Aplikasi
+                </button>
+              ) : (
+                <button className="btn-primary" onClick={() => { (window as any).electronAPI.downloadUpdate(); setUpdateInfo(prev => ({ ...prev, downloading: true })); }}>
+                  Unduh Sekarang
+                </button>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {!updateInfo.available && !updateInfo.downloading && !updateInfo.ready && (
+        <div className="settings-section">
+          <div className="settings-section-title">
+            <DownloadCloud size={18} style={{ marginRight: 8 }} /> Pembaruan Aplikasi
+          </div>
+          <div className="settings-item">
+            <div className="settings-item-info">
+              <span className="settings-item-title">Cek Pembaruan Manual</span>
+              <span className="settings-item-desc">Periksa apakah ada versi baru Don Pollo Music yang tersedia.</span>
+            </div>
+            <button className="btn-secondary" onClick={async () => {
+              try {
+                setToastData({ msg: 'Mengecek pembaruan...', type: 'info', icon: <DownloadCloud size={20} /> });
+                await (window as any).electronAPI.checkForUpdates();
+              } catch (err: any) {
+                setToastData({ msg: `Gagal mengecek: ${err.message || err}`, type: 'error' });
+              }
+            }}>
+              Periksa Pembaruan
+            </button>
           </div>
         </div>
       )}

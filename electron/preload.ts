@@ -30,6 +30,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
   },
   downloadUpdate: () => ipcRenderer.send('download-update'),
   installUpdate: () => ipcRenderer.send('install-update'),
+  checkForUpdates: () => ipcRenderer.invoke('check-for-updates'),
   updatePresence: (data: any) => ipcRenderer.invoke('update-presence', data),
   getOnlineUsers: (currentUserId: string) => ipcRenderer.invoke('get-online-users', currentUserId),
   hostParty: (partyId: string, hostDiscordId: string, song: any, currentTime: number, isPlaying: boolean) => ipcRenderer.invoke('host-party', partyId, hostDiscordId, song, currentTime, isPlaying),
