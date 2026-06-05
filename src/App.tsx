@@ -371,7 +371,7 @@ function App() {
       try {
         if ((window as any).electronAPI) {
           const dbPlaylists = await (window as any).electronAPI.getPlaylists(discordUser?.id);
-          if (dbPlaylists && dbPlaylists.length > 0) {
+          if (dbPlaylists) {
             setPlaylists(dbPlaylists);
           }
         }
@@ -743,6 +743,26 @@ function App() {
   userRef.current = discordUser;
 
   useEffect(() => {
+    const suffix = discordUser ? `_${discordUser.id}` : '';
+    
+    try {
+      const hist = localStorage.getItem(`donpollo_history${suffix}`);
+      setPlayHistory(hist ? JSON.parse(hist) : []);
+    } catch { setPlayHistory([]); }
+
+    try {
+      const liked = localStorage.getItem(`donpollo_liked${suffix}`);
+      setLikedSongs(liked ? JSON.parse(liked) : []);
+    } catch { setLikedSongs([]); }
+    
+    try {
+      const pl = localStorage.getItem(`donpollo_playlists${suffix}`);
+      setPlaylists(pl ? JSON.parse(pl) : []);
+    } catch { setPlaylists([]); }
+    
+  }, [discordUser]);
+
+  useEffect(() => {
     const suffix = userRef.current ? `_${userRef.current.id}` : '';
     localStorage.setItem(`donpollo_history${suffix}`, JSON.stringify(playHistory));
   }, [playHistory]);
@@ -812,12 +832,6 @@ function App() {
             setDiscordUser(user);
             localStorage.setItem('donpollo_user', JSON.stringify(user));
             localStorage.setItem('donpollo_discord_token', token);
-            // Muat data untuk user ini
-            try {
-              setPlayHistory(JSON.parse(localStorage.getItem(`donpollo_history_${user.id}`) || '[]'));
-              setLikedSongs(JSON.parse(localStorage.getItem(`donpollo_liked_${user.id}`) || '[]'));
-              setPlaylists(JSON.parse(localStorage.getItem(`donpollo_playlists_${user.id}`) || '[]'));
-            } catch (e) {}
             showToast(`${t('toastWelcome')}, ${user.global_name || user.username}!`, 'user');
             window.history.replaceState(null, '', window.location.pathname);
             setActivePage('home');
@@ -1204,12 +1218,6 @@ function App() {
     setDiscordUser(null);
     localStorage.removeItem('donpollo_user');
     localStorage.removeItem('donpollo_discord_token');
-    // Kembalikan ke data tamu
-    try {
-      setPlayHistory(JSON.parse(localStorage.getItem(`donpollo_history`) || '[]'));
-      setLikedSongs(JSON.parse(localStorage.getItem(`donpollo_liked`) || '[]'));
-      setPlaylists(JSON.parse(localStorage.getItem(`donpollo_playlists`) || '[]'));
-    } catch (e) {}
     showToast(t('toastLogout'));
   };
 
