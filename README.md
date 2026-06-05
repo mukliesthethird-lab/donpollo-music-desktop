@@ -13,6 +13,7 @@ DonPollo Music Desktop is a modern, premium, and lightning-fast music streaming 
 - **Multi-language Support**: Fully localized in English, Indonesian (Bahasa Indonesia), and Japanese (日本語).
 - **Silent Auto-Updates**: Never worry about downloading new patches manually. The app updates itself automatically in the background.
 
+
 ## 🚀 Tech Stack
 
 - **Framework**: [Electron](https://www.electronjs.org/) + [React 19](https://react.dev/)
@@ -51,9 +52,9 @@ The compiled installer will be available in the `release/` directory.
 
 Contributions, issues, and feature requests are welcome! Feel free to check the [issues page](https://github.com/mukliesthethird-lab/donpollo-music-desktop/issues).
 
-
 ## 💬 Community & Support
-Need help, have a feature request? 
+
+Need help, have a feature request, or just want to hang out with other music lovers? 
 **Join our official Discord Server: [https://discord.gg/usn49FDhMr](https://discord.gg/usn49FDhMr)**
 
 ---

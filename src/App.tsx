@@ -267,8 +267,11 @@ function App() {
       if ((window as any).electronAPI.onUpdateError) {
         unsubs.push((window as any).electronAPI.onUpdateError((_event: any, errorMsg: string) => {
           console.error('Update error:', errorMsg);
-          // Abaikan error palsu jika update sudah berhasil diunduh (sering terjadi di electron-updater)
-          setUpdateStatus(prev => prev === 'downloaded' ? 'downloaded' : 'error');
+          // Abaikan error palsu jika update sudah berhasil diunduh atau terjadi saat background check
+          setUpdateStatus(prev => {
+            if (prev === 'downloading') return 'error';
+            return prev;
+          });
         }));
       }
     }
