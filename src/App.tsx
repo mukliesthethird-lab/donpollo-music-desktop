@@ -102,7 +102,7 @@ function App() {
   const [isFetchingSuggestions, setIsFetchingSuggestions] = useState(false);
   const searchContainerRef = useRef<HTMLDivElement>(null);
 
-  const [updateInfo, setUpdateInfo] = useState<{ available: boolean, downloading: boolean, progress: number, ready: boolean, error: string }>({ available: false, downloading: false, progress: 0, ready: false, error: '' });
+  const [updateInfo, setUpdateInfo] = useState<{ available: boolean, downloading: boolean, progress: number, ready: boolean, error: string, isChecking?: boolean, checkMsg?: string }>({ available: false, downloading: false, progress: 0, ready: false, error: '' });
 
   useEffect(() => {
     let unbind1: any, unbind2: any, unbind3: any, unbind4: any;
@@ -2108,20 +2108,40 @@ function App() {
           <div className="settings-section-title">
             <DownloadCloud size={18} style={{ marginRight: 8 }} /> Pembaruan Aplikasi
           </div>
-          <div className="settings-item">
-            <div className="settings-item-info">
-              <span className="settings-item-title">Cek Pembaruan Manual</span>
-              <span className="settings-item-desc">Periksa apakah ada versi baru Don Pollo Music yang tersedia.</span>
+          <div className="settings-item" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <div className="settings-item-info" style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+              <div className="settings-item-title">{t('manualUpdateCheck')}</div>
+              <div className="settings-item-desc" style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                {t('manualUpdateDesc')}
+                {updateInfo.checkMsg && (
+                   <span style={{ 
+                     color: updateInfo.checkMsg.includes('Error') ? '#f23f43' : 'var(--accent-primary)',
+                     fontSize: '0.95em',
+                     fontWeight: 500
+                   }}>
+                     {updateInfo.checkMsg}
+                   </span>
+                )}
+              </div>
             </div>
-            <button className="btn-secondary" onClick={async () => {
+            <button className="btn-secondary" style={{ whiteSpace: 'nowrap' }} disabled={updateInfo.isChecking} onClick={async () => {
               try {
-                setToastData({ msg: 'Mengecek pembaruan...', type: 'success', icon: <DownloadCloud size={20} /> });
-                await (window as any).electronAPI.checkForUpdates();
+                setUpdateInfo(prev => ({ ...prev, isChecking: true, checkMsg: t('checkingUpdate') }));
+                const hasUpdate = await (window as any).electronAPI.checkForUpdates();
+                if (!hasUpdate) {
+                   setUpdateInfo(prev => ({ ...prev, isChecking: false, checkMsg: t('alreadyLatest') }));
+                } else {
+                   setUpdateInfo(prev => ({ ...prev, isChecking: false, checkMsg: '' }));
+                }
               } catch (err: any) {
-                setToastData({ msg: `Gagal mengecek: ${err.message || err}`, type: 'error', icon: <AlertCircle size={20} /> });
+                let errorMsg = err.message || err;
+                if (typeof errorMsg === 'string' && errorMsg.includes('No published versions on GitHub')) {
+                   errorMsg = t('noPublishedVersions');
+                }
+                setUpdateInfo(prev => ({ ...prev, isChecking: false, checkMsg: `Error: ${errorMsg}` }));
               }
             }}>
-              Periksa Pembaruan
+              {t('manualUpdateCheck')}
             </button>
           </div>
         </div>

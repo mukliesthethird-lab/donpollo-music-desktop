@@ -157,6 +157,11 @@ type TranslationKeys = {
   appVersion: string;
   clearAudioCache: string;
   audioCacheDesc: string;
+  manualUpdateCheck: string;
+  manualUpdateDesc: string;
+  checkingUpdate: string;
+  alreadyLatest: string;
+  noPublishedVersions: string;
   downloads: string;
   offlineMode: string;
   noDownloads: string;
@@ -368,6 +373,11 @@ const translations: Record<Language, TranslationKeys> = {
     appVersion: 'Versi Aplikasi',
     clearAudioCache: 'Hapus Cache Lagu Lokal',
     audioCacheDesc: 'Cache menyimpan lagu untuk memutar lebih cepat dan hemat kuota',
+    manualUpdateCheck: 'Cek Pembaruan Manual',
+    manualUpdateDesc: 'Periksa apakah ada versi baru Don Pollo Music yang tersedia.',
+    checkingUpdate: 'Mengecek pembaruan...',
+    alreadyLatest: 'Anda menggunakan versi terbaru.',
+    noPublishedVersions: 'Belum ada rilis versi terbaru.',
     downloads: 'Unduhan',
     offlineMode: 'Mode Offline',
     noDownloads: 'Belum ada unduhan',
@@ -578,6 +588,11 @@ const translations: Record<Language, TranslationKeys> = {
     appVersion: 'App Version',
     clearAudioCache: 'Clear Local Audio Cache',
     audioCacheDesc: 'Cache saves songs for faster playback and data saving',
+    manualUpdateCheck: 'Manual Update Check',
+    manualUpdateDesc: 'Check if a new version of Don Pollo Music is available.',
+    checkingUpdate: 'Checking for updates...',
+    alreadyLatest: 'You are using the latest version.',
+    noPublishedVersions: 'No published versions available yet.',
     downloads: 'Downloads',
     offlineMode: 'Offline Mode',
     noDownloads: 'No downloads yet',
@@ -788,6 +803,11 @@ const translations: Record<Language, TranslationKeys> = {
     appVersion: 'アプリバージョン',
     clearAudioCache: 'ローカルオーディオキャッシュをクリア',
     audioCacheDesc: 'キャッシュは曲を保存して、より高速に再生し、データを節約します',
+    manualUpdateCheck: '手動アップデート確認',
+    manualUpdateDesc: '新しいバージョンのDon Pollo Musicが利用可能か確認します。',
+    checkingUpdate: 'アップデートを確認中...',
+    alreadyLatest: '最新バージョンを使用しています。',
+    noPublishedVersions: '公開されている新しいバージョンはありません。',
     downloads: 'ダウンロード',
     offlineMode: 'オフラインモード',
     noDownloads: 'ダウンロードがありません',
