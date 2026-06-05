@@ -28,8 +28,7 @@
     "files": [
       "dist/**/*",
       "dist-electron/**/*",
-      "package.json",
-      ".env"
+      "package.json"
     ],
     "extraMetadata": {
       "main": "dist-electron/main.cjs"

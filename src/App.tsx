@@ -93,21 +93,29 @@ function App() {
       return;
     }
 
+    const controller = new AbortController();
     const handler = setTimeout(async () => {
       setIsFetchingSuggestions(true);
       try {
-        const res = await fetch(`${API_BASE_URL}/api/search?q=${encodeURIComponent(searchQuery)}`);
+        const res = await fetch(`${API_BASE_URL}/api/search?q=${encodeURIComponent(searchQuery)}`, { signal: controller.signal });
         const data = await res.json();
         const results = data.results?.slice(0, 5) || [];
         setSuggestions(results);
         searchCacheRef.current[searchQuery] = results;
-      } catch (e) {
-        setSuggestions([]);
+      } catch (e: any) {
+        if (e.name !== 'AbortError') {
+          setSuggestions([]);
+        }
       } finally {
-        setIsFetchingSuggestions(false);
+        if (!controller.signal.aborted) {
+          setIsFetchingSuggestions(false);
+        }
       }
     }, 500);
-    return () => clearTimeout(handler);
+    return () => {
+      clearTimeout(handler);
+      controller.abort();
+    };
   }, [searchQuery]);
 
   // ─── Updater State ──────────────────────────────────────────
@@ -234,38 +242,40 @@ function App() {
   }, []);
 
   useEffect(() => {
+    let unsubs: any[] = [];
     if ((window as any).electronAPI) {
       if ((window as any).electronAPI.onUpdateAvailable) {
-        (window as any).electronAPI.onUpdateAvailable(() => {
+        unsubs.push((window as any).electronAPI.onUpdateAvailable(() => {
           setUpdateStatus('available');
-        });
+        }));
       }
       if ((window as any).electronAPI.onUpdateDownloaded) {
-        (window as any).electronAPI.onUpdateDownloaded(() => {
+        unsubs.push((window as any).electronAPI.onUpdateDownloaded(() => {
           setUpdateStatus('downloaded');
-        });
+        }));
       }
       if ((window as any).electronAPI.onDownloadProgress) {
-        (window as any).electronAPI.onDownloadProgress((_event: any, progressObj: any) => {
+        unsubs.push((window as any).electronAPI.onDownloadProgress((_event: any, progressObj: any) => {
           if (progressObj && progressObj.percent) {
             setUpdateProgress(Math.floor(progressObj.percent));
           }
-        });
+        }));
       }
       if ((window as any).electronAPI.onUpdateError) {
-        (window as any).electronAPI.onUpdateError((_event: any, errorMsg: string) => {
+        unsubs.push((window as any).electronAPI.onUpdateError((_event: any, errorMsg: string) => {
           console.error('Update error:', errorMsg);
           setUpdateStatus('error');
-        });
+        }));
       }
     }
+    return () => unsubs.forEach(unsub => unsub && unsub());
   }, []);
 
-  // Handle Discord OAuth token received from deep-link (installed app flow)
   useEffect(() => {
+    let unsub: any;
     const api = (window as any).electronAPI;
     if (api && api.onDiscordOAuthToken) {
-      api.onDiscordOAuthToken(async (token: string) => {
+      unsub = api.onDiscordOAuthToken(async (token: string) => {
         try {
           const res = await fetch('https://discord.com/api/users/@me', {
             headers: { Authorization: `Bearer ${token}` },
@@ -281,6 +291,9 @@ function App() {
         }
       });
     }
+    return () => {
+      if (unsub) unsub();
+    };
   }, []);
 
   // Close suggestions when clicking outside
@@ -392,12 +405,20 @@ function App() {
       showToast(`${t('toastDownloadComplete')}: ${songData.title}`, 'success');
     };
 
+    let unsub1: any;
+    let unsub2: any;
+
     if ((window as any).electronAPI?.onDownloadCacheProgress) {
-      (window as any).electronAPI.onDownloadCacheProgress(handleProgress);
+      unsub1 = (window as any).electronAPI.onDownloadCacheProgress(handleProgress);
     }
     if ((window as any).electronAPI?.onDownloadCacheComplete) {
-      (window as any).electronAPI.onDownloadCacheComplete(handleComplete);
+      unsub2 = (window as any).electronAPI.onDownloadCacheComplete(handleComplete);
     }
+
+    return () => {
+      if (unsub1) unsub1();
+      if (unsub2) unsub2();
+    };
   }, []);
 
   // ─── Queue ───────────────────────────────────────────────────
@@ -771,13 +792,17 @@ function App() {
   }, [activePage]);
 
   useEffect(() => {
+    let unsub: any;
     const api = (window as any).electronAPI;
-    if (api) {
-      if (api.onMiniPlayerMode) api.onMiniPlayerMode((_event: any, mode: boolean) => {
+    if (api && api.onMiniPlayerMode) {
+      unsub = api.onMiniPlayerMode((_event: any, mode: boolean) => {
          setIsWidgetMode(mode);
-         if (mode && activePage !== 'home') setActivePage('home');
+         if (mode) setActivePage('home');
       });
     }
+    return () => {
+      if (unsub) unsub();
+    };
   }, []);
 
   // ─── Lyrics Auto-Scroll ──────────────────────────────────────

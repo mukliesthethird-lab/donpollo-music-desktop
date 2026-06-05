@@ -5,14 +5,29 @@ contextBridge.exposeInMainWorld('electronAPI', {
   enterMiniPlayer: () => ipcRenderer.send('enter-mini-player'),
   exitMiniPlayer: () => ipcRenderer.send('exit-mini-player'),
   setMinimizeToMiniPlayer: (enabled: boolean) => ipcRenderer.send('set-minimize-to-miniplayer', enabled),
-  onMiniPlayerMode: (callback: (event: any, mode: boolean) => void) => ipcRenderer.on('mini-player-mode', callback),
+  onMiniPlayerMode: (callback: (event: any, mode: boolean) => void) => {
+    ipcRenderer.on('mini-player-mode', callback);
+    return () => ipcRenderer.off('mini-player-mode', callback);
+  },
   getPlaylists: (discordId?: string) => ipcRenderer.invoke('get-playlists', discordId),
   savePlaylist: (playlist: any) => ipcRenderer.invoke('save-playlist', playlist),
   deletePlaylist: (id: string) => ipcRenderer.invoke('delete-playlist', id),
-  onUpdateAvailable: (callback: (event: any, info: any) => void) => ipcRenderer.on('update-available', callback),
-  onUpdateDownloaded: (callback: (event: any, info: any) => void) => ipcRenderer.on('update-downloaded', callback),
-  onDownloadProgress: (callback: (event: any, progressObj: any) => void) => ipcRenderer.on('download-progress', callback),
-  onUpdateError: (callback: (event: any, error: string) => void) => ipcRenderer.on('update-error', callback),
+  onUpdateAvailable: (callback: (event: any, info: any) => void) => {
+    ipcRenderer.on('update-available', callback);
+    return () => ipcRenderer.off('update-available', callback);
+  },
+  onUpdateDownloaded: (callback: (event: any, info: any) => void) => {
+    ipcRenderer.on('update-downloaded', callback);
+    return () => ipcRenderer.off('update-downloaded', callback);
+  },
+  onDownloadProgress: (callback: (event: any, progressObj: any) => void) => {
+    ipcRenderer.on('download-progress', callback);
+    return () => ipcRenderer.off('download-progress', callback);
+  },
+  onUpdateError: (callback: (event: any, error: string) => void) => {
+    ipcRenderer.on('update-error', callback);
+    return () => ipcRenderer.off('update-error', callback);
+  },
   downloadUpdate: () => ipcRenderer.send('download-update'),
   installUpdate: () => ipcRenderer.send('install-update'),
   updatePresence: (data: any) => ipcRenderer.invoke('update-presence', data),
@@ -29,14 +44,23 @@ contextBridge.exposeInMainWorld('electronAPI', {
   romanizeLyrics: (text: string, lang: 'ko' | 'ja') => ipcRenderer.invoke('romanize-lyrics', text, lang),
   setActivity: (song: any, progressStr?: string) => ipcRenderer.send('set-activity', song, progressStr),
   clearActivity: () => ipcRenderer.send('clear-activity'),
-  onDiscordOAuthToken: (callback: (token: string) => void) =>
-    ipcRenderer.on('discord-oauth-token', (_event, token) => callback(token)),
+  onDiscordOAuthToken: (callback: (token: string) => void) => {
+    const wrapped = (_event: any, token: string) => callback(token);
+    ipcRenderer.on('discord-oauth-token', wrapped);
+    return () => ipcRenderer.off('discord-oauth-token', wrapped);
+  },
   checkCache: (songId: string) => ipcRenderer.invoke('check-cache', songId),
   cacheAudio: (songData: any, url: string) => ipcRenderer.send('cache-audio', songData, url),
   getDownloadedSongs: () => ipcRenderer.invoke('get-downloaded-songs'),
   deleteDownloadedSong: (songId: string) => ipcRenderer.invoke('delete-downloaded-song', songId),
   clearCache: () => ipcRenderer.invoke('clear-cache'),
   getCacheSize: () => ipcRenderer.invoke('get-cache-size'),
-  onDownloadCacheProgress: (callback: (event: any, data: any) => void) => ipcRenderer.on('download-cache-progress', callback),
-  onDownloadCacheComplete: (callback: (event: any, song: any) => void) => ipcRenderer.on('download-cache-complete', callback)
+  onDownloadCacheProgress: (callback: (event: any, data: any) => void) => {
+    ipcRenderer.on('download-cache-progress', callback);
+    return () => ipcRenderer.off('download-cache-progress', callback);
+  },
+  onDownloadCacheComplete: (callback: (event: any, song: any) => void) => {
+    ipcRenderer.on('download-cache-complete', callback);
+    return () => ipcRenderer.off('download-cache-complete', callback);
+  }
 });

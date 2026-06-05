@@ -12,7 +12,7 @@ const isDev = !app.isPackaged;
 dotenv.config({ path: path.join(__dirname, '../.env') });
 
 let mainWindow: BrowserWindow | null = null;
-let db: mysql.Connection | null = null;
+let db: mysql.Pool | null = null;
 let minimizeToMiniPlayerEnabled = false;
 let isMiniPlayerMode = false;
 let previousBounds = { width: 1280, height: 800, x: 0, y: 0 };
@@ -40,20 +40,15 @@ function handleDeepLink(url: string) {
 
 async function initDB() {
   try {
-    db = await mysql.createConnection({
+    db = mysql.createPool({
       host: process.env.DB_HOST,
       user: process.env.DB_USER,
       password: process.env.DB_PASSWORD,
       database: process.env.DB_NAME,
       port: Number(process.env.DB_PORT) || 3306,
-    });
-
-    db.on('error', (err: any) => {
-      console.error('MySQL database error:', err);
-      if (err.code === 'PROTOCOL_CONNECTION_LOST' || err.code === 'ECONNRESET') {
-        console.log('Reconnecting to MySQL...');
-        initDB();
-      }
+      waitForConnections: true,
+      connectionLimit: 10,
+      queueLimit: 0
     });
     
     await db.execute(`
@@ -599,6 +594,7 @@ ipcMain.on('clear-activity', () => {
 autoUpdater.autoDownload = false; // We want to ask the user to download or we can download automatically and notify
 autoUpdater.autoInstallOnAppQuit = true;
 autoUpdater.allowPrerelease = true;
+autoUpdater.channel = 'latest';
 
 autoUpdater.on('update-available', (info) => {
   if (mainWindow) mainWindow.webContents.send('update-available', info);
@@ -690,7 +686,7 @@ function enforceCacheLimit() {
       let metadata = getCachedMetadata();
       for (const file of fileStats) {
         try {
-          fs.unlinkSync(file.filePath);
+          fs.unlink(file.filePath, () => {});
           totalSize -= file.size;
           metadata = metadata.filter((s: any) => s.id !== file.songId);
           if (totalSize <= CACHE_LIMIT_BYTES) break;
@@ -729,9 +725,9 @@ function downloadToCache(songData: any, urlStr: string, sender: any) {
       response.pipe(fileStream);
 
       fileStream.on('finish', () => {
-        fileStream.close(() => {
+        fileStream.close(async () => {
           try {
-            fs.renameSync(tempPath, filePath);
+            await fs.promises.rename(tempPath, filePath);
             const metadata = getCachedMetadata();
             if (!metadata.find((s: any) => s.id === songId)) {
               metadata.push(songData);
@@ -772,7 +768,7 @@ ipcMain.handle('delete-downloaded-song', async (event, songId) => {
   try {
     const filePath = path.join(cacheDir, `${songId}.m4a`);
     if (fs.existsSync(filePath)) {
-      fs.unlinkSync(filePath);
+      await fs.promises.unlink(filePath);
     }
     const metadata = getCachedMetadata();
     const updated = metadata.filter((s: any) => s.id !== songId);
@@ -785,9 +781,9 @@ ipcMain.handle('delete-downloaded-song', async (event, songId) => {
 
 ipcMain.handle('clear-cache', async () => {
   try {
-    const files = fs.readdirSync(cacheDir);
+    const files = await fs.promises.readdir(cacheDir);
     for (const file of files) {
-      fs.unlinkSync(path.join(cacheDir, file));
+      await fs.promises.unlink(path.join(cacheDir, file)).catch(() => {});
     }
     return true;
   } catch (e) {
