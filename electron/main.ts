@@ -653,7 +653,7 @@ ipcMain.on('clear-activity', () => {
 });
 
 // AUTO UPDATER
-autoUpdater.autoDownload = false; // We want to ask the user to download or we can download automatically and notify
+autoUpdater.autoDownload = true; // Auto download silently
 autoUpdater.autoInstallOnAppQuit = true;
 autoUpdater.allowPrerelease = true;
 autoUpdater.channel = 'latest';
@@ -906,64 +906,87 @@ ipcMain.on('notify-closing', async (event, discordId) => {
   }
 });
 
-app.whenReady().then(async () => {
-  const iconPath = path.join(__dirname, isDev ? '../public/icon.png' : '../dist/icon.png');
-  const trayIcon = nativeImage.createFromPath(iconPath).resize({ width: 16, height: 16 });
-  tray = new Tray(trayIcon);
-  updateTrayMenu('Not Playing', false);
-  tray.on('click', () => {
+const gotTheLock = app.requestSingleInstanceLock();
+
+if (!gotTheLock) {
+  app.quit();
+} else {
+  // Handle deep-link on Windows/Linux (second-instance)
+  app.on('second-instance', (_event, commandLine) => {
+    // The URL will be the last element of commandLine
+    const url = commandLine.find((arg: string) => arg.startsWith('donpollo://'));
+    if (url) handleDeepLink(url);
     if (mainWindow) {
       if (mainWindow.isMinimized()) mainWindow.restore();
-      mainWindow.show();
       mainWindow.focus();
     }
   });
-  protocol.registerFileProtocol('donpollo-cache', (request, callback) => {
-    const url = request.url.replace('donpollo-cache://', '');
-    const songId = url.split('/')[0].split('?')[0];
-    const filePath = path.join(cacheDir, `${songId}.m4a`);
-    callback({ path: filePath });
-  });
 
-  Menu.setApplicationMenu(null);
-  await initDB();
-  createWindow();
+  app.whenReady().then(async () => {
+    const isUpdateCLI = process.argv.includes('--update');
 
-
-
-  // Handle deep-link on macOS (open-url)
-  app.on('open-url', (event, url) => {
-    event.preventDefault();
-    handleDeepLink(url);
-  });
-
-  // Check for updates after a short delay
-  setTimeout(() => {
-    if (!isDev) {
-      autoUpdater.checkForUpdatesAndNotify();
+    if (isUpdateCLI) {
+      console.log('Checking for update via CLI...');
+      try {
+        await autoUpdater.checkForUpdates();
+        console.log('Update check completed.');
+      } catch (err: any) {
+        console.error('Update check failed:', err.message);
+      }
+      app.quit();
+      return;
     }
-  }, 3000);
 
-  app.on('activate', () => {
-    if (BrowserWindow.getAllWindows().length === 0) {
-      createWindow();
+    const iconPath = path.join(__dirname, isDev ? '../public/icon.png' : '../dist/icon.png');
+    const trayIcon = nativeImage.createFromPath(iconPath).resize({ width: 16, height: 16 });
+    tray = new Tray(trayIcon);
+    updateTrayMenu('Not Playing', false);
+    tray.on('click', () => {
+      if (mainWindow) {
+        if (mainWindow.isMinimized()) mainWindow.restore();
+        mainWindow.show();
+        mainWindow.focus();
+      }
+    });
+    protocol.registerFileProtocol('donpollo-cache', (request, callback) => {
+      const url = request.url.replace('donpollo-cache://', '');
+      const songId = url.split('/')[0].split('?')[0];
+      const filePath = path.join(cacheDir, `${songId}.m4a`);
+      callback({ path: filePath });
+    });
+
+    Menu.setApplicationMenu(null);
+    await initDB();
+    createWindow();
+
+
+
+    // Handle deep-link on macOS (open-url)
+    app.on('open-url', (event, url) => {
+      event.preventDefault();
+      handleDeepLink(url);
+    });
+
+    // Check for updates after a short delay
+    setTimeout(() => {
+      if (!isDev) {
+        autoUpdater.checkForUpdatesAndNotify().catch((err: any) => {
+          console.error('Auto-update check failed:', err.message);
+        });
+      }
+    }, 3000);
+
+    app.on('activate', () => {
+      if (BrowserWindow.getAllWindows().length === 0) {
+        createWindow();
+      }
+    });
+  });
+
+  app.on('window-all-closed', () => {
+    if (process.platform !== 'darwin') {
+      app.quit();
     }
   });
-});
+}
 
-// Handle deep-link on Windows/Linux (second-instance)
-app.on('second-instance', (_event, commandLine) => {
-  // The URL will be the last element of commandLine
-  const url = commandLine.find(arg => arg.startsWith('donpollo://'));
-  if (url) handleDeepLink(url);
-  if (mainWindow) {
-    if (mainWindow.isMinimized()) mainWindow.restore();
-    mainWindow.focus();
-  }
-});
-
-app.on('window-all-closed', () => {
-  if (process.platform !== 'darwin') {
-    app.quit();
-  }
-});
