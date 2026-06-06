@@ -5,8 +5,8 @@ import * as https from 'https';
 import * as http from 'http';
 import mysql from 'mysql2/promise';
 import dotenv from 'dotenv';
-import { autoUpdater } from 'electron-updater';
 import DiscordRPC from 'discord-rpc';
+import { setupUpdater, checkUpdateCLI, startAutoUpdateCheck, setMainWindowGetter } from './updater.js';
 
 const isDev = !app.isPackaged;
 dotenv.config({ path: path.join(__dirname, '../.env') });
@@ -45,9 +45,9 @@ function updateTrayMenu(songTitle: string, isPlaying: boolean) {
 let thumbarIcons: any = {};
 function updateThumbar(isPlaying: boolean, hasSong: boolean = true) {
   if (!mainWindow || !thumbarIcons.play) return;
-  
+
   const flags: string[] = hasSong ? [] : ['disabled'];
-  
+
   mainWindow.setThumbarButtons([
     {
       tooltip: trayLabels.prev,
@@ -103,7 +103,7 @@ async function initDB() {
       connectionLimit: 10,
       queueLimit: 0
     });
-    
+
     await db.execute(`
       CREATE TABLE IF NOT EXISTS playlists (
         id VARCHAR(255) PRIMARY KEY,
@@ -113,7 +113,7 @@ async function initDB() {
         discord_id VARCHAR(255)
       )
     `);
-    
+
     await db.execute(`
       CREATE TABLE IF NOT EXISTS online_users (
         discord_id VARCHAR(255) PRIMARY KEY,
@@ -217,6 +217,14 @@ function createWindow() {
     console.log('Main window failed to load:', code, desc);
   });
 
+  // Hidden debug mode: Ctrl+Shift+D to toggle DevTools
+  mainWindow.webContents.on('before-input-event', (event, input) => {
+    if (input.control && input.shift && input.key.toLowerCase() === 'd') {
+      mainWindow?.webContents.toggleDevTools();
+      event.preventDefault();
+    }
+  });
+
   // @ts-ignore: minimize event does pass an event object in Electron, despite what TS thinks
   mainWindow.on('minimize', (event: any) => {
     if (minimizeToMiniPlayerEnabled && !isMiniPlayerMode) {
@@ -312,7 +320,7 @@ ipcMain.handle('discord-login', async (_event, authUrl: string) => {
             resolve(token);
             popup.close();
           }
-        }).catch(() => {});
+        }).catch(() => { });
       }
     });
 
@@ -394,7 +402,7 @@ ipcMain.handle('update-presence', async (event, data) => {
   if (!db) return false;
   try {
     const { discordId, username, avatarUrl, currentSong, partyId, status, queue } = data;
-    
+
     if (currentSong) {
       updateTrayMenu(currentSong.title || 'Unknown', !!currentSong.isPlaying);
       updateThumbar(!!currentSong.isPlaying, true);
@@ -423,7 +431,7 @@ ipcMain.handle('get-online-users', async (event, currentUserId) => {
   try {
     // Delete users older than 30 seconds to clean up
     await db.execute('DELETE FROM online_users WHERE last_seen < DATE_SUB(NOW(), INTERVAL 30 SECOND)');
-    
+
     const [rows] = await db.execute('SELECT * FROM online_users WHERE discord_id != ?', [currentUserId || '']);
     return (rows as any[]).map(row => ({
       discordId: row.discord_id,
@@ -461,7 +469,7 @@ ipcMain.handle('poll-queue-requests', async (event, hostId) => {
   try {
     // Auto-clean old queue requests
     await db.execute('DELETE FROM queue_requests WHERE created_at < DATE_SUB(NOW(), INTERVAL 5 MINUTE)');
-    
+
     const [rows] = await db.execute('SELECT * FROM queue_requests WHERE host_id = ? AND status = "pending"', [hostId]);
     return (rows as any[]).map(row => ({
       id: row.id,
@@ -512,10 +520,10 @@ ipcMain.handle('poll-join-requests', async (event, userId) => {
   try {
     // Clean up old requests (older than 2 minutes)
     await db.execute('DELETE FROM join_requests WHERE created_at < DATE_SUB(NOW(), INTERVAL 2 MINUTE)');
-    
+
     const [incomingRows] = await db.execute('SELECT * FROM join_requests WHERE host_id = ? AND status = "pending"', [userId]);
     const [outgoingRows] = await db.execute('SELECT * FROM join_requests WHERE guest_id = ?', [userId]);
-    
+
     return {
       incoming: (incomingRows as any[]).map(row => ({
         id: row.id,
@@ -652,48 +660,7 @@ ipcMain.on('clear-activity', () => {
   }
 });
 
-// AUTO UPDATER
-autoUpdater.autoDownload = true; // Auto download silently
-autoUpdater.autoInstallOnAppQuit = true;
-autoUpdater.allowPrerelease = true;
-autoUpdater.channel = 'latest';
-
-autoUpdater.on('update-available', (info) => {
-  if (mainWindow) mainWindow.webContents.send('update-available', info);
-});
-
-autoUpdater.on('error', (err: any) => {
-  const msg = err instanceof Error ? err.message : err?.toString() || 'Unknown error';
-  if (msg.includes('No published versions on GitHub')) return;
-  if (mainWindow) mainWindow.webContents.send('update-error', msg);
-});
-
-autoUpdater.on('update-downloaded', (info) => {
-  if (mainWindow) mainWindow.webContents.send('update-downloaded', info);
-});
-
-autoUpdater.on('download-progress', (progressObj) => {
-  if (mainWindow) mainWindow.webContents.send('download-progress', progressObj);
-});
-
-ipcMain.on('download-update', () => {
-  autoUpdater.downloadUpdate();
-});
-
-ipcMain.on('install-update', () => {
-  autoUpdater.quitAndInstall();
-});
-
-ipcMain.handle('check-for-updates', async () => {
-  try {
-    const result = await autoUpdater.checkForUpdates();
-    return result ? true : false;
-  } catch (err: any) {
-    throw err;
-  }
-});
-
-ipcMain.handle('fetch-url', async (event, url: string) => { try { const res = await fetch(url); return await res.json(); } catch (err: any) { throw err; } }); 
+ipcMain.handle('fetch-url', async (event, url: string) => { try { const res = await fetch(url); return await res.json(); } catch (err: any) { throw err; } });
 // ROMANIZATION IPC
 let kuroshiroInstance: any = null;
 ipcMain.handle('romanize-lyrics', async (event, text: string, lang: 'ko' | 'ja') => {
@@ -735,14 +702,14 @@ function getCachedMetadata() {
       const data = fs.readFileSync(metadataPath, 'utf-8');
       return JSON.parse(data);
     }
-  } catch (e) {}
+  } catch (e) { }
   return [];
 }
 
 function saveCachedMetadata(data: any[]) {
   try {
     fs.writeFileSync(metadataPath, JSON.stringify(data, null, 2));
-  } catch (e) {}
+  } catch (e) { }
 }
 
 function enforceCacheLimit() {
@@ -763,7 +730,7 @@ function enforceCacheLimit() {
       let metadata = getCachedMetadata();
       for (const file of fileStats) {
         try {
-          fs.unlink(file.filePath, () => {});
+          fs.unlink(file.filePath, () => { });
           totalSize -= file.size;
           metadata = metadata.filter((s: any) => s.id !== file.songId);
           if (totalSize <= CACHE_LIMIT_BYTES) break;
@@ -778,7 +745,7 @@ function downloadToCache(songData: any, urlStr: string, sender: any) {
   const songId = songData.id;
   const filePath = path.join(cacheDir, `${songId}.m4a`);
   const tempPath = path.join(cacheDir, `${songId}.tmp`);
-  
+
   // If already cached or currently downloading, skip
   if (fs.existsSync(filePath) || fs.existsSync(tempPath)) return;
 
@@ -812,19 +779,19 @@ function downloadToCache(songData: any, urlStr: string, sender: any) {
             }
             enforceCacheLimit();
             if (sender) sender.send('download-cache-complete', songData);
-          } catch (e) {}
+          } catch (e) { }
         });
       });
-      
+
       fileStream.on('error', () => {
-        fs.unlink(tempPath, () => {});
+        fs.unlink(tempPath, () => { });
       });
     } else {
       // Consume response data to free up memory
       response.resume();
     }
   }).on('error', () => {
-    fs.unlink(tempPath, () => {});
+    fs.unlink(tempPath, () => { });
   });
 }
 
@@ -860,7 +827,7 @@ ipcMain.handle('clear-cache', async () => {
   try {
     const files = await fs.promises.readdir(cacheDir);
     for (const file of files) {
-      await fs.promises.unlink(path.join(cacheDir, file)).catch(() => {});
+      await fs.promises.unlink(path.join(cacheDir, file)).catch(() => { });
     }
     return true;
   } catch (e) {
@@ -923,17 +890,13 @@ if (!gotTheLock) {
   });
 
   app.whenReady().then(async () => {
+    setMainWindowGetter(() => mainWindow);
+    setupUpdater();
+
     const isUpdateCLI = process.argv.includes('--update');
 
     if (isUpdateCLI) {
-      console.log('Checking for update via CLI...');
-      try {
-        await autoUpdater.checkForUpdates();
-        console.log('Update check completed.');
-      } catch (err: any) {
-        console.error('Update check failed:', err.message);
-      }
-      app.quit();
+      await checkUpdateCLI();
       return;
     }
 
@@ -968,13 +931,7 @@ if (!gotTheLock) {
     });
 
     // Check for updates after a short delay
-    setTimeout(() => {
-      if (!isDev) {
-        autoUpdater.checkForUpdatesAndNotify().catch((err: any) => {
-          console.error('Auto-update check failed:', err.message);
-        });
-      }
-    }, 3000);
+    startAutoUpdateCheck(isDev);
 
     app.on('activate', () => {
       if (BrowserWindow.getAllWindows().length === 0) {
