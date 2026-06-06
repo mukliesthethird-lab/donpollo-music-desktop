@@ -703,8 +703,11 @@ ipcMain.handle('romanize-lyrics', async (event, text: string, lang: 'ko' | 'ja')
       return aromanize.romanize(text);
     } else if (lang === 'ja') {
       if (!kuroshiroInstance) {
-        const Kuroshiro = require('kuroshiro');
-        const KuromojiAnalyzer = require('kuroshiro-analyzer-kuromoji');
+        const KuroshiroMod = require('kuroshiro');
+        const KuromojiMod = require('kuroshiro-analyzer-kuromoji');
+        // Handle both ESM default export and direct CJS export
+        const Kuroshiro = KuroshiroMod.default || KuroshiroMod;
+        const KuromojiAnalyzer = KuromojiMod.default || KuromojiMod;
         kuroshiroInstance = new Kuroshiro();
         await kuroshiroInstance.init(new KuromojiAnalyzer());
       }
@@ -720,6 +723,7 @@ ipcMain.handle('romanize-lyrics', async (event, text: string, lang: 'ko' | 'ja')
 const CACHE_LIMIT_BYTES = 1024 * 1024 * 1024; // 1 GB
 const cacheDir = path.join(app.getPath('userData'), 'AudioCache');
 const metadataPath = path.join(cacheDir, 'metadata.json');
+
 
 if (!fs.existsSync(cacheDir)) {
   fs.mkdirSync(cacheDir, { recursive: true });

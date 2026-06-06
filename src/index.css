@@ -3961,3 +3961,7 @@ body {
   inset: 0;
   background: linear-gradient(to bottom, rgba(0,0,0,0.2) 0%, rgba(0,0,0,0.5) 100%);
 }
+
+.lyric-word { transition: color 0.15s ease-out, text-shadow 0.15s ease-out; color: var(--text-muted); }
+.active .lyric-word.past-word { color: rgba(255, 255, 255, 0.7); }
+.active .lyric-word.active-word { color: white; text-shadow: 0 0 10px rgba(255, 255, 255, 0.3); }

@@ -106,6 +106,21 @@ type TranslationKeys = {
   importPlaylistPlaceholder: string;
   importing: string;
 
+  // Profile Stats
+  profileStats: string;
+  statsSubtitle: string;
+  totalSongsPlayed: string;
+  listeningTime: string;
+  listeningTimeHours: string;
+  listeningTimeMins: string;
+  topArtist: string;
+  noneYet: string;
+  songsLikedStat: string;
+  playlistsCreated: string;
+  songsDownloaded: string;
+  memberSince: string;
+  rightClickForStatus: string;
+
   // Player
   nowPlaying: string;
   queue: string;
@@ -168,12 +183,32 @@ type TranslationKeys = {
   noDownloadsDesc: string;
   miniPlayer: string;
   minimizeToMiniPlayer: string;
+  minimizeToMiniPlayerDesc: string;
   shortcutsTitle: string;
   shortcutPlayPause: string;
   shortcutNext: string;
   shortcutPrev: string;
   equalizer: string;
   eqEnabled: string;
+  eqEnabledDesc: string;
+
+  // Offline Vault & Library hardcoded strings
+  offlineVault: string;
+  songsAvailable: string;
+  playlists: string;
+  myPersonalCollection: string;
+  favoriteCollectionDesc: string;
+  recentPlaybackDesc: string;
+  localCollection: string;
+  availableOffline: string;
+  storage: string;
+  totalStorageUsed: string;
+  listenUnlimited: string;
+  listenUnlimitedDesc: string;
+  offlineDownloads: string;
+  songDetail: string;
+  addSongToPlaylistLabel: string;
+  personalCollectionDesc: string;
 
   // Toast
   toastLogout: string;
@@ -259,6 +294,21 @@ const translations: Record<Language, TranslationKeys> = {
     leaveParty: 'Tinggalkan Party',
     friends: 'Teman',
     pendingFriendRequest: 'permintaan pertemanan tertunda',
+
+    // Profile Stats
+    profileStats: 'Statistik Profil',
+    statsSubtitle: 'Ringkasan aktivitas mendengarkan kamu',
+    totalSongsPlayed: 'Lagu Diputar',
+    listeningTime: 'Waktu Mendengarkan',
+    listeningTimeHours: 'jam',
+    listeningTimeMins: 'menit',
+    topArtist: 'Artis Favorit',
+    noneYet: 'Belum ada',
+    songsLikedStat: 'Lagu Disukai',
+    playlistsCreated: 'Playlist Dibuat',
+    songsDownloaded: 'Lagu Diunduh',
+    memberSince: 'Bergabung',
+    rightClickForStatus: 'Klik kanan untuk ubah status',
 
     // Home Page
     goodMorning: 'Selamat Pagi',
@@ -384,12 +434,32 @@ const translations: Record<Language, TranslationKeys> = {
     noDownloadsDesc: 'Lagu yang selesai diputar akan di-cache dan muncul di sini.',
     miniPlayer: 'Mini Player',
     minimizeToMiniPlayer: 'Minimize otomatis menjadi Mini Player',
+    minimizeToMiniPlayerDesc: 'Minimize aplikasi otomatis ke Mini Player saat ditutup',
     shortcutsTitle: 'Keyboard Shortcuts Global',
     shortcutPlayPause: 'Play / Pause (Media Key)',
     shortcutNext: 'Next Track (Media Key)',
     shortcutPrev: 'Previous Track (Media Key)',
     equalizer: 'Equalizer',
     eqEnabled: 'Aktifkan Equalizer',
+    eqEnabledDesc: 'Aktifkan efek Equalizer pada pemutaran audio',
+
+    // Offline Vault & Library
+    offlineVault: 'Offline Vault',
+    songsAvailable: 'Lagu Tersedia',
+    playlists: 'Playlist',
+    myPersonalCollection: 'Koleksi Pribadi\nAnda',
+    favoriteCollectionDesc: 'Koleksi favorit Anda',
+    recentPlaybackDesc: 'Riwayat putar terakhir',
+    localCollection: 'Koleksi Lokal',
+    availableOffline: 'Tersedia tanpa internet',
+    storage: 'Penyimpanan',
+    totalStorageUsed: 'Total kapasitas terpakai',
+    listenUnlimited: 'Dengarkan\nTanpa Batas',
+    listenUnlimitedDesc: 'Musik Anda selalu bersama Anda, di mana saja kapan saja.',
+    offlineDownloads: 'Unduhan Offline',
+    songDetail: 'Detail Lagu',
+    addSongToPlaylistLabel: 'Tambahkan lagu ke playlist ini',
+    personalCollectionDesc: 'Semua lagu yang Anda putar dan sukai, tersimpan aman di sini.',
 
     // Toast
     toastLogout: 'Berhasil logout dan pemutaran dihentikan',
@@ -474,6 +544,21 @@ const translations: Record<Language, TranslationKeys> = {
     leaveParty: 'Leave Party',
     friends: 'Friends',
     pendingFriendRequest: 'pending friend request',
+
+    // Profile Stats
+    profileStats: 'Profile Stats',
+    statsSubtitle: 'Your listening activity summary',
+    totalSongsPlayed: 'Songs Played',
+    listeningTime: 'Listening Time',
+    listeningTimeHours: 'hrs',
+    listeningTimeMins: 'min',
+    topArtist: 'Top Artist',
+    noneYet: 'None yet',
+    songsLikedStat: 'Songs Liked',
+    playlistsCreated: 'Playlists Created',
+    songsDownloaded: 'Songs Downloaded',
+    memberSince: 'Member Since',
+    rightClickForStatus: 'Right-click to change status',
 
     // Home Page
     goodMorning: 'Good Morning',
@@ -599,12 +684,32 @@ const translations: Record<Language, TranslationKeys> = {
     noDownloadsDesc: 'Songs you cache will appear here.',
     miniPlayer: 'Mini Player',
     minimizeToMiniPlayer: 'Minimize to Mini Player',
+    minimizeToMiniPlayerDesc: 'Automatically minimize app to Mini Player when closed',
     shortcutsTitle: 'Global Keyboard Shortcuts',
     shortcutPlayPause: 'Play / Pause (Media Key)',
     shortcutNext: 'Next Track (Media Key)',
     shortcutPrev: 'Previous Track (Media Key)',
     equalizer: 'Equalizer',
     eqEnabled: 'Enable Equalizer',
+    eqEnabledDesc: 'Enable Equalizer effect on audio playback',
+
+    // Offline Vault & Library
+    offlineVault: 'Offline Vault',
+    songsAvailable: 'Songs Available',
+    playlists: 'Playlists',
+    myPersonalCollection: 'Your Personal\nCollection',
+    favoriteCollectionDesc: 'Your favorite collection',
+    recentPlaybackDesc: 'Recent playback history',
+    localCollection: 'Local Collection',
+    availableOffline: 'Available offline',
+    storage: 'Storage',
+    totalStorageUsed: 'Total storage used',
+    listenUnlimited: 'Listen\nUnlimited',
+    listenUnlimitedDesc: 'Your music is always with you, anywhere anytime.',
+    offlineDownloads: 'Offline Downloads',
+    songDetail: 'Song Detail',
+    addSongToPlaylistLabel: 'Add songs to this playlist',
+    personalCollectionDesc: 'All songs you have played and liked, safely stored here.',
 
     // Toast
     toastLogout: 'Logged out and playback stopped',
@@ -689,6 +794,21 @@ const translations: Record<Language, TranslationKeys> = {
     leaveParty: '退出する',
     friends: 'フレンド',
     pendingFriendRequest: '件の保留中のフレンドリクエスト',
+
+    // Profile Stats
+    profileStats: 'プロフィール統計',
+    statsSubtitle: '再生アクティビティのまとめ',
+    totalSongsPlayed: '再生した曲数',
+    listeningTime: '再生時間',
+    listeningTimeHours: '時間',
+    listeningTimeMins: '分',
+    topArtist: 'よく聴くアーティスト',
+    noneYet: 'まだなし',
+    songsLikedStat: 'お気に入り曲数',
+    playlistsCreated: '作成したプレイリスト',
+    songsDownloaded: 'ダウンロード済みの曲',
+    memberSince: 'メンバー登録日',
+    rightClickForStatus: '右クリックでステータス変更',
 
     // Home Page
     goodMorning: 'おはようございます',
@@ -814,12 +934,32 @@ const translations: Record<Language, TranslationKeys> = {
     noDownloadsDesc: 'キャッシュした曲はここに表示されます。',
     miniPlayer: 'ミニプレーヤー',
     minimizeToMiniPlayer: '最小化でミニプレーヤーにする',
+    minimizeToMiniPlayerDesc: '閉じたときにアプリを自動でミニプレーヤーに最小化する',
     shortcutsTitle: 'キーボードショートカット',
     shortcutPlayPause: '再生 / 一時停止 (Media Key)',
     shortcutNext: '次の曲 (Media Key)',
     shortcutPrev: '前の曲 (Media Key)',
     equalizer: 'イコライザー',
     eqEnabled: 'イコライザーを有効にする',
+    eqEnabledDesc: 'オーディオ再生にイコライザー効果を適用する',
+
+    // Offline Vault & Library
+    offlineVault: 'オフラインボルト',
+    songsAvailable: '曲が利用可能',
+    playlists: 'プレイリスト',
+    myPersonalCollection: 'マイ\nコレクション',
+    favoriteCollectionDesc: 'お気に入りのコレクション',
+    recentPlaybackDesc: '最近の再生履歴',
+    localCollection: 'ローカルコレクション',
+    availableOffline: 'オフラインで利用可能',
+    storage: 'ストレージ',
+    totalStorageUsed: '使用済みストレージ合計',
+    listenUnlimited: '無制限で\n聴こう',
+    listenUnlimitedDesc: '音楽はいつでもどこでもあなたと一緒です。',
+    offlineDownloads: 'オフラインダウンロード',
+    songDetail: '曲の詳細',
+    addSongToPlaylistLabel: 'このプレイリストに曲を追加',
+    personalCollectionDesc: '再生してお気に入りにした曲がすべて、安全に保存されています。',
 
     // Toast
     toastLogout: 'ログアウトして再生を停止しました',

@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react';
-import { Home, Library, Plus, Mic2, Settings, Play, Pause, SkipBack, SkipForward, Repeat, Shuffle, Volume2, VolumeX, ListMusic, UserCircle, ChevronRight, Search, AlertCircle, Headset, Loader2, Maximize2, X, ChevronLeft, ChevronUp, ChevronDown, Music, PanelRight, Trash2, Heart, LogIn, LogOut, Check, FolderPlus, Globe, Headphones, Download, DownloadCloud, Database, WifiOff, CheckCircle2, Paintbrush } from 'lucide-react';
+import { Home, Library, Plus, Mic2, Settings, Play, Pause, SkipBack, SkipForward, Repeat, Shuffle, Volume2, VolumeX, ListMusic, UserCircle, ChevronRight, Search, AlertCircle, Headset, Loader2, Maximize2, X, ChevronLeft, ChevronUp, ChevronDown, Music, PanelRight, Trash2, Heart, LogIn, LogOut, Check, FolderPlus, Globe, Headphones, Download, DownloadCloud, Database, WifiOff, CheckCircle2, Paintbrush, Clock, Trophy } from 'lucide-react';
 import './index.css';
 import './themes.css';
 import { createTranslator } from './translations';
@@ -437,6 +437,10 @@ function App() {
 
   const [userStatus, setUserStatus] = useState<'online' | 'idle' | 'dnd'>(localStorage.getItem('donpollo_status') as any || 'online');
   const [joinRequests, setJoinRequests] = useState<{incoming: any[], outgoing: any[]}>({ incoming: [], outgoing: [] });
+  const [showProfileStats, setShowProfileStats] = useState(false);
+  const [totalListenSeconds, setTotalListenSeconds] = useState<number>(() => {
+    try { return parseInt(localStorage.getItem('donpollo_listen_seconds') || '0', 10); } catch { return 0; }
+  });
 
   const [downloadedSongs, setDownloadedSongs] = useState<any[]>([]);
   // const [activeDownloads, setActiveDownloads] = useState<Record<string, { progress: number, songData: any }>>({});
@@ -572,8 +576,8 @@ function App() {
           const isCached = await (window as any).electronAPI.checkCache(nextSong.id);
           if (!isCached) {
             console.log(`[Prefetch] Memulai download diam-diam untuk lagu berikutnya: ${nextSong.title}`);
-            // const streamUrl = `${API_BASE_URL}/api/stream?id=${nextSong.id}`;
-            /* (window as any).electronAPI.cacheAudio(nextSong, streamUrl, true); */
+            const streamUrl = `${API_BASE_URL}/api/stream?id=${nextSong.id}`;
+            (window as any).electronAPI.cacheAudio(nextSong, streamUrl, true);
           }
         }
       };
@@ -755,10 +759,14 @@ function App() {
       setLikedSongs(liked ? JSON.parse(liked) : []);
     } catch { setLikedSongs([]); }
     
-    try {
-      const pl = localStorage.getItem(`donpollo_playlists${suffix}`);
-      setPlaylists(pl ? JSON.parse(pl) : []);
-    } catch { setPlaylists([]); }
+    // Only load playlists from localStorage for guest mode (no DB connection).
+    // When logged in with electronAPI, the DB fetch effect (above) handles loading.
+    if (!(window as any).electronAPI || !discordUser) {
+      try {
+        const pl = localStorage.getItem(`donpollo_playlists${suffix}`);
+        setPlaylists(pl ? JSON.parse(pl) : []);
+      } catch { setPlaylists([]); }
+    }
     
   }, [discordUser]);
 
@@ -780,6 +788,19 @@ function App() {
   useEffect(() => {
     localStorage.setItem('donpollo_settings', JSON.stringify({ ...settings, volume }));
   }, [settings, volume]);
+
+  //   // --- Listen time tracker
+  useEffect(() => {
+    if (!isPlaying) return;
+    const interval = setInterval(() => {
+      setTotalListenSeconds(prev => {
+        const next = prev + 1;
+        localStorage.setItem('donpollo_listen_seconds', String(next));
+        return next;
+      });
+    }, 1000);
+    return () => clearInterval(interval);
+  }, [isPlaying]);
 
   // ─── Recommendations ─────────────────────────────────────────
   useEffect(() => {
@@ -1126,9 +1147,11 @@ function App() {
         name: data.name || 'Imported Playlist',
         avatar: data.cover || '',
         songs: data.songs || [],
-        createdAt: Date.now()
+        createdAt: Date.now(),
+        discordId: discordUser?.id || '',
       };
       
+      if ((window as any).electronAPI) await (window as any).electronAPI.savePlaylist(newPlaylist);
       setPlaylists((prev: any) => [...prev, newPlaylist]);
       showToast(`"${newPlaylist.name}" ${t('toastImportSuccess')}`);
       setShowImportPlaylist(false);
@@ -1739,7 +1762,7 @@ function App() {
                <h3 style={{ fontSize: '12px', fontWeight: '700', letterSpacing: '1px', textTransform: 'uppercase' }}>{t('likedSongs')}</h3>
              </div>
              <div style={{ fontSize: '36px', fontWeight: '800' }}>{likedSongs.length} <span style={{ fontSize: '16px', color: 'var(--text-secondary)', fontWeight: '600' }}>Lagu</span></div>
-             <div style={{ fontSize: '12px', color: 'var(--text-secondary)' }}>Koleksi favorit Anda</div>
+             <div style={{ fontSize: '12px', color: 'var(--text-secondary)' }}>{t('favoriteCollectionDesc')}</div>
           </div>
           
           <div style={{ background: 'var(--bg-card)', padding: '20px', borderRadius: '12px', border: '1px solid var(--border-color)', display: 'flex', flexDirection: 'column', gap: '12px' }}>
@@ -1748,15 +1771,15 @@ function App() {
                <h3 style={{ fontSize: '12px', fontWeight: '700', letterSpacing: '1px', textTransform: 'uppercase' }}>{t('recentlyPlayed')}</h3>
              </div>
              <div style={{ fontSize: '36px', fontWeight: '800' }}>{playHistory.length} <span style={{fontSize: '16px', color: 'var(--text-secondary)', fontWeight: '600'}}>Lagu</span></div>
-             <div style={{ fontSize: '12px', color: 'var(--text-secondary)' }}>Riwayat putar terakhir</div>
+             <div style={{ fontSize: '12px', color: 'var(--text-secondary)' }}>{t('recentPlaybackDesc')}</div>
           </div>
           
           <div style={{ background: 'linear-gradient(135deg, #ff6b9d, #ff4785)', padding: '20px', borderRadius: '12px', display: 'flex', flexDirection: 'column', gap: '8px', justifyContent: 'center', position: 'relative', overflow: 'hidden' }}>
              <div style={{ position: 'absolute', right: '-15px', bottom: '-15px', opacity: 0.15 }}>
                <Headphones size={100} />
              </div>
-             <h3 style={{ fontSize: '16px', fontWeight: '800', color: '#fff', zIndex: 1, letterSpacing: '0.5px' }}>Koleksi Pribadi<br/>Anda</h3>
-             <p style={{ fontSize: '12px', color: 'rgba(255,255,255,0.85)', zIndex: 1, margin: 0, marginTop: '4px', lineHeight: '1.4' }}>Semua lagu yang Anda putar dan sukai, tersimpan aman di sini.</p>
+             <h3 style={{ fontSize: '16px', fontWeight: '800', color: '#fff', zIndex: 1, letterSpacing: '0.5px' }}>{t('myPersonalCollection').split('\n').map((line, i) => <span key={i}>{line}{i === 0 ? <br/> : ''}</span>)}</h3>
+             <p style={{ fontSize: '12px', color: 'rgba(255,255,255,0.85)', zIndex: 1, margin: 0, marginTop: '4px', lineHeight: '1.4' }}>{t('personalCollectionDesc')}</p>
           </div>
         </div>
 
@@ -1780,8 +1803,8 @@ function App() {
                 <div style={{ background: 'var(--bg-card)', borderRadius: '12px', border: '1px solid var(--border-color)', overflow: 'hidden' }}>
                   <div style={{ display: 'grid', gridTemplateColumns: '40px 1fr 100px 80px', padding: '16px 24px', borderBottom: '1px solid var(--border-color)', fontSize: '11px', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '1px', fontWeight: '700' }}>
                     <span>#</span>
-                    <span>Detail Lagu</span>
-                    <span>Durasi</span>
+                    <span>{t('songDetail')}</span>
+                    <span>{t('duration')}</span>
                     <span></span>
                   </div>
                   
@@ -1833,8 +1856,8 @@ function App() {
                 <div style={{ background: 'var(--bg-card)', borderRadius: '12px', border: '1px solid var(--border-color)', overflow: 'hidden' }}>
                   <div style={{ display: 'grid', gridTemplateColumns: '40px 1fr 100px 80px', padding: '16px 24px', borderBottom: '1px solid var(--border-color)', fontSize: '11px', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '1px', fontWeight: '700' }}>
                     <span>#</span>
-                    <span>Detail Lagu</span>
-                    <span>Durasi</span>
+                    <span>{t('songDetail')}</span>
+                    <span>{t('duration')}</span>
                     <span></span>
                   </div>
                   
@@ -1983,7 +2006,7 @@ function App() {
 
           {/* Search bar inside playlist */}
           <div className="playlist-search-section" style={{ marginTop: '40px', paddingTop: '20px', borderTop: '1px solid var(--border-color)' }}>
-            <h2 style={{ fontSize: '18px', marginBottom: '16px' }}>Tambahkan lagu ke playlist ini</h2>
+            <h2 style={{ fontSize: '18px', marginBottom: '16px' }}>{t('addSongToPlaylistLabel')}</h2>
             <form onSubmit={handlePlaylistSearch} style={{ display: 'flex', gap: '12px', marginBottom: '20px' }}>
               <input
                 type="text"
@@ -2317,7 +2340,7 @@ function App() {
         <div className="settings-row">
           <div>
             <div className="settings-label">{t('minimizeToMiniPlayer')}</div>
-            <div className="settings-desc">Minimize app ke Mini Player</div>
+            <div className="settings-desc">{t('minimizeToMiniPlayerDesc')}</div>
           </div>
           <button className={`settings-toggle ${settings.minimizeToMiniPlayer ? 'on' : ''}`}
             onClick={() => {
@@ -2338,7 +2361,7 @@ function App() {
         <div className="settings-row">
           <div>
             <div className="settings-label">{t('eqEnabled')}</div>
-            <div className="settings-desc">Aktifkan efek Equalizer</div>
+            <div className="settings-desc">{t('eqEnabledDesc')}</div>
           </div>
           <button className={`settings-toggle ${settings.eqEnabled ? 'on' : ''}`}
             onClick={() => setSettings((p: any) => ({ ...p, eqEnabled: !p.eqEnabled }))}>
@@ -2532,7 +2555,7 @@ function App() {
   const renderDownloadsPage = () => (
     <div className="page-content offline-mode" style={{ minHeight: '100%', display: 'flex', flexDirection: 'column', background: 'var(--bg-primary)' }}>
       <div style={{ padding: '32px 32px 16px 32px' }}>
-        <h1 style={{ fontSize: '28px', fontWeight: '800', marginBottom: '24px', color: 'var(--text-primary)' }}>Offline Vault</h1>
+        <h1 style={{ fontSize: '28px', fontWeight: '800', marginBottom: '24px', color: 'var(--text-primary)' }}>{t('offlineVault')}</h1>
         
         {/* Dashboard Cards */}
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(250px, 1fr))', gap: '16px', marginBottom: '32px' }}>
@@ -2540,27 +2563,27 @@ function App() {
           <div style={{ background: 'var(--bg-card)', padding: '20px', borderRadius: '12px', border: '1px solid var(--border-color)', display: 'flex', flexDirection: 'column', gap: '12px' }}>
              <div style={{ display: 'flex', alignItems: 'center', gap: '8px', color: 'var(--accent-primary)' }}>
                <DownloadCloud size={20} />
-               <h3 style={{ fontSize: '12px', fontWeight: '700', letterSpacing: '1px', textTransform: 'uppercase' }}>Koleksi Lokal</h3>
+               <h3 style={{ fontSize: '12px', fontWeight: '700', letterSpacing: '1px', textTransform: 'uppercase' }}>{t('localCollection')}</h3>
              </div>
-             <div style={{ fontSize: '36px', fontWeight: '800' }}>{downloadedSongs.length} <span style={{ fontSize: '16px', color: 'var(--text-secondary)', fontWeight: '600' }}>Lagu</span></div>
-             <div style={{ fontSize: '12px', color: 'var(--text-secondary)' }}>Tersedia tanpa internet</div>
+             <div style={{ fontSize: '36px', fontWeight: '800' }}>{downloadedSongs.length} <span style={{ fontSize: '16px', color: 'var(--text-secondary)', fontWeight: '600' }}>{t('songs')}</span></div>
+             <div style={{ fontSize: '12px', color: 'var(--text-secondary)' }}>{t('availableOffline')}</div>
           </div>
           
           <div style={{ background: 'var(--bg-card)', padding: '20px', borderRadius: '12px', border: '1px solid var(--border-color)', display: 'flex', flexDirection: 'column', gap: '12px' }}>
              <div style={{ display: 'flex', alignItems: 'center', gap: '8px', color: 'var(--text-secondary)' }}>
                <Database size={20} />
-               <h3 style={{ fontSize: '12px', fontWeight: '700', letterSpacing: '1px', textTransform: 'uppercase' }}>Penyimpanan</h3>
+               <h3 style={{ fontSize: '12px', fontWeight: '700', letterSpacing: '1px', textTransform: 'uppercase' }}>{t('storage')}</h3>
              </div>
              <div style={{ fontSize: '36px', fontWeight: '800' }}>{(cacheSize / (1024 * 1024)).toFixed(1)} <span style={{fontSize: '16px', color: 'var(--text-secondary)', fontWeight: '600'}}>MB</span></div>
-             <div style={{ fontSize: '12px', color: 'var(--text-secondary)' }}>Total kapasitas terpakai</div>
+             <div style={{ fontSize: '12px', color: 'var(--text-secondary)' }}>{t('totalStorageUsed')}</div>
           </div>
           
           <div style={{ background: 'linear-gradient(135deg, #00c6ff, #0072ff)', padding: '20px', borderRadius: '12px', display: 'flex', flexDirection: 'column', gap: '8px', justifyContent: 'center', position: 'relative', overflow: 'hidden' }}>
              <div style={{ position: 'absolute', right: '-15px', bottom: '-15px', opacity: 0.15 }}>
                <WifiOff size={100} />
              </div>
-             <h3 style={{ fontSize: '16px', fontWeight: '800', color: '#fff', zIndex: 1, letterSpacing: '0.5px' }}>Dengarkan<br/>Tanpa Batas</h3>
-             <p style={{ fontSize: '12px', color: 'rgba(255,255,255,0.85)', zIndex: 1, margin: 0, marginTop: '4px', lineHeight: '1.4' }}>Musik Anda selalu bersama Anda, di mana saja kapan saja.</p>
+             <h3 style={{ fontSize: '16px', fontWeight: '800', color: '#fff', zIndex: 1, letterSpacing: '0.5px' }}>{t('listenUnlimited').split('\n').map((line, i) => <span key={i}>{line}{i === 0 ? <br/> : ''}</span>)}</h3>
+             <p style={{ fontSize: '12px', color: 'rgba(255,255,255,0.85)', zIndex: 1, margin: 0, marginTop: '4px', lineHeight: '1.4' }}>{t('listenUnlimitedDesc')}</p>
           </div>
 
         </div>
@@ -2583,8 +2606,8 @@ function App() {
               <div style={{ background: 'var(--bg-card)', borderRadius: '12px', border: '1px solid var(--border-color)', overflow: 'hidden' }}>
                 <div style={{ display: 'grid', gridTemplateColumns: '40px 1fr 100px 80px', padding: '16px 24px', borderBottom: '1px solid var(--border-color)', fontSize: '11px', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '1px', fontWeight: '700' }}>
                   <span>#</span>
-                  <span>Detail Lagu</span>
-                  <span>Durasi</span>
+                  <span>{t('songDetail')}</span>
+                  <span>{t('duration')}</span>
                   <span></span>
                 </div>
                 
@@ -3258,10 +3281,110 @@ function App() {
         <div className="modal-overlay" onClick={() => setShowAvatarPrompt(false)}>
           <div className="modal" onClick={e => e.stopPropagation()}>
             <h3 className="modal-title">{t('changeImage')}</h3>
+            <input
+              className="modal-input"
+              type="text"
+              placeholder={t('imageUrlPlaceholder')}
+              value={avatarUrlInput}
+              onChange={e => setAvatarUrlInput(e.target.value)}
+              onKeyDown={e => e.key === 'Enter' && activePlaylistId && handleUpdatePlaylistAvatar(activePlaylistId)}
+              autoFocus
+            />
+            {avatarUrlInput.trim() && (
+              <div style={{ display: 'flex', justifyContent: 'center', marginBottom: '12px' }}>
+                <img
+                  src={avatarUrlInput.trim()}
+                  alt="Preview"
+                  style={{ width: '80px', height: '80px', objectFit: 'cover', borderRadius: '8px', border: '1px solid var(--border-color)' }}
+                  onError={e => { (e.currentTarget as HTMLImageElement).style.display = 'none'; }}
+                  onLoad={e => { (e.currentTarget as HTMLImageElement).style.display = 'block'; }}
+                />
+              </div>
+            )}
             <div className="modal-actions">
               <button className="btn-secondary" onClick={() => setShowAvatarPrompt(false)}>{t('cancel')}</button>
               <button className="btn-primary" onClick={() => activePlaylistId && handleUpdatePlaylistAvatar(activePlaylistId)}>{t('save')}</button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* Profile Stats Popup */}
+      {showProfileStats && discordUser && (
+        <div style={{ position: 'fixed', inset: 0, zIndex: 9999, display: 'flex', alignItems: 'flex-end', justifyContent: 'flex-start', padding: '0 0 80px 80px' }} onClick={() => setShowProfileStats(false)}>
+          <div onClick={e => e.stopPropagation()} style={{
+            background: 'var(--bg-card, #1c1c1c)',
+            borderRadius: '16px',
+            padding: '24px',
+            width: '380px',
+            boxShadow: '0 12px 32px rgba(0,0,0,0.3)',
+            border: '1px solid var(--border-color)',
+            display: 'flex',
+            flexDirection: 'column',
+            gap: '16px',
+            position: 'relative'
+          }}>
+            {/* Close Button */}
+            <button onClick={() => setShowProfileStats(false)} style={{ position: 'absolute', top: '16px', right: '16px', background: 'transparent', border: 'none', color: 'var(--text-secondary)', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '4px', borderRadius: '50%' }}>
+              <X size={18} />
+            </button>
+
+            {/* User Profile Header */}
+            <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
+              <div style={{ position: 'relative', width: '64px', height: '64px', borderRadius: '50%', backgroundColor: 'var(--bg-card, #1c1c1c)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '24px', fontWeight: 'bold', color: 'var(--text-primary)', border: '2px solid var(--border-color)' }}>
+                {getDiscordAvatar(discordUser) ? (
+                  <img src={getDiscordAvatar(discordUser)!} alt="avatar" style={{ width: '100%', height: '100%', borderRadius: '50%', objectFit: 'cover' }} />
+                ) : (
+                  <span>{(discordUser.global_name || discordUser.username).charAt(0).toUpperCase()}</span>
+                )}
+                {/* Status indicator on bottom right */}
+                <div style={{ position: 'absolute', bottom: '-2px', right: '-2px', width: '20px', height: '20px', borderRadius: '50%', backgroundColor: 'var(--surface-color)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                   <div className={`status-dot ${userStatus}`} style={{ width: '12px', height: '12px', margin: 0 }}></div>
+                </div>
+              </div>
+              <div style={{ flex: 1, overflow: 'hidden' }}>
+                <div style={{ fontSize: '18px', fontWeight: '800', color: 'var(--text-primary)', whiteSpace: 'nowrap', textOverflow: 'ellipsis', overflow: 'hidden' }}>{discordUser.global_name || discordUser.username}</div>
+                <div style={{ fontSize: '13px', color: 'var(--text-secondary)', marginTop: '2px', whiteSpace: 'nowrap', textOverflow: 'ellipsis', overflow: 'hidden' }}>@{discordUser.username}</div>
+              </div>
+            </div>
+
+            <div style={{ height: '1px', background: 'var(--border-color)', margin: '4px 0' }}></div>
+
+            <div style={{ fontSize: '12px', fontWeight: '700', color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '0.5px' }}>{t('profileStats')}</div>
+            
+            {/* Stats Grid */}
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+               {[
+                { label: t('totalSongsPlayed'), value: playHistory.length, icon: <ListMusic size={16} /> },
+                { label: t('listeningTime'), value: totalListenSeconds >= 3600 ? `${Math.floor(totalListenSeconds/3600)}${t('listeningTimeHours')} ${Math.floor((totalListenSeconds%3600)/60)}${t('listeningTimeMins')}` : `${Math.floor(totalListenSeconds/60)}${t('listeningTimeMins')}`, icon: <Clock size={16} /> },
+                { label: t('songsLikedStat'), value: likedSongs.length, icon: <Heart size={16} /> },
+                { label: t('playlistsCreated'), value: playlists.length, icon: <FolderPlus size={16} /> },
+                { label: t('songsDownloaded'), value: downloadedSongs.length, icon: <Download size={16} /> },
+                { label: t('topArtist'), value: (() => { const freq: Record<string, number> = {}; playHistory.forEach((s: any) => { const a = s.artist || (s.title?.split(' - ')[0]) || ''; if (a) freq[a] = (freq[a] || 0) + 1; }); const sorted = Object.entries(freq).sort((a, b) => b[1] - a[1]); return sorted[0]?.[0] || t('noneYet'); })(), icon: <Mic2 size={16} /> },
+              ].map(({ label, value, icon }, idx) => (
+                <div key={idx} style={{ display: 'flex', alignItems: 'center', gap: '12px', background: 'rgba(255,255,255,0.03)', borderRadius: '10px', padding: '12px' }}>
+                  <div style={{ color: 'var(--accent-primary)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>{icon}</div>
+                  <div style={{ overflow: 'hidden' }}>
+                    <div style={{ fontSize: '15px', fontWeight: '800', color: 'var(--text-primary)', whiteSpace: 'nowrap', textOverflow: 'ellipsis' }}>{value}</div>
+                    <div style={{ fontSize: '11px', color: 'var(--text-secondary)', lineHeight: '1.3' }}>{label}</div>
+                  </div>
+                </div>
+              ))}
+            </div>
+
+            {/* Top song */}
+            {playHistory.length > 0 && (
+              <div style={{ display: 'flex', alignItems: 'center', gap: '12px', background: 'rgba(255,255,255,0.03)', borderRadius: '10px', padding: '12px', marginTop: '4px' }}>
+                <div style={{ color: 'var(--accent-primary)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                  <Trophy size={24} />
+                </div>
+                <div style={{ overflow: 'hidden' }}>
+                  <div style={{ fontSize: '11px', color: 'var(--accent-primary)', fontWeight: '700', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: '2px' }}>Last Played</div>
+                  <div style={{ fontSize: '14px', fontWeight: '700', color: 'var(--text-primary)', whiteSpace: 'nowrap', textOverflow: 'ellipsis', overflow: 'hidden' }}>{playHistory[0]?.title || '-'}</div>
+                  <div style={{ fontSize: '12px', color: 'var(--text-secondary)', whiteSpace: 'nowrap', textOverflow: 'ellipsis', overflow: 'hidden' }}>{playHistory[0]?.artist || ''}</div>
+                </div>
+              </div>
+            )}
           </div>
         </div>
       )}
@@ -3415,7 +3538,7 @@ function App() {
             </div>
 
             <div className="library-pills">
-              <button className="library-pill">Playlists</button>
+              <button className="library-pill">{t('playlists')}</button>
             </div>
 
             <div className="library-list-container">
@@ -3435,8 +3558,8 @@ function App() {
                   <FolderPlus size={20} color="white" />
                 </div>
                 <div className="sidebar-item-info">
-                  <div className="sidebar-item-title">Offline Vault</div>
-                  <div className="sidebar-item-subtitle">{downloadedSongs.length} Lagu Tersedia</div>
+                  <div className="sidebar-item-title">{t('offlineVault')}</div>
+                  <div className="sidebar-item-subtitle">{downloadedSongs.length} {t('songsAvailable')}</div>
                 </div>
               </button>
 
@@ -3664,7 +3787,7 @@ function App() {
                 )}
               </div>
             )}
-            <button className="user-profile-btn" onClick={() => setShowLogoutDropdown(!showLogoutDropdown)} title={discordUser ? `${discordUser.global_name || discordUser.username}` : 'Login'}>
+            <button className="user-profile-btn" onClick={() => { if (discordUser) { setShowProfileStats(true); setShowLogoutDropdown(false); } else { setShowLogoutDropdown(!showLogoutDropdown); } }} onContextMenu={(e) => { e.preventDefault(); setShowLogoutDropdown(!showLogoutDropdown); setShowProfileStats(false); }} title={discordUser ? `` : 'Login'}>
               <div className="user-avatar" style={{ position: 'relative' }}>
                 {discordUser && getDiscordAvatar(discordUser) ? (
                   <img src={getDiscordAvatar(discordUser)!} alt="avatar" style={{ width: '100%', height: '100%', borderRadius: '50%', objectFit: 'cover' }} />
