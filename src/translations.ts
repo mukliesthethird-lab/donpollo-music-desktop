@@ -191,6 +191,46 @@ type TranslationKeys = {
   equalizer: string;
   eqEnabled: string;
   eqEnabledDesc: string;
+  eqPresetCustom: string;
+  eqPresetDefault: string;
+  eqPresetBassBooster: string;
+  eqPresetPop: string;
+  eqPresetElectronic: string;
+  eqPresetAcoustic: string;
+
+  // Audio Cache Mode
+  cacheModeLabel: string;
+  cacheModeDesc: string;
+  cacheModeSmartCache: string;
+  cacheModeSmartCacheDesc: string;
+  cacheModeStream: string;
+  cacheModeStreamDesc: string;
+  cacheModeTemp: string;
+  cacheModeTempDesc: string;
+
+  // Player Tooltips
+  btnShuffle: string;
+  btnPrevious: string;
+  btnPlay: string;
+  btnPause: string;
+  btnNext: string;
+  btnLoop: string;
+  btnLike: string;
+  btnUnlike: string;
+  btnVolume: string;
+  btnMute: string;
+  btnFullscreen: string;
+  btnExitFullscreen: string;
+  btnSidebar: string;
+  btnHideSidebar: string;
+
+  // Update section (available)
+  updateSectionTitle: string;
+  updateAvailableMsg: string;
+  updateReadyMsg: string;
+  downloadingUpdateMsg: string;
+  downloadNow: string;
+  restartApp: string;
 
   // Offline Vault & Library hardcoded strings
   offlineVault: string;
@@ -442,6 +482,46 @@ const translations: Record<Language, TranslationKeys> = {
     equalizer: 'Equalizer',
     eqEnabled: 'Aktifkan Equalizer',
     eqEnabledDesc: 'Aktifkan efek Equalizer pada pemutaran audio',
+    eqPresetCustom: 'Kustom',
+    eqPresetDefault: 'Default (Datar)',
+    eqPresetBassBooster: 'Perkuat Bass',
+    eqPresetPop: 'Pop',
+    eqPresetElectronic: 'Elektronik',
+    eqPresetAcoustic: 'Akustik',
+
+    // Audio Cache Mode
+    cacheModeLabel: 'Mode Cache Audio',
+    cacheModeDesc: 'Pilih cara aplikasi mengelola file audio saat pemutaran',
+    cacheModeSmartCache: 'Smart Cache',
+    cacheModeSmartCacheDesc: 'Unduh & simpan permanen. Replay instan, tanpa buffering',
+    cacheModeStream: 'Streaming',
+    cacheModeStreamDesc: 'Putar langsung tanpa menyimpan file. Hemat storage, butuh koneksi stabil',
+    cacheModeTemp: 'Cache Sementara',
+    cacheModeTempDesc: 'Unduh untuk kualitas terbaik, hapus otomatis saat lagu berganti',
+
+    // Player Tooltips
+    btnShuffle: 'Acak',
+    btnPrevious: 'Sebelumnya',
+    btnPlay: 'Putar',
+    btnPause: 'Jeda',
+    btnNext: 'Selanjutnya',
+    btnLoop: 'Ulangi',
+    btnLike: 'Suka',
+    btnUnlike: 'Hapus Suka',
+    btnVolume: 'Volume',
+    btnMute: 'Bisukan',
+    btnFullscreen: 'Layar Penuh',
+    btnExitFullscreen: 'Keluar Layar Penuh',
+    btnSidebar: 'Tampilkan Sidebar',
+    btnHideSidebar: 'Sembunyikan Sidebar',
+
+    // Update section (available)
+    updateSectionTitle: 'Pembaruan Tersedia',
+    updateAvailableMsg: 'Versi terbaru Don Pollo Music telah tersedia.',
+    updateReadyMsg: 'Pembaruan selesai diunduh dan siap dipasang!',
+    downloadingUpdateMsg: 'Mengunduh pembaruan...',
+    downloadNow: 'Unduh Sekarang',
+    restartApp: 'Mulai Ulang Aplikasi',
 
     // Offline Vault & Library
     offlineVault: 'Offline Vault',
@@ -692,6 +772,46 @@ const translations: Record<Language, TranslationKeys> = {
     equalizer: 'Equalizer',
     eqEnabled: 'Enable Equalizer',
     eqEnabledDesc: 'Enable Equalizer effect on audio playback',
+    eqPresetCustom: 'Custom',
+    eqPresetDefault: 'Default (Flat)',
+    eqPresetBassBooster: 'Bass Booster',
+    eqPresetPop: 'Pop',
+    eqPresetElectronic: 'Electronic',
+    eqPresetAcoustic: 'Acoustic',
+
+    // Audio Cache Mode
+    cacheModeLabel: 'Audio Cache Mode',
+    cacheModeDesc: 'Choose how the app handles audio files during playback',
+    cacheModeSmartCache: 'Smart Cache',
+    cacheModeSmartCacheDesc: 'Download & keep permanently. Instant replay, no buffering',
+    cacheModeStream: 'Streaming',
+    cacheModeStreamDesc: 'Play directly without saving files. Saves storage, needs stable connection',
+    cacheModeTemp: 'Temp Cache',
+    cacheModeTempDesc: 'Download for best quality, auto-delete when song changes',
+
+    // Player Tooltips
+    btnShuffle: 'Shuffle',
+    btnPrevious: 'Previous',
+    btnPlay: 'Play',
+    btnPause: 'Pause',
+    btnNext: 'Next',
+    btnLoop: 'Loop',
+    btnLike: 'Like',
+    btnUnlike: 'Unlike',
+    btnVolume: 'Volume',
+    btnMute: 'Mute',
+    btnFullscreen: 'Full Screen',
+    btnExitFullscreen: 'Exit Full Screen',
+    btnSidebar: 'Show Sidebar',
+    btnHideSidebar: 'Hide Sidebar',
+
+    // Update section (available)
+    updateSectionTitle: 'Update Available',
+    updateAvailableMsg: 'A new version of Don Pollo Music is now available.',
+    updateReadyMsg: 'Update downloaded and ready to install!',
+    downloadingUpdateMsg: 'Downloading update...',
+    downloadNow: 'Download Now',
+    restartApp: 'Restart App',
 
     // Offline Vault & Library
     offlineVault: 'Offline Vault',
@@ -942,6 +1062,46 @@ const translations: Record<Language, TranslationKeys> = {
     equalizer: 'イコライザー',
     eqEnabled: 'イコライザーを有効にする',
     eqEnabledDesc: 'オーディオ再生にイコライザー効果を適用する',
+    eqPresetCustom: 'カスタム',
+    eqPresetDefault: 'デフォルト（フラット）',
+    eqPresetBassBooster: 'バスブースター',
+    eqPresetPop: 'ポップ',
+    eqPresetElectronic: 'エレクトロニック',
+    eqPresetAcoustic: 'アコースティック',
+
+    // Audio Cache Mode
+    cacheModeLabel: 'オーディオキャッシュモード',
+    cacheModeDesc: '再生中のオーディオファイルの処理方法を選択します',
+    cacheModeSmartCache: '⚡ スマートキャッシュ',
+    cacheModeSmartCacheDesc: 'ダウンロードして永続的に保存。バッファリングなしですぐに再生',
+    cacheModeStream: 'ストリーミング',
+    cacheModeStreamDesc: 'ファイルを保存せずに直接再生。ストレージを節約、安定した接続が必要',
+    cacheModeTemp: '一時キャッシュ',
+    cacheModeTempDesc: '最高品質でダウンロード、曲が変わると自動削除',
+
+    // Player Tooltips
+    btnShuffle: 'シャッフル',
+    btnPrevious: '前へ',
+    btnPlay: '再生',
+    btnPause: '一時停止',
+    btnNext: '次へ',
+    btnLoop: 'リピート',
+    btnLike: 'お気に入り',
+    btnUnlike: 'お気に入り解除',
+    btnVolume: '音量',
+    btnMute: 'ミュート',
+    btnFullscreen: '全画面表示',
+    btnExitFullscreen: '全画面表示を終了',
+    btnSidebar: 'サイドバーを表示',
+    btnHideSidebar: 'サイドバーを非表示',
+
+    // Update section (available)
+    updateSectionTitle: 'アップデートが利用可能',
+    updateAvailableMsg: '新しいバージョンのDon Pollo Musicが利用可能です。',
+    updateReadyMsg: 'アップデートのダウンロードが完了し、インストール準備ができました！',
+    downloadingUpdateMsg: 'アップデートをダウンロード中...',
+    downloadNow: '今すぐダウンロード',
+    restartApp: 'アプリを再起動',
 
     // Offline Vault & Library
     offlineVault: 'オフラインボルト',

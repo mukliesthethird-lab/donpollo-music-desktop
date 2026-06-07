@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react';
-import { Home, Library, Plus, Mic2, Settings, Play, Pause, SkipBack, SkipForward, Repeat, Shuffle, Volume2, VolumeX, ListMusic, UserCircle, ChevronRight, Search, AlertCircle, Headset, Loader2, Maximize2, X, ChevronLeft, ChevronUp, ChevronDown, Music, PanelRight, Trash2, Heart, LogIn, LogOut, Check, FolderPlus, Globe, Headphones, Download, DownloadCloud, Database, WifiOff, CheckCircle2, Paintbrush, Clock, Trophy } from 'lucide-react';
+import { Home, Library, Plus, Mic2, Settings, Play, Pause, SkipBack, SkipForward, Repeat, Shuffle, Volume2, VolumeX, ListMusic, UserCircle, ChevronRight, Search, AlertCircle, Headset, Loader2, Maximize2, X, ChevronLeft, ChevronUp, ChevronDown, Music, PanelRight, Trash2, Heart, LogIn, LogOut, Check, FolderPlus, Globe, Headphones, Download, DownloadCloud, Database, WifiOff, CheckCircle2, Paintbrush, Clock, Trophy, Zap, Radio, Timer, Repeat1 } from 'lucide-react';
 import './index.css';
 import './themes.css';
 import { createTranslator } from './translations';
@@ -430,7 +430,7 @@ function App() {
   const [duration, setDuration] = useState(0);
   const [volume, setVolume] = useState(settings.volume ?? 1);
   const [isMuted, setIsMuted] = useState(false);
-  const [isLooping, setIsLooping] = useState(false);
+  const [loopMode, setLoopMode] = useState<'off' | 'all' | 'one'>('off');
   const [showLyrics, setShowLyrics] = useState(false);
   const [isWidgetMode, setIsWidgetMode] = useState(false);
   const [isRightSidebarOpen, setIsRightSidebarOpen] = useState(true);
@@ -885,7 +885,7 @@ function App() {
     const audio = new Audio();
     // audio.crossOrigin = "anonymous"; // Dicomment sementara agar tidak error CORS di mode Dev
     audio.volume = isMuted ? 0 : volume;
-    audio.loop = isLooping;
+    audio.loop = loopMode === 'one';
     audioRef.current = audio;
     setupAudioContext(audio);
     setupAudioListeners(audio);
@@ -935,7 +935,7 @@ function App() {
         audioRef.current = newAudio;
         setupAudioListeners(newAudio);
         newAudio.volume = 0;
-        newAudio.loop = isLooping;
+        newAudio.loop = loopMode === 'one';
 
         const targetVol = isMuted ? 0 : volume;
         newAudio.volume = targetVol;
@@ -945,14 +945,14 @@ function App() {
       }
     }, 500);
     return () => clearInterval(interval);
-  }, [isGuest, queue, currentIndex, volume, isMuted, isLooping, setupAudioListeners]);
+  }, [isGuest, queue, currentIndex, volume, isMuted, loopMode, setupAudioListeners]);
 
   useEffect(() => {
     if (audioRef.current) {
       audioRef.current.volume = isMuted ? 0 : volume;
-      audioRef.current.loop = isLooping;
+      audioRef.current.loop = loopMode === 'one';
     }
-  }, [volume, isMuted, isLooping]);
+  }, [volume, isMuted, loopMode]);
 
   useEffect(() => {
     if (activePage === 'settings' && (window as any).electronAPI?.getCacheSize) {
@@ -1400,15 +1400,22 @@ function App() {
            isCached = await (window as any).electronAPI.checkCache(song.id);
         }
 
+        if ((window as any).electronAPI?.clearTempCache) {
+           (window as any).electronAPI.clearTempCache(song.id);
+        }
+
+        const cacheMode = settings.cacheMode || 'smart';
+
         if (isCached) {
           audioRef.current.src = `donpollo-cache://${song.id}`;
         } else {
           audioRef.current.src = streamUrl;
-          /*
-          if ((window as any).electronAPI?.cacheAudio) {
-             (window as any).electronAPI.cacheAudio(song, streamUrl, true);
+          if (cacheMode !== 'stream') {
+            if ((window as any).electronAPI?.cacheAudio) {
+               const isTemp = cacheMode === 'temp';
+               (window as any).electronAPI.cacheAudio(song, streamUrl, true, isTemp);
+            }
           }
-          */
         }
         
         if (startTime !== undefined) {
@@ -1536,9 +1543,21 @@ function App() {
       }
       setCurrentIndex(currentIndex + 1);
       executePlay(queue[currentIndex + 1]);
+    } else if (loopMode === 'all' && queue.length > 0) {
+      if (isGuest) {
+        (window as any).lastGuestAdvance = Date.now();
+      }
+      setCurrentIndex(0);
+      executePlay(queue[0]);
     } else {
       setIsPlaying(false);
     }
+  };
+
+  const toggleLoopMode = () => {
+    if (loopMode === 'off') setLoopMode('one');
+    else if (loopMode === 'one') setLoopMode('all');
+    else setLoopMode('off');
   };
   handleNextRef.current = handleNext;
 
@@ -2524,6 +2543,59 @@ function App() {
           <button className="btn-secondary" onClick={() => { setPlaylists([]); showToast(t('toastHistoryCleared')); }}>
             <Trash2 size={14} /> {t('deleteAllPlaylists')}
           </button>
+        </div>
+        <div className="settings-row" style={{ alignItems: 'flex-start' }}>
+          <div style={{ flex: 1, paddingRight: '16px' }}>
+            <div className="settings-label">{t('cacheModeLabel')}</div>
+            <div className="settings-desc">{t('cacheModeDesc')}</div>
+            
+            <div style={{ marginTop: '12px', display: 'flex', flexDirection: 'column', gap: '8px' }}>
+              <label style={{ display: 'flex', alignItems: 'flex-start', gap: '8px', cursor: 'pointer' }}>
+                <input type="radio" name="cacheMode" value="smart" 
+                  checked={!settings.cacheMode || settings.cacheMode === 'smart'}
+                  onChange={() => {
+                    setSettings((p: any) => ({...p, cacheMode: 'smart'}));
+                    localStorage.setItem('donpollo_settings', JSON.stringify({...settings, cacheMode: 'smart'}));
+                  }} 
+                  style={{ marginTop: '4px' }}
+                />
+                <div>
+                  <div style={{ fontSize: '14px', fontWeight: 600, color: 'var(--text-primary)', display: 'flex', alignItems: 'center', gap: '6px' }}><Zap size={16} color="var(--accent-primary)" /> {t('cacheModeSmartCache')}</div>
+                  <div style={{ fontSize: '12px', color: 'var(--text-secondary)' }}>{t('cacheModeSmartCacheDesc')}</div>
+                </div>
+              </label>
+
+              <label style={{ display: 'flex', alignItems: 'flex-start', gap: '8px', cursor: 'pointer' }}>
+                <input type="radio" name="cacheMode" value="stream" 
+                  checked={settings.cacheMode === 'stream'}
+                  onChange={() => {
+                    setSettings((p: any) => ({...p, cacheMode: 'stream'}));
+                    localStorage.setItem('donpollo_settings', JSON.stringify({...settings, cacheMode: 'stream'}));
+                  }} 
+                  style={{ marginTop: '4px' }}
+                />
+                <div>
+                  <div style={{ fontSize: '14px', fontWeight: 600, color: 'var(--text-primary)', display: 'flex', alignItems: 'center', gap: '6px' }}><Radio size={16} color="var(--accent-primary)" /> {t('cacheModeStream')}</div>
+                  <div style={{ fontSize: '12px', color: 'var(--text-secondary)' }}>{t('cacheModeStreamDesc')}</div>
+                </div>
+              </label>
+              
+              <label style={{ display: 'flex', alignItems: 'flex-start', gap: '8px', cursor: 'pointer' }}>
+                <input type="radio" name="cacheMode" value="temp" 
+                  checked={settings.cacheMode === 'temp'}
+                  onChange={() => {
+                    setSettings((p: any) => ({...p, cacheMode: 'temp'}));
+                    localStorage.setItem('donpollo_settings', JSON.stringify({...settings, cacheMode: 'temp'}));
+                  }} 
+                  style={{ marginTop: '4px' }}
+                />
+                <div>
+                  <div style={{ fontSize: '14px', fontWeight: 600, color: 'var(--text-primary)', display: 'flex', alignItems: 'center', gap: '6px' }}><Timer size={16} color="var(--accent-primary)" /> {t('cacheModeTemp')}</div>
+                  <div style={{ fontSize: '12px', color: 'var(--text-secondary)' }}>{t('cacheModeTempDesc')}</div>
+                </div>
+              </label>
+            </div>
+          </div>
         </div>
         <div className="settings-row">
           <div>
@@ -3528,7 +3600,7 @@ function App() {
                 <span>{t('yourLibrary')}</span>
               </div>
               <div style={{ display: 'flex', gap: '4px' }}>
-                <button className="library-header-btn" onClick={() => setShowCreatePlaylist(true)} title="Buat Playlist Baru">
+                <button className="library-header-btn" onClick={() => setShowCreatePlaylist(true)} title={t('createPlaylist')}>
                   <Plus size={20} />
                 </button>
                 <button className="library-header-btn" onClick={() => setShowImportPlaylist(true)} title={t('importPlaylist')}>
@@ -4042,7 +4114,7 @@ function App() {
                       <span className="player-title" title={currentSong.title}>{currentSong.title}</span>
                       <span className="player-artist" style={{ color: 'var(--text-secondary)', fontSize: '12px' }}>{currentSong.artist}</span>
                     </div>
-                    <button className={`chat-btn ${isLiked(currentSong.id) ? 'liked' : ''}`} style={{ color: isLiked(currentSong.id) ? '#ff6b9d' : 'var(--text-secondary)', marginLeft: '12px' }} onClick={() => toggleLike(currentSong)}>
+                    <button className={`chat-btn ${isLiked(currentSong.id) ? 'liked' : ''}`} style={{ color: isLiked(currentSong.id) ? '#ff6b9d' : 'var(--text-secondary)', marginLeft: '12px' }} onClick={() => toggleLike(currentSong)} title={isLiked(currentSong.id) ? t('btnUnlike') : t('btnLike')}>
                       <Heart size={16} fill={isLiked(currentSong.id) ? 'currentColor' : 'none'} />
                     </button>
                   </>
@@ -4052,13 +4124,13 @@ function App() {
               </div>
               <div className="player-center">
                 <div className="player-controls">
-                  <button className="chat-btn" onClick={toggleShuffle} style={{ color: isShuffled ? 'var(--accent-primary)' : 'var(--text-secondary)' }}><Shuffle size={18} /></button>
-                  <button className="chat-btn" onClick={handlePrev} disabled={currentIndex <= 0} style={{ opacity: currentIndex <= 0 ? 0.3 : 1 }}><SkipBack size={22} fill="currentColor" /></button>
-                  <button className="chat-play-btn" onClick={togglePlay} disabled={!currentSong}>
+                  <button className="chat-btn" onClick={toggleShuffle} style={{ color: isShuffled ? 'var(--accent-primary)' : 'var(--text-secondary)' }} title={t('btnShuffle')}><Shuffle size={18} /></button>
+                  <button className="chat-btn" onClick={handlePrev} disabled={currentIndex <= 0} style={{ opacity: currentIndex <= 0 ? 0.3 : 1 }} title={t('btnPrevious')}><SkipBack size={22} fill="currentColor" /></button>
+                  <button className="chat-play-btn" onClick={togglePlay} disabled={!currentSong} title={isPlaying ? t('btnPause') : t('btnPlay')}>
                     {isPlaying ? <Pause size={20} fill="currentColor" /> : <Play size={20} fill="currentColor" style={{ marginLeft: '4px' }} />}
                   </button>
-                  <button className="chat-btn" onClick={handleNext} disabled={currentIndex >= queue.length - 1} style={{ opacity: (currentIndex >= queue.length - 1) ? 0.3 : 1 }}><SkipForward size={22} fill="currentColor" /></button>
-                  <button className="chat-btn" onClick={() => setIsLooping(!isLooping)} style={{ color: isLooping ? 'var(--accent-primary)' : 'var(--text-secondary)' }}><Repeat size={18} /></button>
+                  <button className="chat-btn" onClick={handleNext} disabled={currentIndex >= queue.length - 1} style={{ opacity: (currentIndex >= queue.length - 1) ? 0.3 : 1 }} title={t('btnNext')}><SkipForward size={22} fill="currentColor" /></button>
+                  <button className="chat-btn" onClick={toggleLoopMode} style={{ color: loopMode !== 'off' ? 'var(--accent-primary)' : 'var(--text-secondary)' }} title={t('btnLoop')}>{loopMode === 'one' ? <Repeat1 size={18} /> : <Repeat size={18} />}</button>
                 </div>
                 <div className="player-progress-container">
                   <span className="chat-time">{formatTime(progress)}</span>
@@ -4072,13 +4144,13 @@ function App() {
               </div>
               <div className="player-right">
                 {settings.theme !== 'minimalist' && (
-                  <button className="chat-btn" onClick={() => setIsRightSidebarOpen(!isRightSidebarOpen)} style={{ color: isRightSidebarOpen ? 'var(--accent-primary)' : 'var(--text-secondary)' }} title="Right Sidebar">
+                  <button className="chat-btn" onClick={() => setIsRightSidebarOpen(!isRightSidebarOpen)} style={{ color: isRightSidebarOpen ? 'var(--accent-primary)' : 'var(--text-secondary)' }} title={isRightSidebarOpen ? t('btnHideSidebar') : t('btnSidebar')}>
                     <PanelRight size={20} />
                   </button>
                 )}
-                <button className="chat-btn" onClick={() => setIsWidgetMode(true)} title="Full Screen"><Maximize2 size={16} /></button>
-                <div className="player-volume-container" style={{ display: 'flex', alignItems: 'center', gap: '8px', marginLeft: '16px' }}>
-                  <button className="chat-btn" onClick={() => setIsMuted(!isMuted)}>
+                <button className="chat-btn" onClick={() => setIsWidgetMode(true)} title={t('btnFullscreen')}><Maximize2 size={16} /></button>
+                <div className="player-volume-container" style={{ display: 'flex', alignItems: 'center', gap: '8px', marginLeft: '16px' }} title={t('btnVolume')}>
+                  <button className="chat-btn" onClick={() => setIsMuted(!isMuted)} title={isMuted || volume === 0 ? t('btnVolume') : t('btnMute')}>
                     {isMuted || volume === 0 ? <VolumeX size={18} /> : <Volume2 size={18} />}
                   </button>
                   <input type="range" min="0" max="1" step="0.01" value={isMuted ? 0 : volume}
@@ -4479,7 +4551,7 @@ function App() {
                         {isPlaying ? <Pause size={28} fill="black" /> : <Play size={28} fill="black" style={{ marginLeft: '6px' }} />}
                       </button>
                       <button onClick={handleNext}><SkipForward size={24} fill="currentColor" /></button>
-                      <button onClick={() => setIsLooping(!isLooping)} style={{ color: isLooping ? 'var(--accent-primary)' : 'white' }}><Repeat size={20} /></button>
+                      <button onClick={toggleLoopMode} style={{ color: loopMode !== 'off' ? 'var(--accent-primary)' : 'white' }}>{loopMode === 'one' ? <Repeat1 size={20} /> : <Repeat size={20} />}</button>
                     </div>
 
                     <div className="fs-overlay-progress">

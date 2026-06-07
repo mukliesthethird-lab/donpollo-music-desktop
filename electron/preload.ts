@@ -1,4 +1,4 @@
-import { contextBridge, ipcRenderer } from 'electron';
+﻿import { contextBridge, ipcRenderer } from 'electron';
 
 contextBridge.exposeInMainWorld('electronAPI', {
   discordLogin: (authUrl: string) => ipcRenderer.invoke('discord-login', authUrl),
@@ -51,10 +51,11 @@ contextBridge.exposeInMainWorld('electronAPI', {
     return () => ipcRenderer.off('discord-oauth-token', wrapped);
   },
   checkCache: (songId: string) => ipcRenderer.invoke('check-cache', songId),
-  cacheAudio: (songData: any, url: string) => ipcRenderer.send('cache-audio', songData, url),
+  cacheAudio: (songData: any, url: string, isSilent?: boolean, isTemp?: boolean) => ipcRenderer.send('cache-audio', songData, url, isSilent, isTemp),
   getDownloadedSongs: () => ipcRenderer.invoke('get-downloaded-songs'),
   deleteDownloadedSong: (songId: string) => ipcRenderer.invoke('delete-downloaded-song', songId),
   clearCache: () => ipcRenderer.invoke('clear-cache'),
+  clearTempCache: (currentSongId?: string) => ipcRenderer.invoke('clear-temp-cache', currentSongId),
   getCacheSize: () => ipcRenderer.invoke('get-cache-size'),
   onDownloadCacheProgress: (callback: (event: any, data: any) => void) => {
     ipcRenderer.on('download-cache-progress', callback);

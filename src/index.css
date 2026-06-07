@@ -430,6 +430,16 @@ body {
   align-items: center;
   justify-content: center;
   cursor: pointer;
+  transition: background-color 0.2s, opacity 0.2s;
+}
+
+.arrow-btn:hover:not(:disabled) {
+  background-color: var(--bg-card-hover);
+}
+
+.arrow-btn:disabled {
+  opacity: 0.3;
+  cursor: not-allowed;
 }
 
 .search-container {

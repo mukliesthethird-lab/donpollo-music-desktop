@@ -1,4 +1,4 @@
-import { app, BrowserWindow, ipcMain, Menu, protocol, globalShortcut, Tray, nativeImage } from 'electron';
+﻿import { app, BrowserWindow, ipcMain, Menu, protocol, globalShortcut, Tray, nativeImage } from 'electron';
 import * as path from 'path';
 import * as fs from 'fs';
 import * as https from 'https';
@@ -741,7 +741,7 @@ function enforceCacheLimit() {
   });
 }
 
-function downloadToCache(songData: any, urlStr: string, sender: any) {
+function downloadToCache(songData: any, urlStr: string, sender: any, isTemp: boolean = false) {
   const songId = songData.id;
   const filePath = path.join(cacheDir, `${songId}.m4a`);
   const tempPath = path.join(cacheDir, `${songId}.tmp`);
@@ -817,6 +817,25 @@ ipcMain.handle('delete-downloaded-song', async (event, songId) => {
     const metadata = getCachedMetadata();
     const updated = metadata.filter((s: any) => s.id !== songId);
     saveCachedMetadata(updated);
+    return true;
+  } catch (e) {
+    return false;
+  }
+});
+
+ipcMain.handle('clear-temp-cache', async (event, currentSongId) => {
+  try {
+    const metadata = getCachedMetadata();
+    const keepIds = new Set(metadata.map((s: any) => s.id));
+    const files = await fs.promises.readdir(cacheDir);
+    for (const file of files) {
+      if (file.endsWith('.m4a') || file.endsWith('.tmp')) {
+        const songId = file.replace('.m4a', '').replace('.tmp', '');
+        if (!keepIds.has(songId) && songId !== currentSongId) {
+          await fs.promises.unlink(path.join(cacheDir, file)).catch(() => { });
+        }
+      }
+    }
     return true;
   } catch (e) {
     return false;

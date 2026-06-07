@@ -233,12 +233,13 @@
 }
 
 /* Floating Pill Player */
-.theme-minimalist .player-container {
+.theme-minimalist .bottom-player-bar {
   position: fixed;
   bottom: 24px;
   left: 50%;
   transform: translateX(-50%);
-  width: 80%;
+  width: calc(100vw - 800px);
+  min-width: 500px;
   max-width: 800px;
   border-radius: 100px;
   background: rgba(20, 20, 20, 0.85);
@@ -247,5 +248,12 @@
   padding: 8px 24px;
   height: auto;
   box-shadow: 0 10px 40px rgba(0,0,0,0.8);
-  z-index: 9999;
+  z-index: 10001;
+}
+
+@media (max-width: 1280px) {
+  .theme-minimalist .bottom-player-bar {
+    width: 90%;
+    min-width: 0;
+  }
 }
