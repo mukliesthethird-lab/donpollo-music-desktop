@@ -23,7 +23,7 @@ type TranslationKeys = {
   guest: string;
   logoutDropdown: string;
   goToSettings: string;
-  
+
   // Status & Join
   statusOnline: string;
   statusIdle: string;
@@ -182,8 +182,8 @@ type TranslationKeys = {
   noDownloads: string;
   noDownloadsDesc: string;
   miniPlayer: string;
-  minimizeToMiniPlayer: string;
-  minimizeToMiniPlayerDesc: string;
+  closeToTray: string;
+  closeToTrayDesc: string;
   shortcutsTitle: string;
   shortcutPlayPause: string;
   shortcutNext: string;
@@ -473,8 +473,8 @@ const translations: Record<Language, TranslationKeys> = {
     noDownloads: 'Belum ada unduhan',
     noDownloadsDesc: 'Lagu yang selesai diputar akan di-cache dan muncul di sini.',
     miniPlayer: 'Mini Player',
-    minimizeToMiniPlayer: 'Minimize otomatis menjadi Mini Player',
-    minimizeToMiniPlayerDesc: 'Minimize aplikasi otomatis ke Mini Player saat ditutup',
+    closeToTray: 'Minimize ke Tray',
+    closeToTrayDesc: 'Minimize aplikasi ke system tray saat ditutup',
     shortcutsTitle: 'Keyboard Shortcuts Global',
     shortcutPlayPause: 'Play / Pause (Media Key)',
     shortcutNext: 'Next Track (Media Key)',
@@ -763,8 +763,8 @@ const translations: Record<Language, TranslationKeys> = {
     noDownloads: 'No downloads yet',
     noDownloadsDesc: 'Songs you cache will appear here.',
     miniPlayer: 'Mini Player',
-    minimizeToMiniPlayer: 'Minimize to Mini Player',
-    minimizeToMiniPlayerDesc: 'Automatically minimize app to Mini Player when closed',
+    closeToTray: 'Close to Tray',
+    closeToTrayDesc: 'Minimize app to system tray when closed',
     shortcutsTitle: 'Global Keyboard Shortcuts',
     shortcutPlayPause: 'Play / Pause (Media Key)',
     shortcutNext: 'Next Track (Media Key)',
@@ -1053,8 +1053,8 @@ const translations: Record<Language, TranslationKeys> = {
     noDownloads: 'ダウンロードがありません',
     noDownloadsDesc: 'キャッシュした曲はここに表示されます。',
     miniPlayer: 'ミニプレーヤー',
-    minimizeToMiniPlayer: '最小化でミニプレーヤーにする',
-    minimizeToMiniPlayerDesc: '閉じたときにアプリを自動でミニプレーヤーに最小化する',
+    closeToTray: 'トレイに閉じる',
+    closeToTrayDesc: '閉じたときにアプリをシステムトレイに最小化する',
     shortcutsTitle: 'キーボードショートカット',
     shortcutPlayPause: '再生 / 一時停止 (Media Key)',
     shortcutNext: '次の曲 (Media Key)',

@@ -225,32 +225,78 @@ function App() {
   useEffect(() => {
     const fetchHits = async () => {
       try {
-        const fetchCategory = async (queries: string[]) => {
-          const responses = await Promise.all(queries.map(q => fetch(`${API_BASE_URL}/api/search?q=${encodeURIComponent(q)}`).catch(() => null)));
-          const dataArrays = await Promise.all(responses.map(r => r ? r.json().catch(() => ({})) : {}));
-          let combined: any[] = [];
-          dataArrays.forEach((data: any) => {
-            if (data && data.results) combined = [...combined, ...data.results];
-          });
-          
-          // Filter: duration must be between 1.5 mins and 7 mins (avoids compilations and shorts)
-          const filtered = combined.filter(item => item.duration && item.duration > 90 && item.duration < 420);
-          
-          // Remove duplicates by ID
-          const unique = filtered.filter((item, index, self) => index === self.findIndex((t) => t.id === item.id));
-          
-          // Shuffle slightly
-          const shuffled = unique.sort(() => 0.5 - Math.random());
-          return shuffled.slice(0, 20);
+        const fetchItunesRSS = async (countryCode: string) => {
+          try {
+            const targetUrl = `https://rss.applemarketingtools.com/api/v2/${countryCode}/music/most-played/25/songs.json`;
+            const data = (window as any).electronAPI 
+              ? await (window as any).electronAPI.fetchUrl(targetUrl)
+              : await (await fetch(`https://api.allorigins.win/get?url=${encodeURIComponent(targetUrl)}`)).json();
+
+            let feedData = data;
+            if (data && data.contents) {
+              try { feedData = JSON.parse(data.contents); } catch {}
+            }
+
+            if (feedData && feedData.feed && feedData.feed.results) {
+              const songs = feedData.feed.results.map((t: any) => ({
+                id: null,
+                title: t.name,
+                artist: t.artistName,
+                thumbnail: t.artworkUrl100 ? t.artworkUrl100.replace('100x100bb.jpg', '500x500bb.jpg') : '',
+                duration: 0,
+                originalQuery: `${t.artistName} ${t.name} official audio`
+              }));
+              return songs;
+            }
+          } catch (e) { console.error('RSS fetch failed', e); }
+          return [];
         };
 
-        let localQueries: string[] = [];
+        const loadCategory = async (countryCode: string, setter: React.Dispatch<React.SetStateAction<any[]>>) => {
+          const songs = await fetchItunesRSS(countryCode);
+          if (songs.length > 0) {
+            setter(songs);
+            
+            // Background Mapping for YouTube ID (Sequentially to prevent congestion)
+            (async () => {
+              for (let idx = 0; idx < songs.length; idx++) {
+                const song = songs[idx];
+                const url = `${API_BASE_URL}/api/search?q=${encodeURIComponent(song.originalQuery)}`;
+                try {
+                  const data = (window as any).electronAPI
+                    ? await (window as any).electronAPI.fetchUrl(url)
+                    : await (await fetch(url)).json();
+                  
+                  if (data && data.results) {
+                    const validYt = data.results.find((item: any) => item.duration >= 60 && item.duration <= 480);
+                    if (validYt) {
+                      setter(prev => {
+                        const next = [...prev];
+                        if (next[idx] && next[idx].title === song.title) {
+                          next[idx] = { ...next[idx], id: validYt.id, duration: validYt.duration };
+                        }
+                        return next;
+                      });
+                    }
+                  }
+                } catch (e) {
+                  console.error('BG mapping error:', e);
+                }
+                // Yield to allow on-the-fly requests to take priority
+                await new Promise(resolve => setTimeout(resolve, 300));
+              }
+            })();
+          }
+        };
+
+        let localCountryCode = 'us';
         try {
           const ipRes = await fetch('http://ip-api.com/json/');
           const ipData = await ipRes.json();
           if (ipData && ipData.country && ipData.countryCode) {
-            const getFlagEmoji = (countryCode: string) => {
-              const codePoints = countryCode.toUpperCase().split('').map(char => 127397 + char.charCodeAt(0));
+            localCountryCode = ipData.countryCode.toLowerCase();
+            const getFlagEmoji = (code: string) => {
+              const codePoints = code.toUpperCase().split('').map(char => 127397 + char.charCodeAt(0));
               return String.fromCodePoint(...codePoints);
             };
             setLocalCountry({
@@ -258,40 +304,19 @@ function App() {
               code: ipData.countryCode,
               flag: getFlagEmoji(ipData.countryCode)
             });
-            localQueries = [
-              `Trending music in ${ipData.country} official audio`,
-              `Top Hits ${ipData.country} official audio`,
-              `Popular songs in ${ipData.country} official audio`
-            ];
           }
         } catch (err) {}
 
-        const intQueries = ['The Weeknd official audio', 'Taylor Swift official audio', 'Ariana Grande official audio', 'Bruno Mars official audio', 'Post Malone official audio'];
-        const idQueries = ['Mahalini official audio', 'Tiara Andini official audio', 'Tulus official audio', 'Nadin Amizah official audio', 'Hindia official audio'];
-        const jpQueries = ['YOASOBI official audio', 'Kenshi Yonezu official audio', 'Ado official audio', 'Fujii Kaze official audio', 'Vaundy official audio'];
-        const krQueries = ['BTS official audio', 'BLACKPINK official audio', 'NewJeans official audio', 'TWICE official audio', 'Stray Kids official audio'];
-        const latinQueries = ['Bad Bunny official audio', 'Karol G official audio', 'J Balvin official audio', 'Shakira official audio', 'Maluma official audio'];
+        loadCategory(localCountryCode, setHitsLocal);
+        loadCategory('us', setHitsInternational); 
+        loadCategory('id', setHitsIndonesia);
+        loadCategory('jp', setHitsJapan);
+        loadCategory('kr', setHitsKorean);
+        loadCategory('mx', setHitsLatin);
 
-        const loadCategory = (queries: string[], setter: (val: any[]) => void) => {
-          fetchCategory(queries).then(res => {
-            if (res.length > 0) setter(res);
-          }).catch(() => {});
-        };
-
-        if (localQueries.length > 0) loadCategory(localQueries, setHitsLocal);
-        loadCategory(intQueries, setHitsInternational);
-
-        // Beri sedikit jeda agar backend (API YouTube) tidak kebanjiran request sekaligus
-        setTimeout(() => {
-          loadCategory(idQueries, setHitsIndonesia);
-          loadCategory(jpQueries, setHitsJapan);
-        }, 1000);
-
-        setTimeout(() => {
-          loadCategory(krQueries, setHitsKorean);
-          loadCategory(latinQueries, setHitsLatin);
-        }, 2000);
-      } catch (e) {}
+      } catch (e) {
+        console.error("fetchHits error", e);
+      }
     };
     fetchHits();
   }, []);
@@ -422,6 +447,14 @@ function App() {
       return { theme: 'default', ...saved };
     } catch { return { theme: 'default' }; }
   });
+
+  useEffect(() => {
+    if ((window as any).electronAPI) {
+      if ((window as any).electronAPI.setCloseToTray) {
+        (window as any).electronAPI.setCloseToTray(!!settings.closeToTray);
+      }
+    }
+  }, []);
 
   // ─── Player State ────────────────────────────────────────────
   const [currentSong, setCurrentSong] = useState<any>(null);
@@ -689,6 +722,7 @@ function App() {
   const audioContextRef = useRef<AudioContext | null>(null);
   const sourceNodeRef = useRef<MediaElementAudioSourceNode | null>(null);
   const filtersRef = useRef<BiquadFilterNode[]>([]);
+  const toastTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const setupAudioContext = (audio: HTMLAudioElement) => {
     if (!audioContextRef.current) {
@@ -938,7 +972,20 @@ function App() {
         newAudio.loop = loopMode === 'one';
 
         const targetVol = isMuted ? 0 : volume;
-        newAudio.volume = targetVol;
+        // Fade in new audio gradually
+        if (targetVol > 0) {
+          const fadeInStep = targetVol / (cfDuration * 10);
+          const fadeInInt = setInterval(() => {
+            if (newAudio.volume + fadeInStep < targetVol) {
+              newAudio.volume = Math.min(newAudio.volume + fadeInStep, targetVol);
+            } else {
+              newAudio.volume = targetVol;
+              clearInterval(fadeInInt);
+            }
+          }, 100);
+        } else {
+          newAudio.volume = 0;
+        }
         isCrossfadingRef.current = false;
 
         handleNextRef.current();
@@ -1016,7 +1063,8 @@ function App() {
     }
 
     setToastData({ msg, icon: IconComponent, type });
-    setTimeout(() => setToastData(null), 4000);
+    if (toastTimeoutRef.current) clearTimeout(toastTimeoutRef.current);
+    toastTimeoutRef.current = setTimeout(() => setToastData(null), 4000);
   };
 
   const handleUserScroll = () => {
@@ -1085,7 +1133,7 @@ function App() {
     setCurrentIndex(-1);
     setLyricsData(null);
     setDiscordUser(null);
-    localStorage.removeItem('discord_user');
+    localStorage.removeItem('donpollo_user');
     setShowLogoutDropdown(false);
     setActivePage('home');
     showToast(t('toastLogout'), 'success');
@@ -1507,11 +1555,22 @@ function App() {
 
   const startPlayingFromList = async (list: any[], startIndex: number) => {
     if (!list || list.length === 0) return;
-    const song = list[startIndex];
+    let song = list[startIndex];
     
     if (!song.id) {
-       showToast(`Sedang menautkan "${song.title}" ke YouTube... Mohon tunggu sesaat lalu coba lagi.`, 'error');
-       return;
+       showToast(`Menautkan "${song.title}" ke YouTube...`, 'user');
+       try {
+         const url = `${API_BASE_URL}/api/search?q=${encodeURIComponent(song.originalQuery)}`;
+         const data = (window as any).electronAPI ? await (window as any).electronAPI.fetchUrl(url) : await (await fetch(url)).json();
+         const validYt = data?.results?.find((item: any) => item.duration >= 60 && item.duration <= 480);
+         if (validYt) {
+           song = { ...song, id: validYt.id, duration: validYt.duration };
+           list[startIndex] = song; // Update in list
+         } else throw new Error("Not found");
+       } catch (err) {
+         showToast(`Gagal menautkan "${song.title}".`, 'error');
+         return;
+       }
     }
 
     if (isGuest && activePartyId) {
@@ -1541,8 +1600,26 @@ function App() {
       if (isGuest) {
         (window as any).lastGuestAdvance = Date.now();
       }
+      
+      // On-the-fly fetch for next song if id is null
+      let nextSong = queue[currentIndex + 1];
+      if (!nextSong.id) {
+        try {
+          const url = `${API_BASE_URL}/api/search?q=${encodeURIComponent(nextSong.originalQuery)}`;
+          const data = (window as any).electronAPI ? await (window as any).electronAPI.fetchUrl(url) : await (await fetch(url)).json();
+          const validYt = data?.results?.find((item: any) => item.duration >= 60 && item.duration <= 480);
+          if (validYt) {
+            nextSong = { ...nextSong, id: validYt.id, duration: validYt.duration };
+            setQueue(prev => prev.map((s, i) => i === currentIndex + 1 ? nextSong : s));
+          } else throw new Error("Not found");
+        } catch (err) {
+          showToast(`Gagal menautkan lagu berikutnya.`, 'error');
+          return;
+        }
+      }
+
       setCurrentIndex(currentIndex + 1);
-      executePlay(queue[currentIndex + 1]);
+      executePlay(nextSong);
     } else if (loopMode === 'all' && queue.length > 0) {
       if (isGuest) {
         (window as any).lastGuestAdvance = Date.now();
@@ -1562,22 +1639,33 @@ function App() {
   handleNextRef.current = handleNext;
 
   const playSingleSong = async (song: any) => {
+    let finalSong = song;
     if (!song.id) {
-       showToast(`Sedang menautkan "${song.title}" ke YouTube... Mohon tunggu sesaat lalu coba lagi.`, 'error');
-       return;
+       showToast(`Menautkan "${song.title}" ke YouTube...`, 'user');
+       try {
+         const url = `${API_BASE_URL}/api/search?q=${encodeURIComponent(song.originalQuery)}`;
+         const data = (window as any).electronAPI ? await (window as any).electronAPI.fetchUrl(url) : await (await fetch(url)).json();
+         const validYt = data?.results?.find((item: any) => item.duration >= 60 && item.duration <= 480);
+         if (validYt) {
+           finalSong = { ...song, id: validYt.id, duration: validYt.duration };
+         } else throw new Error("Not found");
+       } catch (err) {
+         showToast(`Gagal menautkan "${song.title}".`, 'error');
+         return;
+       }
     }
 
     if (isGuest && activePartyId) {
-       await (window as any).electronAPI.sendQueueRequest(activePartyId, discordUser?.id, discordUser?.global_name || discordUser?.username, song);
-       showToast(`Berhasil meminta Host untuk menambahkan "${song.title}" ke antrean!`, 'success');
+       await (window as any).electronAPI.sendQueueRequest(activePartyId, discordUser?.id, discordUser?.global_name || discordUser?.username, finalSong);
+       showToast(`Berhasil meminta Host untuk menambahkan "${finalSong.title}" ke antrean!`, 'success');
        return;
     }
 
-    setQueue([song]);
-    setOriginalQueue([song]);
+    setQueue([finalSong]);
+    setOriginalQueue([finalSong]);
     setCurrentIndex(0);
-    addToHistory(song);
-    executePlay(song);
+    addToHistory(finalSong);
+    executePlay(finalSong);
   };
 
   const handleContextMenu = (e: React.MouseEvent, song: any) => {
@@ -1681,28 +1769,35 @@ function App() {
           setArtistSongs(initialSongs);
           setIsArtistLoading(false); // Stop loader instantly!
           
-          // 2. BACKGROUND MAPPING using high-speed IPC
-          initialSongs.forEach((song, idx) => {
-            const url = `${API_BASE_URL}/api/search?q=${encodeURIComponent(song.originalQuery)}`;
-            const fetchPromise = (window as any).electronAPI
-              ? (window as any).electronAPI.fetchUrl(url)
-              : fetch(url).then(r => r.json());
-              
-            fetchPromise.then((data: any) => {
-              if (data && data.results) {
-                const validYt = data.results.find((item: any) => item.duration >= 60 && item.duration <= 480);
-                if (validYt) {
-                  setArtistSongs(prev => {
-                    const next = [...prev];
-                    if (next[idx] && next[idx].title === song.title) {
-                      next[idx] = { ...next[idx], id: validYt.id }; // Insert the real YouTube ID
-                    }
-                    return next;
-                  });
+          // 2. BACKGROUND MAPPING using high-speed IPC (Sequentially)
+          (async () => {
+            for (let idx = 0; idx < initialSongs.length; idx++) {
+              const song = initialSongs[idx];
+              const url = `${API_BASE_URL}/api/search?q=${encodeURIComponent(song.originalQuery)}`;
+              try {
+                const data = (window as any).electronAPI
+                  ? await (window as any).electronAPI.fetchUrl(url)
+                  : await (await fetch(url)).json();
+                  
+                if (data && data.results) {
+                  const validYt = data.results.find((item: any) => item.duration >= 60 && item.duration <= 480);
+                  if (validYt) {
+                    setArtistSongs(prev => {
+                      const next = [...prev];
+                      if (next[idx] && next[idx].title === song.title) {
+                        next[idx] = { ...next[idx], id: validYt.id }; // Insert the real YouTube ID
+                      }
+                      return next;
+                    });
+                  }
                 }
+              } catch (e) {
+                console.error('BG mapping error:', e);
               }
-            }).catch(console.error);
-          });
+              // Yield to allow on-the-fly requests to take priority
+              await new Promise(resolve => setTimeout(resolve, 300));
+            }
+          })();
           
           return; // Early return, success!
         }
@@ -2356,20 +2451,21 @@ function App() {
             {settings.autoSidebar !== false && <Check size={14} />}
           </button>
         </div>
+
         <div className="settings-row">
           <div>
-            <div className="settings-label">{t('minimizeToMiniPlayer')}</div>
-            <div className="settings-desc">{t('minimizeToMiniPlayerDesc')}</div>
+            <div className="settings-label">{t('closeToTray')}</div>
+            <div className="settings-desc">{t('closeToTrayDesc')}</div>
           </div>
-          <button className={`settings-toggle ${settings.minimizeToMiniPlayer ? 'on' : ''}`}
+          <button className={`settings-toggle ${settings.closeToTray ? 'on' : ''}`}
             onClick={() => {
-              const newVal = !settings.minimizeToMiniPlayer;
-              setSettings((p: any) => ({ ...p, minimizeToMiniPlayer: newVal }));
-              if ((window as any).electronAPI?.setMinimizeToMiniPlayer) {
-                 (window as any).electronAPI.setMinimizeToMiniPlayer(newVal);
+              const newVal = !settings.closeToTray;
+              setSettings((p: any) => ({ ...p, closeToTray: newVal }));
+              if ((window as any).electronAPI?.setCloseToTray) {
+                 (window as any).electronAPI.setCloseToTray(newVal);
               }
             }}>
-            {settings.minimizeToMiniPlayer && <Check size={14} />}
+            {settings.closeToTray && <Check size={14} />}
           </button>
         </div>
       </div>
@@ -4571,14 +4667,30 @@ function App() {
               </div>
             </div>
 
-            <div className="fs-right">
+            <div className="fs-right" style={{ position: 'relative' }}>
+              <div style={{ position: 'absolute', top: '32px', right: '32px', zIndex: 10, display: 'flex', gap: '8px' }}>
+                <button 
+                  onClick={() => setShowRomanized(!showRomanized)} 
+                  style={{ 
+                    background: showRomanized ? 'rgba(255,255,255,0.2)' : 'transparent', 
+                    border: '1px solid rgba(255,255,255,0.3)', 
+                    color: 'white', 
+                    fontSize: '12px', padding: '4px 10px', borderRadius: '8px', cursor: 'pointer', fontWeight: 600,
+                    backdropFilter: 'blur(10px)',
+                    transition: 'all 0.2s'
+                  }}
+                  title="Toggle Romanization"
+                >
+                  A/文
+                </button>
+              </div>
               <div className="fs-lyrics-container" ref={widgetLyricsRef} onWheel={handleUserScroll} onTouchMove={handleUserScroll} onMouseDown={handleUserScroll}>
                 {lyricsData && lyricsData.length > 0 ? (
                   lyricsData.map((line, idx) => {
                     const nextLineTime = idx < lyricsData.length - 1 ? lyricsData[idx + 1].time : duration;
                     const isActive = (progress - lyricsOffset) >= line.time && (progress - lyricsOffset) < nextLineTime;
                     if (line.isInstrumental) return null;
-                    return <div key={idx} data-lyric-idx={idx} className={`fs-lyric-line ${isActive ? 'active' : ''}`} onClick={() => jumpToLyric(line.time)}>{line.text}</div>;
+                    return <div key={idx} data-lyric-idx={idx} className={`fs-lyric-line ${isActive ? 'active' : ''}`} onClick={() => jumpToLyric(line.time)}>{showRomanized && line.romanizedText ? line.romanizedText : line.text}</div>;
                   })
                 ) : (
                   <div className="fs-lyric-line active">{plainLyrics || 'Instrumental'}</div>

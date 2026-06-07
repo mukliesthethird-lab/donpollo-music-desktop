@@ -1,10 +1,11 @@
-﻿import { contextBridge, ipcRenderer } from 'electron';
+import { contextBridge, ipcRenderer } from 'electron';
 
 contextBridge.exposeInMainWorld('electronAPI', {
   discordLogin: (authUrl: string) => ipcRenderer.invoke('discord-login', authUrl),
   enterMiniPlayer: () => ipcRenderer.send('enter-mini-player'),
   exitMiniPlayer: () => ipcRenderer.send('exit-mini-player'),
-  setMinimizeToMiniPlayer: (enabled: boolean) => ipcRenderer.send('set-minimize-to-miniplayer', enabled),
+  setMinimizeToMiniPlayer: (_enabled: boolean) => { /* Deprecated */ },
+  setCloseToTray: (enabled: boolean) => ipcRenderer.send('set-close-to-tray', enabled),
   onMiniPlayerMode: (callback: (event: any, mode: boolean) => void) => {
     ipcRenderer.on('mini-player-mode', callback);
     return () => ipcRenderer.off('mini-player-mode', callback);

@@ -1,4 +1,4 @@
-﻿import { app, BrowserWindow, ipcMain, Menu, protocol, globalShortcut, Tray, nativeImage } from 'electron';
+import { app, BrowserWindow, ipcMain, Menu, protocol, globalShortcut, Tray, nativeImage } from 'electron';
 import * as path from 'path';
 import * as fs from 'fs';
 import * as https from 'https';
@@ -13,7 +13,14 @@ dotenv.config({ path: path.join(__dirname, '../.env') });
 
 let mainWindow: BrowserWindow | null = null;
 let db: mysql.Pool | null = null;
-let minimizeToMiniPlayerEnabled = false;
+let minimizeToMiniPlayerEnabled = false; // kept for manual enter-mini-player IPC
+let closeToTrayEnabled = false;
+let isQuitting = false;
+
+app.on('before-quit', () => {
+  isQuitting = true;
+});
+
 let isMiniPlayerMode = false;
 let previousBounds = { width: 1280, height: 800, x: 0, y: 0 };
 let tray: Tray | null = null;
@@ -227,15 +234,7 @@ function createWindow() {
 
   // @ts-ignore: minimize event does pass an event object in Electron, despite what TS thinks
   mainWindow.on('minimize', (event: any) => {
-    if (minimizeToMiniPlayerEnabled && !isMiniPlayerMode) {
-      event.preventDefault();
-      previousBounds = mainWindow!.getBounds();
-      isMiniPlayerMode = true;
-      mainWindow!.setMinimumSize(300, 100);
-      mainWindow!.setBounds({ width: 320, height: 420 });
-      mainWindow!.setAlwaysOnTop(true);
-      mainWindow!.webContents.send('mini-player-mode', true);
-    }
+    // minimizeToMiniPlayer only triggered via manual IPC, not on OS minimize
   });
 
   mainWindow.on('restore', () => {
@@ -254,6 +253,14 @@ function createWindow() {
       mainWindow.setAlwaysOnTop(false);
       mainWindow.setMinimumSize(800, 600);
       mainWindow.webContents.send('mini-player-mode', false);
+    }
+  });
+
+  if (isDev) console.log('Creating window...');
+  mainWindow.on('close', (event: any) => {
+    if (closeToTrayEnabled && !isQuitting) {
+      event.preventDefault();
+      mainWindow?.hide();
     }
   });
 
@@ -351,8 +358,12 @@ ipcMain.on('exit-mini-player', () => {
   }
 });
 
-ipcMain.on('set-minimize-to-miniplayer', (event, enabled) => {
-  minimizeToMiniPlayerEnabled = enabled;
+ipcMain.on('set-minimize-to-miniplayer', (_event, _enabled) => {
+  // Deprecated: minimizeToMiniPlayer setting removed from UI
+});
+
+ipcMain.on('set-close-to-tray', (event, enabled) => {
+  closeToTrayEnabled = enabled;
 });
 
 ipcMain.handle('get-playlists', async (event, discordId) => {
@@ -893,8 +904,9 @@ ipcMain.on('notify-closing', async (event, discordId) => {
 });
 
 const gotTheLock = app.requestSingleInstanceLock();
+console.log("gotTheLock:", gotTheLock);
 
-if (!gotTheLock) {
+if (!gotTheLock && !isDev) {
   app.quit();
 } else {
   // Handle deep-link on Windows/Linux (second-instance)
