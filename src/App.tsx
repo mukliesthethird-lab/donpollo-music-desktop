@@ -358,7 +358,7 @@ function App() {
             }
             if (feedData && feedData.feed && feedData.feed.results) {
               const items = feedData.feed.results.map((p: any) => ({
-                id: null as string | null,
+                id: p.id || `podcast-${region}-${Math.random()}`,
                 title: p.name,
                 artist: p.artistName,
                 thumbnail: p.artworkUrl100
