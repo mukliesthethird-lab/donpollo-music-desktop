@@ -2485,18 +2485,18 @@ function App() {
       {updateInfo.available && (
         <div className="settings-section" style={{ background: 'rgba(35, 165, 89, 0.1)', border: '1px solid rgba(35, 165, 89, 0.3)' }}>
           <div className="settings-section-title" style={{ color: '#23a559' }}>
-            <DownloadCloud size={20} style={{ marginRight: 8 }} /> Pembaruan Tersedia
+            <DownloadCloud size={20} style={{ marginRight: 8 }} /> {t('updateSectionTitle')}
           </div>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 12 }}>
             <div style={{ color: 'var(--text-secondary)' }}>
               {updateInfo.error ? (
                 <span style={{ color: '#f23f43' }}>Error: {updateInfo.error}</span>
               ) : updateInfo.ready ? (
-                'Pembaruan telah selesai diunduh dan siap dipasang!'
+                t('updateReadyMsg')
               ) : updateInfo.downloading ? (
-                `Mengunduh pembaruan... ${Math.round(updateInfo.progress)}%`
+                `${t('downloadingUpdateMsg')} ${Math.round(updateInfo.progress)}%`
               ) : (
-                'Versi terbaru Don Pollo Music telah tersedia.'
+                t('updateAvailableMsg')
               )}
             </div>
             
@@ -2507,11 +2507,11 @@ function App() {
                 </div>
               ) : updateInfo.ready ? (
                 <button className="btn-primary" style={{ background: '#23a559' }} onClick={() => (window as any).electronAPI.installUpdate()}>
-                  Mulai Ulang Aplikasi
+                  {t('restartApp')}
                 </button>
               ) : (
                 <button className="btn-primary" onClick={() => { (window as any).electronAPI.downloadUpdate(); setUpdateInfo(prev => ({ ...prev, downloading: true })); }}>
-                  Unduh Sekarang
+                  {t('downloadNow')}
                 </button>
               )}
             </div>
@@ -2522,7 +2522,7 @@ function App() {
       {!updateInfo.available && !updateInfo.downloading && !updateInfo.ready && (
         <div className="settings-section">
           <div className="settings-section-title">
-            <DownloadCloud size={18} style={{ marginRight: 8 }} /> Pembaruan Aplikasi
+            <DownloadCloud size={18} style={{ marginRight: 8 }} /> {t('appUpdateSectionTitle')}
           </div>
           <div className="settings-item" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
             <div className="settings-item-info" style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
@@ -2637,14 +2637,19 @@ function App() {
             <div className="settings-desc">{t('languageDesc')}</div>
           </div>
           <div className="language-picker">
-            {(['id', 'en', 'ja'] as Language[]).map(lang => (
+            {(['id', 'en', 'ja', 'ko'] as Language[]).map(lang => (
               <button
                 key={lang}
                 className={`lang-btn ${language === lang ? 'active' : ''}`}
                 onClick={() => setLanguage(lang)}
               >
-                <img src={lang === 'id' ? 'https://flagcdn.com/id.svg' : lang === 'en' ? 'https://flagcdn.com/us.svg' : 'https://flagcdn.com/jp.svg'} alt={lang} />
-                {lang === 'id' ? 'Indonesia' : lang === 'en' ? 'English' : '日本語'}
+                <img src={
+                  lang === 'id' ? 'https://flagcdn.com/id.svg' :
+                  lang === 'en' ? 'https://flagcdn.com/us.svg' :
+                  lang === 'ja' ? 'https://flagcdn.com/jp.svg' :
+                  'https://flagcdn.com/kr.svg'
+                } alt={lang} />
+                {lang === 'id' ? 'Indonesia' : lang === 'en' ? 'English' : lang === 'ja' ? '日本語' : '한국어'}
               </button>
             ))}
           </div>
@@ -5004,8 +5009,14 @@ function App() {
               key={currentSong?.id || 'bg'} 
               src={getHighResImage(currentSong?.thumbnail)} 
               onError={(e) => {
-                if (e.currentTarget.src !== currentSong?.thumbnail && currentSong?.thumbnail) {
-                  e.currentTarget.src = currentSong.thumbnail;
+                const target = e.currentTarget as HTMLImageElement;
+                const fallback = 'https://images.unsplash.com/photo-1614680376573-df3480f0c6ff?auto=format&fit=crop&w=500&q=80';
+                if (target.src.includes('maxresdefault.jpg')) {
+                  target.src = target.src.replace('maxresdefault.jpg', 'hqdefault.jpg');
+                } else if (target.src.includes('hqdefault.jpg')) {
+                  target.src = target.src.replace('hqdefault.jpg', 'mqdefault.jpg');
+                } else if (target.src !== fallback) {
+                  target.src = fallback;
                 }
               }}
               alt="bg" 
@@ -5019,8 +5030,14 @@ function App() {
                   key={currentSong?.id || 'art'} 
                   src={getHighResImage(currentSong?.thumbnail)} 
                   onError={(e) => {
-                    if (e.currentTarget.src !== currentSong?.thumbnail && currentSong?.thumbnail) {
-                      e.currentTarget.src = currentSong.thumbnail;
+                    const target = e.currentTarget as HTMLImageElement;
+                    const fallback = 'https://images.unsplash.com/photo-1614680376573-df3480f0c6ff?auto=format&fit=crop&w=500&q=80';
+                    if (target.src.includes('maxresdefault.jpg')) {
+                      target.src = target.src.replace('maxresdefault.jpg', 'hqdefault.jpg');
+                    } else if (target.src.includes('hqdefault.jpg')) {
+                      target.src = target.src.replace('hqdefault.jpg', 'mqdefault.jpg');
+                    } else if (target.src !== fallback) {
+                      target.src = fallback;
                     }
                   }}
                   alt="art" 
