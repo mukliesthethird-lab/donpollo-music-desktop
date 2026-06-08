@@ -134,6 +134,17 @@ function App() {
 
 
 
+  // ─── Podcast State ────────────────────────────────────────────
+  const [homeMode, setHomeMode] = useState<'music' | 'podcast'>('music');
+  const [topPodcasts, setTopPodcasts] = useState<any[]>([]); // Used for Hero
+  const [podcastsUs, setPodcastsUs] = useState<any[]>([]);
+  const [podcastsId, setPodcastsId] = useState<any[]>([]);
+  const [podcastsJp, setPodcastsJp] = useState<any[]>([]);
+  const [podcastsKr, setPodcastsKr] = useState<any[]>([]);
+  const [podcastsLatin, setPodcastsLatin] = useState<any[]>([]);
+  const [podcastHeroIndex, setPodcastHeroIndex] = useState(0);
+  const [isArtistPodcast, setIsArtistPodcast] = useState(false);
+
   // ─── Debounced Search ───────────────────────────────────────
   const searchCacheRef = useRef<Record<string, any[]>>({});
 
@@ -152,9 +163,19 @@ function App() {
     const handler = setTimeout(async () => {
       setIsFetchingSuggestions(true);
       try {
-        const res = await fetch(`${API_BASE_URL}/api/search?q=${encodeURIComponent(searchQuery)}`, { signal: controller.signal });
+        // In podcast mode: append 'podcast' to get relevant results & filter by duration
+        const effectiveQuery = homeMode === 'podcast'
+          ? `${searchQuery} podcast`
+          : searchQuery;
+        const res = await fetch(`${API_BASE_URL}/api/search?q=${encodeURIComponent(effectiveQuery)}`, { signal: controller.signal });
         const data = await res.json();
-        const results = data.results?.slice(0, 5) || [];
+        let results = data.results?.slice(0, 8) || [];
+        if (homeMode === 'podcast') {
+          // Filter to only longer content (podcast episodes)
+          results = results.filter((r: any) => r.duration >= 120).slice(0, 5);
+        } else {
+          results = results.slice(0, 5);
+        }
         setSuggestions(results);
         searchCacheRef.current[searchQuery] = results;
       } catch (e: any) {
@@ -171,7 +192,7 @@ function App() {
       clearTimeout(handler);
       controller.abort();
     };
-  }, [searchQuery]);
+  }, [searchQuery, homeMode]);
 
   // ─── Updater State ──────────────────────────────────────────
   const [updateStatus, setUpdateStatus] = useState<'none' | 'available' | 'downloading' | 'downloaded' | 'error'>('none');
@@ -319,6 +340,57 @@ function App() {
       }
     };
     fetchHits();
+  }, []);
+  // ─── Podcast Fetch ───────────────────────────────────────────
+  useEffect(() => {
+    const fetchPodcasts = async () => {
+      try {
+        const loadPodcastCategory = async (region: string, setter: React.Dispatch<React.SetStateAction<any[]>>) => {
+          try {
+            const targetUrl = `https://rss.applemarketingtools.com/api/v2/${region}/podcasts/top/25/podcasts.json`;
+            const data = (window as any).electronAPI
+              ? await (window as any).electronAPI.fetchUrl(targetUrl)
+              : await (await fetch(`https://api.allorigins.win/get?url=${encodeURIComponent(targetUrl)}`)).json();
+
+            let feedData = data;
+            if (data && data.contents) {
+              try { feedData = JSON.parse(data.contents); } catch {}
+            }
+            if (feedData && feedData.feed && feedData.feed.results) {
+              const items = feedData.feed.results.map((p: any) => ({
+                id: null as string | null,
+                title: p.name,
+                artist: p.artistName,
+                thumbnail: p.artworkUrl100
+                  ? p.artworkUrl100.replace('100x100bb.png', '500x500bb.png').replace('100x100bb.jpg', '500x500bb.jpg')
+                  : '',
+                duration: 0,
+                genre: p.genres?.[0]?.name || 'Podcast',
+                originalQuery: `${p.artistName} ${p.name} podcast`,
+                isPodcast: true,
+              }));
+              setter(items);
+              return items;
+            }
+          } catch (e) {}
+          return null;
+        };
+
+        const heroItems = await loadPodcastCategory('id', setTopPodcasts);
+        if (heroItems && heroItems.length > 0) {
+          setPodcastHeroIndex(Math.floor(Math.random() * heroItems.length));
+        }
+
+        loadPodcastCategory('us', setPodcastsUs);
+        loadPodcastCategory('id', setPodcastsId);
+        loadPodcastCategory('jp', setPodcastsJp);
+        loadPodcastCategory('kr', setPodcastsKr);
+        loadPodcastCategory('mx', setPodcastsLatin);
+      } catch (e) {
+        console.error('fetchPodcasts error', e);
+      }
+    };
+    fetchPodcasts();
   }, []);
 
   useEffect(() => {
@@ -1426,8 +1498,99 @@ function App() {
     }
   };
 
-  const executePlay = async (song: any, startTime?: number) => {
+  // --- Title Similarity Helper ---
+  const titleSimilarity = (a: string, b: string): number => {
+    const STOP = new Set(['the','a','an','and','or','of','in','on','is','it','to','for','ft','feat','featuring','episode','eps','ep','with','by','part','pt','vol','vs']);
+    const norm = (s: string) => s.toLowerCase()
+      .replace(/[^a-z0-9\s]/g, ' ')
+      .split(/\s+/)
+      .filter(w => w.length > 1 && !STOP.has(w));
+    const wa = norm(a), wb = new Set(norm(b));
+    if (wa.length === 0) return 0;
+    const hits = wa.filter(w => wb.has(w)).length;
+    return hits / wa.length;
+  };
+
+  // --- Smart Podcast Query Builder ---
+  const buildPodcastQuery = (artist: string, title: string): string => {
+    // Remove episode number prefix: "Eps 17 -", "Ep. 5:", "#10 -", "Episode 3 -"
+    let cleaned = title
+      .replace(/^(eps?\.?\s*\d+\s*[-:–—]?\s*|episode\s*\d+\s*[-:–—]?\s*|#\s*\d+\s*[-:–—]?\s*)/i, '')
+      .trim();
+    // Extract guest names from (Ft. X) / (feat. X) to keep as keywords
+    const guestMatch = cleaned.match(/\(?(?:ft|feat|featuring|with)[.\s]+([^)]+)\)?/i);
+    const guests = guestMatch ? guestMatch[1].replace(/[()]/g, '').trim() : '';
+    // Remove the ft./feat. clause from the main title to shorten it
+    cleaned = cleaned.replace(/\(?(?:ft|feat|featuring|with)[.\s]+[^)]+\)?/gi, '').trim();
+    // Build final query: artist + cleaned title + guests
+    const parts = [artist, cleaned, guests].filter(Boolean);
+    return parts.join(' ').replace(/\s+/g, ' ').trim();
+  };
+
+  const executePlay = async (inputSong: any, startTime?: number) => {
     try {
+      let song = { ...inputSong };
+      // Guard: treat string "null" / "undefined" / empty as missing ID
+      if (song.id && (String(song.id) === 'null' || String(song.id) === 'undefined' || String(song.id).trim() === '')) {
+        song.id = null;
+      }
+      if (!song.id) {
+        // Build smart query
+        let query: string;
+        if (song.isPodcast) {
+          query = buildPodcastQuery(song.artist || '', song.title || '');
+        } else {
+          query = song.originalQuery || (`${song.artist} ${song.title}`);
+        }
+        let url = `${API_BASE_URL}/api/search?q=${encodeURIComponent(query)}`;
+        try {
+          let resData = (window as any).electronAPI
+            ? await (window as any).electronAPI.fetchUrl(url)
+            : await (await fetch(url)).json();
+            
+          if (resData && resData.results && resData.results.length > 0) {
+            let validYt: any;
+            if (song.isPodcast) {
+              // Score each result by title similarity to the episode title
+              const scored = resData.results
+                .filter((item: any) => item.duration >= 60) // at least 1 min
+                .map((item: any) => ({
+                  item,
+                  score: titleSimilarity(song.title || '', item.title || '')
+                }))
+                .sort((a: any, b: any) => b.score - a.score);
+              // Pick the best match, but only if score > 0 (at least one word matched)
+              validYt = scored.length > 0 && scored[0].score > 0
+                ? scored[0].item
+                : resData.results.find((item: any) => item.duration >= 120) || resData.results[0];
+            } else {
+              validYt = resData.results.find((item: any) => item.duration >= 60 && item.duration <= 480) || resData.results[0];
+            }
+
+            if (validYt) {
+              song.id = validYt.id;
+              song.duration = validYt.duration;
+              
+              // Update queue dynamically to fix future plays
+              setQueue(prev => prev.map(q => q.title === song.title ? { ...q, id: song.id, duration: song.duration } : q));
+              setOriginalQueue(prev => prev.map(q => q.title === song.title ? { ...q, id: song.id, duration: song.duration } : q));
+              setTopPodcasts(prev => prev.map(p => p.title === song.title ? { ...p, id: song.id, duration: song.duration } : p));
+              setArtistSongs(prev => prev.map(a => a.title === song.title ? { ...a, id: song.id, duration: song.duration } : a));
+            } else {
+              showToast('Audio source not found.', 'error');
+              return;
+            }
+          } else {
+            showToast('Audio source not found.', 'error');
+            return;
+          }
+        } catch (e) {
+          showToast('Failed to resolve audio.', 'error');
+          return;
+        }
+      }
+
+
       setLyricsData(null);
       setLyricsOffset(0);
       
@@ -1439,8 +1602,16 @@ function App() {
       // 2. Fetch lyrics berjalan di background
       fetchLyrics(song.title, song.artist, song.duration || 0);
 
-      // 3. Cek cache lokal atau stream langsung
+      // 3. Stream audio
       if (audioRef.current) {
+        // PODCAST with direct RSS audio URL → stream directly (no YouTube)
+        if (song.isPodcast && song.audioUrl) {
+          audioRef.current.src = song.audioUrl;
+          audioRef.current.load();
+          audioRef.current.play().catch(() => {});
+          return;
+        }
+
         let streamUrl = `${API_BASE_URL}/api/stream?id=${song.id}`;
         let isCached = false;
         
@@ -1453,12 +1624,13 @@ function App() {
         }
 
         const cacheMode = settings.cacheMode || 'smart';
+        const forceStream = !!song.isPodcast;
 
-        if (isCached) {
+        if (isCached && !forceStream) {
           audioRef.current.src = `donpollo-cache://${song.id}`;
         } else {
           audioRef.current.src = streamUrl;
-          if (cacheMode !== 'stream') {
+          if (cacheMode !== 'stream' && !forceStream) {
             if ((window as any).electronAPI?.cacheAudio) {
                const isTemp = cacheMode === 'temp';
                (window as any).electronAPI.cacheAudio(song, streamUrl, true, isTemp);
@@ -1557,22 +1729,6 @@ function App() {
     if (!list || list.length === 0) return;
     let song = list[startIndex];
     
-    if (!song.id) {
-       showToast(`Menautkan "${song.title}" ke YouTube...`, 'user');
-       try {
-         const url = `${API_BASE_URL}/api/search?q=${encodeURIComponent(song.originalQuery)}`;
-         const data = (window as any).electronAPI ? await (window as any).electronAPI.fetchUrl(url) : await (await fetch(url)).json();
-         const validYt = data?.results?.find((item: any) => item.duration >= 60 && item.duration <= 480);
-         if (validYt) {
-           song = { ...song, id: validYt.id, duration: validYt.duration };
-           list[startIndex] = song; // Update in list
-         } else throw new Error("Not found");
-       } catch (err) {
-         showToast(`Gagal menautkan "${song.title}".`, 'error');
-         return;
-       }
-    }
-
     if (isGuest && activePartyId) {
        await (window as any).electronAPI.sendQueueRequest(activePartyId, discordUser?.id, discordUser?.global_name || discordUser?.username, song);
        showToast(`Berhasil meminta Host untuk menambahkan "${song.title}" ke antrean!`, 'success');
@@ -1603,21 +1759,6 @@ function App() {
       
       // On-the-fly fetch for next song if id is null
       let nextSong = queue[currentIndex + 1];
-      if (!nextSong.id) {
-        try {
-          const url = `${API_BASE_URL}/api/search?q=${encodeURIComponent(nextSong.originalQuery)}`;
-          const data = (window as any).electronAPI ? await (window as any).electronAPI.fetchUrl(url) : await (await fetch(url)).json();
-          const validYt = data?.results?.find((item: any) => item.duration >= 60 && item.duration <= 480);
-          if (validYt) {
-            nextSong = { ...nextSong, id: validYt.id, duration: validYt.duration };
-            setQueue(prev => prev.map((s, i) => i === currentIndex + 1 ? nextSong : s));
-          } else throw new Error("Not found");
-        } catch (err) {
-          showToast(`Gagal menautkan lagu berikutnya.`, 'error');
-          return;
-        }
-      }
-
       setCurrentIndex(currentIndex + 1);
       executePlay(nextSong);
     } else if (loopMode === 'all' && queue.length > 0) {
@@ -1640,21 +1781,6 @@ function App() {
 
   const playSingleSong = async (song: any) => {
     let finalSong = song;
-    if (!song.id) {
-       showToast(`Menautkan "${song.title}" ke YouTube...`, 'user');
-       try {
-         const url = `${API_BASE_URL}/api/search?q=${encodeURIComponent(song.originalQuery)}`;
-         const data = (window as any).electronAPI ? await (window as any).electronAPI.fetchUrl(url) : await (await fetch(url)).json();
-         const validYt = data?.results?.find((item: any) => item.duration >= 60 && item.duration <= 480);
-         if (validYt) {
-           finalSong = { ...song, id: validYt.id, duration: validYt.duration };
-         } else throw new Error("Not found");
-       } catch (err) {
-         showToast(`Gagal menautkan "${song.title}".`, 'error');
-         return;
-       }
-    }
-
     if (isGuest && activePartyId) {
        await (window as any).electronAPI.sendQueueRequest(activePartyId, discordUser?.id, discordUser?.global_name || discordUser?.username, finalSong);
        showToast(`Berhasil meminta Host untuk menambahkan "${finalSong.title}" ke antrean!`, 'success');
@@ -1731,11 +1857,158 @@ function App() {
 
   const goHome = () => { setActivePage('home'); setSearchQuery(''); setSearchResults([]); };
 
-  const fetchArtistSongs = async (artist: string, filter: 'popular' | 'newest') => {
+  const fetchArtistSongs = async (artist: string, filter: 'popular' | 'newest', isPodcast: boolean = false) => {
     setIsArtistLoading(true);
     setArtistSongs([]);
     try {
       let queries: string[] = [];
+
+      // ============================================================
+      // PODCAST PATH: Use Apple RSS Feed directly (no YouTube needed)
+      // ============================================================
+      if (isPodcast) {
+        try {
+          // Step 1: Search iTunes for the podcast to get its RSS feedUrl
+          const searchUrl = `https://itunes.apple.com/search?term=${encodeURIComponent(artist)}&media=podcast&entity=podcast&limit=5`;
+          const searchData = (window as any).electronAPI
+            ? await (window as any).electronAPI.fetchUrl(searchUrl)
+            : await (await fetch(`https://api.allorigins.win/raw?url=${encodeURIComponent(searchUrl)}`)).json();
+
+          if (!searchData?.results?.length) throw new Error('Podcast not found in iTunes');
+
+          // Pick the best podcast match by title similarity
+          const scored = searchData.results.map((p: any) => ({
+            p,
+            score: titleSimilarity(artist, p.collectionName || p.trackName || '')
+          })).sort((a: any, b: any) => b.score - a.score);
+          const podcast = scored[0].p;
+          const feedUrl: string = podcast.feedUrl;
+          if (!feedUrl) throw new Error('No RSS feed URL found');
+
+          // Update artist page header with real podcast info
+          const podcastArtwork = (podcast.artworkUrl600 || podcast.artworkUrl100 || '').replace('100x100bb.jpg', '600x600bb.jpg');
+
+          // Step 2: Fetch and parse the RSS feed
+          let xmlText: string;
+          if ((window as any).electronAPI?.fetchText) {
+            xmlText = await (window as any).electronAPI.fetchText(feedUrl);
+          } else {
+            // Web fallback via CORS proxy
+            xmlText = await (await fetch(`https://api.allorigins.win/raw?url=${encodeURIComponent(feedUrl)}`)).text();
+          }
+
+          const parser = new DOMParser();
+          const xml = parser.parseFromString(xmlText, 'text/xml');
+          const items = Array.from(xml.querySelectorAll('item'));
+
+          if (items.length === 0) throw new Error('RSS has no episodes');
+
+          // Step 3: Parse episodes from RSS
+          const getTag = (item: Element, tag: string) => item.querySelector(tag)?.textContent?.trim() || '';
+          const getAttr = (item: Element, tag: string, attr: string) => item.querySelector(tag)?.getAttribute(attr) || '';
+
+          let episodes = items.map((item) => {
+            const enclosureUrl = getAttr(item, 'enclosure', 'url');
+            const durationStr = getTag(item, 'itunes\\:duration') || getTag(item, 'duration');
+            // Parse duration: can be "HH:MM:SS", "MM:SS", or plain seconds
+            let durationSec = 0;
+            if (durationStr) {
+              const parts = durationStr.split(':').map(Number);
+              if (parts.length === 3) durationSec = parts[0] * 3600 + parts[1] * 60 + parts[2];
+              else if (parts.length === 2) durationSec = parts[0] * 60 + parts[1];
+              else durationSec = Number(durationStr) || 0;
+            }
+            const pubDate = getTag(item, 'pubDate');
+            const image = getAttr(item, 'itunes\\:image', 'href') || getTag(item, 'itunes\\:image') || podcastArtwork;
+
+            return {
+              id: enclosureUrl || null, // Use audio URL as unique ID
+              title: getTag(item, 'title'),
+              artist: podcast.collectionName || podcast.artistName || artist,
+              thumbnail: image || podcastArtwork,
+              duration: durationSec,
+              audioUrl: enclosureUrl, // Direct MP3/M4A URL - no YouTube needed!
+              isPodcast: true,
+              releaseDate: pubDate ? new Date(pubDate).getTime() : 0,
+            };
+          }).filter((ep: any) => ep.title && ep.audioUrl);
+
+          // Sort: newest first or keep original RSS order (already newest first usually)
+          if (filter === 'newest') {
+            episodes.sort((a: any, b: any) => b.releaseDate - a.releaseDate);
+          }
+
+          setArtistSongs(episodes.slice(0, 50));
+          setIsArtistLoading(false);
+          return; // Done! No YouTube needed.
+        } catch (rssErr) {
+          console.error('Apple RSS engine failed, falling back to iTunes search:', rssErr);
+          // Fall through to iTunes episode search below
+        }
+
+        // RSS Fallback: Use iTunes episode search (old method)
+        try {
+          const targetUrl = `https://itunes.apple.com/search?term=${encodeURIComponent(artist)}&media=podcast&entity=podcastEpisode&limit=30`;
+          const itunesData = (window as any).electronAPI 
+            ? await (window as any).electronAPI.fetchUrl(targetUrl)
+            : await (await fetch(`https://api.allorigins.win/raw?url=${encodeURIComponent(targetUrl)}`)).json();
+          
+          if (itunesData.results && itunesData.results.length > 0) {
+            const tracks = itunesData.results;
+            if (filter === 'newest') {
+              tracks.sort((a: any, b: any) => new Date(b.releaseDate).getTime() - new Date(a.releaseDate).getTime());
+            }
+            const initialSongs = tracks.slice(0, 30).map((t: any) => ({
+              id: null,
+              title: t.trackName,
+              artist: t.artistName,
+              thumbnail: (t.artworkUrl600 || t.artworkUrl160 || t.artworkUrl100 || '').replace('100x100bb.jpg', '600x600bb.jpg'),
+              duration: (t.trackTimeMillis && t.trackTimeMillis > 0) ? Math.floor(t.trackTimeMillis / 1000) : 0,
+              originalQuery: `${t.artistName} ${t.trackName}`,
+              isPodcast: true
+            }));
+            setArtistSongs(initialSongs);
+            setIsArtistLoading(false);
+            // Background YouTube mapping for fallback
+            (async () => {
+              for (let idx = 0; idx < initialSongs.length; idx++) {
+                const song = initialSongs[idx];
+                const searchQ = buildPodcastQuery(song.artist || '', song.title || '');
+                const url = `${API_BASE_URL}/api/search?q=${encodeURIComponent(searchQ)}`;
+                try {
+                  const data = (window as any).electronAPI
+                    ? await (window as any).electronAPI.fetchUrl(url)
+                    : await (await fetch(url)).json();
+                  if (data && data.results && data.results.length > 0) {
+                    const scored = data.results.filter((item: any) => item.duration >= 60)
+                      .map((item: any) => ({ item, score: titleSimilarity(song.title || '', item.title || '') }))
+                      .sort((a: any, b: any) => b.score - a.score);
+                    const validYt = scored.length > 0 && scored[0].score > 0 ? scored[0].item : data.results.find((item: any) => item.duration >= 120) || data.results[0];
+                    if (validYt) {
+                      setArtistSongs(prev => {
+                        const next = [...prev];
+                        if (next[idx] && next[idx].title === song.title) next[idx] = { ...next[idx], id: validYt.id };
+                        return next;
+                      });
+                    }
+                  }
+                } catch (e) { console.error('BG mapping error:', e); }
+                await new Promise(resolve => setTimeout(resolve, 300));
+              }
+            })();
+            return;
+          }
+        } catch (err) {
+          console.error('iTunes podcast episode fallback failed', err);
+        }
+
+        setIsArtistLoading(false);
+        return;
+      }
+
+      // ============================================================
+      // MUSIC PATH: iTunes + YouTube (unchanged)
+      // ============================================================
       try {
         const targetUrl = `https://itunes.apple.com/search?term=${encodeURIComponent(artist)}&entity=song&limit=100`;
         const itunesData = (window as any).electronAPI 
@@ -1743,7 +2016,8 @@ function App() {
           : await (await fetch(`https://api.allorigins.win/raw?url=${encodeURIComponent(targetUrl)}`)).json();
         
         if (itunesData.results && itunesData.results.length > 0) {
-          let tracks = itunesData.results.filter((t: any) => t.artistName && t.artistName.toLowerCase().includes(artist.toLowerCase()));
+          let tracks = itunesData.results;
+          tracks = tracks.filter((t: any) => t.artistName && t.artistName.toLowerCase().includes(artist.toLowerCase()));
           
           if (filter === 'newest') {
             tracks.sort((a: any, b: any) => new Date(b.releaseDate).getTime() - new Date(a.releaseDate).getTime());
@@ -1756,20 +2030,20 @@ function App() {
           
           const topTracks = Array.from(uniqueTracks.values()).slice(0, 30);
           
-          // 1. INSTANT LOAD using iTunes metadata
           const initialSongs = topTracks.map((t: any) => ({
             id: null,
             title: t.trackName,
             artist: t.artistName,
-            thumbnail: t.artworkUrl100 ? t.artworkUrl100.replace('100x100bb.jpg', '500x500bb.jpg') : '',
-            duration: Math.round((t.trackTimeMillis || 0) / 1000),
-            originalQuery: `${t.artistName} ${t.trackName} official audio`
+            thumbnail: (t.artworkUrl600 || t.artworkUrl160 || t.artworkUrl100 || t.artworkUrl60 || '').replace('100x100bb.jpg', '500x500bb.jpg').replace('100x100bb.png', '500x500bb.png').replace('160x160bb.jpg', '600x600bb.jpg'),
+            duration: (t.trackTimeMillis && t.trackTimeMillis > 0) ? Math.floor(t.trackTimeMillis / 1000) : 0,
+            originalQuery: `${t.artistName} ${t.trackName} official audio`,
+            isPodcast: false
           }));
           
           setArtistSongs(initialSongs);
-          setIsArtistLoading(false); // Stop loader instantly!
+          setIsArtistLoading(false);
           
-          // 2. BACKGROUND MAPPING using high-speed IPC (Sequentially)
+          // Background YouTube mapping for music
           (async () => {
             for (let idx = 0; idx < initialSongs.length; idx++) {
               const song = initialSongs[idx];
@@ -1778,28 +2052,22 @@ function App() {
                 const data = (window as any).electronAPI
                   ? await (window as any).electronAPI.fetchUrl(url)
                   : await (await fetch(url)).json();
-                  
-                if (data && data.results) {
+                if (data && data.results && data.results.length > 0) {
                   const validYt = data.results.find((item: any) => item.duration >= 60 && item.duration <= 480);
                   if (validYt) {
                     setArtistSongs(prev => {
                       const next = [...prev];
-                      if (next[idx] && next[idx].title === song.title) {
-                        next[idx] = { ...next[idx], id: validYt.id }; // Insert the real YouTube ID
-                      }
+                      if (next[idx] && next[idx].title === song.title) next[idx] = { ...next[idx], id: validYt.id };
                       return next;
                     });
                   }
                 }
-              } catch (e) {
-                console.error('BG mapping error:', e);
-              }
-              // Yield to allow on-the-fly requests to take priority
+              } catch (e) { console.error('BG mapping error:', e); }
               await new Promise(resolve => setTimeout(resolve, 300));
             }
           })();
           
-          return; // Early return, success!
+          return;
         }
       } catch (err) {
         console.error('iTunes API fallback', err);
@@ -1851,11 +2119,14 @@ function App() {
   };
 
   const openArtistPage = (artistName: string) => {
-    setActiveArtist(artistName);
+    const isPodcastMode = artistName.toLowerCase().endsWith('__podcast__');
+    const cleanName = isPodcastMode ? artistName.slice(0, -11).trim() : artistName;
+    setIsArtistPodcast(isPodcastMode);
+    setActiveArtist(cleanName);
     setActivePage('artist');
     setArtistFilter('popular');
     setShowSuggestions(false);
-    fetchArtistSongs(artistName, 'popular');
+    fetchArtistSongs(cleanName, 'popular', isPodcastMode);
   };
 
   // ═══════════════════════════════════════════════════════════════
@@ -2851,7 +3122,7 @@ function App() {
         <div className="artist-hero" style={{ position: 'relative', zIndex: 1 }}>
         <div className="artist-hero-info">
           <h1 className="artist-hero-name">{activeArtist}</h1>
-          <p className="artist-hero-label">{t('artistPage')}</p>
+          <p className="artist-hero-label">{isArtistPodcast ? t('podcast') : t('artistPage')}</p>
           <div className="artist-hero-actions">
             <button className="btn-primary" onClick={() => {
               if (artistSongs.length > 0) startPlayingFromList(artistSongs, 0);
@@ -2863,7 +3134,7 @@ function App() {
                 className={`filter-btn ${artistFilter === 'popular' ? 'active' : ''}`}
                 onClick={() => {
                   setArtistFilter('popular');
-                  if (activeArtist) fetchArtistSongs(activeArtist, 'popular');
+                  if (activeArtist) fetchArtistSongs(activeArtist, 'popular', isArtistPodcast);
                 }}
               >
                 {t('filterPopular')}
@@ -2872,7 +3143,7 @@ function App() {
                 className={`filter-btn ${artistFilter === 'newest' ? 'active' : ''}`}
                 onClick={() => {
                   setArtistFilter('newest');
-                  if (activeArtist) fetchArtistSongs(activeArtist, 'newest');
+                  if (activeArtist) fetchArtistSongs(activeArtist, 'newest', isArtistPodcast);
                 }}
               >
                 {t('filterNewest')}
@@ -2924,7 +3195,7 @@ function App() {
           </div>
         ) : !isArtistLoading ? (
           <div className="empty-state">
-            <Music size={40} />
+            {isArtistPodcast ? <Mic2 size={40} /> : <Music size={40} />}
             <p>{t('noResults')}</p>
           </div>
         ) : null}
@@ -2945,6 +3216,122 @@ function App() {
               {new Date().toLocaleDateString(language === 'en' ? 'en-US' : language === 'ja' ? 'ja-JP' : 'id-ID', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })}
             </span>
           </div>
+
+          {/* ── Home Mode Toggle ─────────────────────── */}
+          <div className="home-mode-toggle">
+            <button
+              id="home-mode-music-btn"
+              className={`home-mode-btn ${homeMode === 'music' ? 'active' : ''}`}
+              onClick={() => { setHomeMode('music'); setSearchQuery(''); setSuggestions([]); }}
+            >
+              <Music size={15} />
+              {t('music')}
+            </button>
+            <button
+              id="home-mode-podcast-btn"
+              className={`home-mode-btn ${homeMode === 'podcast' ? 'active' : ''}`}
+              onClick={() => { setHomeMode('podcast'); setSearchQuery(''); setSuggestions([]); }}
+            >
+              <Mic2 size={15} />
+              {t('podcast')}
+            </button>
+          </div>
+
+          {/* ── Podcast Mode Content ─────────────────── */}
+          {homeMode === 'podcast' && (
+            <div className="podcast-home-content">
+              {topPodcasts.length === 0 ? (
+                <div style={{ textAlign: 'center', padding: '60px 0', color: 'var(--text-secondary)', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '16px' }}>
+                  <Mic2 size={52} style={{ opacity: 0.25 }} />
+                  <div style={{ fontSize: '14px', fontWeight: 500 }}>{t('podcastLinking')}</div>
+                  <div style={{ width: '200px', height: '3px', background: 'rgba(255,255,255,0.06)', borderRadius: '2px', overflow: 'hidden' }}>
+                    <div style={{ height: '100%', width: '40%', background: 'var(--accent-primary)', borderRadius: '2px', animation: 'shimmer-bar 1.4s ease-in-out infinite' }} />
+                  </div>
+                </div>
+              ) : (
+                <>
+                  {/* Podcast Featured Showcase */}
+                  {topPodcasts.length >= 1 && (() => {
+                    const hero = topPodcasts[podcastHeroIndex] || topPodcasts[0];
+                    return (
+                      <div className="podcast-showcase-container">
+                        <div className="podcast-showcase-hero" onClick={() => openArtistPage(`${hero.artist} ${hero.title}__podcast__`)} onContextMenu={(e) => handleContextMenu(e, hero)}>
+                          <div className="podcast-showcase-bg" style={{ backgroundImage: `url(${hero.thumbnail})` }} />
+                          <div className="podcast-showcase-content">
+                            <img src={hero.thumbnail} alt={hero.title} className="podcast-showcase-art" />
+                            <div className="podcast-showcase-info">
+                              <div className="podcast-showcase-badge">🎙️ {t('podcast')}</div>
+                              <h2 className="podcast-showcase-title">{hero.title}</h2>
+                              <p className="podcast-showcase-author">{hero.artist}</p>
+                              <div className="podcast-showcase-actions">
+                                <button className="showcase-episodes" onClick={(e) => { e.stopPropagation(); openArtistPage(`${hero.artist} ${hero.title}__podcast__`); }}>
+                                  <ListMusic size={18} /> Episodes
+                                </button>
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })()}
+
+                  {/* Podcast Grids */}
+                  {(() => {
+                    const renderPodcastGrid = (title: string, items: any[], dotClass: string) => {
+                      if (!items || items.length === 0) return null;
+                      return (
+                        <section className="home-section">
+                          <div className="section-header-v2">
+                            <div className="section-header-left">
+                              <div className={`section-dot ${dotClass}`} />
+                              <h2 className="section-title-v2">{title}</h2>
+                            </div>
+                          </div>
+                          <div className="podcast-grid-container">
+                            {items.map((item, i) => (
+                              <div
+                                key={i}
+                                className={`podcast-card ${currentSong?.id === item.id ? 'podcast-card-playing' : ''}`}
+                                onClick={() => openArtistPage(`${item.artist} ${item.title}__podcast__`)}
+                                onContextMenu={(e) => handleContextMenu(e, item)}
+                              >
+                                <div className="podcast-card-art">
+                                  <img src={item.thumbnail} alt={item.title} />
+                                  {currentSong?.id === item.id && isPlaying && (
+                                    <div className="card-v2-eq">
+                                      <div className="eq-bar" /><div className="eq-bar" /><div className="eq-bar" />
+                                    </div>
+                                  )}
+                                </div>
+                                <div className="podcast-card-info">
+                                  <div className="podcast-card-genre">{item.genre}</div>
+                                  <div className="podcast-card-title" title={item.title}>{item.title}</div>
+                                  <div className="podcast-card-host">{item.artist}</div>
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        </section>
+                      );
+                    };
+
+                    return (
+                      <>
+                        {renderPodcastGrid(t('topPodcasts') + " (Global)", podcastsUs, 'section-dot-cyan')}
+                        {renderPodcastGrid(t('topPodcasts') + " (Indonesia)", podcastsId, 'section-dot-purple')}
+                        {renderPodcastGrid(t('topPodcasts') + " (Japan)", podcastsJp, 'section-dot-pink')}
+                        {renderPodcastGrid(t('topPodcasts') + " (Korea)", podcastsKr, 'section-dot-purple')}
+                        {renderPodcastGrid(t('topPodcasts') + " (Latin)", podcastsLatin, 'section-dot-yellow')}
+                      </>
+                    );
+                  })()}
+                </>
+              )}
+            </div>
+          )}
+
+          {/* ── Music Mode: Bento + Sections ─────────── */}
+          {homeMode === 'music' && (<>
 
           {/* ── Bento Featured Grid (Daily Mix) ──────── */}
           {(() => {
@@ -3261,6 +3648,7 @@ function App() {
               </>
             );
           })()}
+          </>)}
 
         </div>
       ) : (
@@ -4018,7 +4406,7 @@ function App() {
                   disabled={isOffline}
                   type="text"
                   className="search-input"
-                  placeholder={t('searchPlaceholder')}
+                  placeholder={homeMode === 'podcast' ? t('searchPodcastPlaceholder') : t('searchPlaceholder')}
                   value={searchQuery}
                   onChange={e => { setSearchQuery(e.target.value); setShowSuggestions(true); }}
                   onFocus={() => { if (searchQuery.length >= 2) setShowSuggestions(true); }}
@@ -4028,19 +4416,30 @@ function App() {
               {/* Live Search Dropdown */}
               {showSuggestions && searchQuery.length >= 2 && (
                 <div className="search-suggestions-dropdown">
-                  <div 
-                    className="suggestion-intent-row" 
-                    onMouseDown={e => e.preventDefault()}
-                    onClick={() => {
-                      openArtistPage(searchQuery);
-                    }}
-                  >
-                    <div className="intent-icon"><UserCircle size={18} /></div>
-                    <div className="intent-text">
-                      <span className="intent-prefix">{t('seeAllSongsBy')}</span>
-                      <span className="intent-keyword">"{searchQuery}"</span>
+                  {homeMode !== 'podcast' && (
+                    <div 
+                      className="suggestion-intent-row" 
+                      onMouseDown={e => e.preventDefault()}
+                      onClick={() => {
+                        openArtistPage(searchQuery);
+                      }}
+                    >
+                      <div className="intent-icon"><UserCircle size={18} /></div>
+                      <div className="intent-text">
+                        <span className="intent-prefix">{t('seeAllSongsBy')}</span>
+                        <span className="intent-keyword">"{searchQuery}"</span>
+                      </div>
                     </div>
-                  </div>
+                  )}
+                  {homeMode === 'podcast' && (
+                    <div className="suggestion-intent-row" style={{ cursor: 'default', pointerEvents: 'none' }}>
+                      <div className="intent-icon"><Mic2 size={18} color="var(--accent-primary)" /></div>
+                      <div className="intent-text">
+                        <span className="intent-prefix" style={{ color: 'var(--accent-primary)' }}>{t('podcast')} —</span>
+                        <span className="intent-keyword">"{searchQuery}"</span>
+                      </div>
+                    </div>
+                  )}
 
                   {isFetchingSuggestions ? (
                     <div className="suggestion-loading">
@@ -4122,21 +4521,23 @@ function App() {
                             >
                               <Plus size={16} />
                             </button>
-                            <button
-                              className="suggestion-btn"
-                              title="Unduh Lagu"
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                if ((window as any).electronAPI) {
-                                  const streamUrl = `${API_BASE_URL}/api/stream?id=${song.id}`;
-                                  (window as any).electronAPI.cacheAudio(song, streamUrl);
-                                  showToast(`Mulai mengunduh "${song.title}"...`, 'success');
-                                }
-                                setShowSuggestions(false);
-                              }}
-                            >
-                              <Download size={16} />
-                            </button>
+                            {homeMode !== 'podcast' && (
+                              <button
+                                className="suggestion-btn"
+                                title="Unduh Lagu"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  if ((window as any).electronAPI) {
+                                    const streamUrl = `${API_BASE_URL}/api/stream?id=${song.id}`;
+                                    (window as any).electronAPI.cacheAudio(song, streamUrl);
+                                    showToast(`Mulai mengunduh "${song.title}"...`, 'success');
+                                  }
+                                  setShowSuggestions(false);
+                                }}
+                              >
+                                <Download size={16} />
+                              </button>
+                            )}
                           </div>
                           <div className="suggestion-duration">{formatTime(song.duration)}</div>
                         </div>
@@ -4737,17 +5138,19 @@ function App() {
           }}>
             <FolderPlus size={16} /> {t('addToPlaylist')}
           </div>
-          <div className="context-menu-item" onClick={() => {
-            if ((window as any).electronAPI?.cacheAudio) {
-              const streamUrl = `${API_BASE_URL}/api/stream?id=${contextMenu.song.id}`;
-              (window as any).electronAPI.cacheAudio(contextMenu.song, streamUrl);
-            } else {
-              showToast(t('downloadDesktopOnly'), 'error');
-            }
-            setContextMenu(null);
-          }}>
-            <DownloadCloud size={16} /> {t('downloadSong')}
-          </div>
+          {!contextMenu.song.isPodcast && (
+            <div className="context-menu-item" onClick={() => {
+              if ((window as any).electronAPI?.cacheAudio) {
+                const streamUrl = `${API_BASE_URL}/api/stream?id=${contextMenu.song.id}`;
+                (window as any).electronAPI.cacheAudio(contextMenu.song, streamUrl);
+              } else {
+                showToast(t('downloadDesktopOnly'), 'error');
+              }
+              setContextMenu(null);
+            }}>
+              <DownloadCloud size={16} /> {t('downloadSong')}
+            </div>
+          )}
         </div>
       )}
     </div>

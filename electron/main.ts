@@ -672,6 +672,7 @@ ipcMain.on('clear-activity', () => {
 });
 
 ipcMain.handle('fetch-url', async (event, url: string) => { try { const res = await fetch(url); return await res.json(); } catch (err: any) { throw err; } });
+ipcMain.handle('fetch-text', async (event, url: string) => { try { const res = await fetch(url, { headers: { 'User-Agent': 'DonPollo/1.0' } }); return await res.text(); } catch (err: any) { throw err; } });
 // ROMANIZATION IPC
 let kuroshiroInstance: any = null;
 ipcMain.handle('romanize-lyrics', async (event, text: string, lang: 'ko' | 'ja') => {

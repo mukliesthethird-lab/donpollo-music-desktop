@@ -289,6 +289,14 @@ type TranslationKeys = {
   trayShow: string;
   trayQuit: string;
 
+  // Podcast
+  podcast: string;
+  music: string;
+  topPodcasts: string;
+  podcastByHost: string;
+  podcastLinking: string;
+  searchPodcastPlaceholder: string;
+  podcastNotFoundYt: string;
 
 };
 
@@ -580,6 +588,15 @@ const translations: Record<Language, TranslationKeys> = {
     trayShow: 'Tampilkan Aplikasi',
     trayQuit: 'Keluar',
 
+    // Podcast
+    podcast: 'Podcast',
+    music: 'Musik',
+    topPodcasts: 'Podcast Populer',
+    podcastByHost: 'oleh',
+    podcastLinking: 'Mencari episode di YouTube...',
+    searchPodcastPlaceholder: 'Cari podcast, host, topik...',
+    podcastNotFoundYt: 'Tidak ditemukan di YouTube',
+
 
   },
 
@@ -870,6 +887,15 @@ const translations: Record<Language, TranslationKeys> = {
     trayShow: 'Show App',
     trayQuit: 'Quit',
 
+    // Podcast
+    podcast: 'Podcast',
+    music: 'Music',
+    topPodcasts: 'Top Podcasts',
+    podcastByHost: 'by',
+    podcastLinking: 'Finding episode on YouTube...',
+    searchPodcastPlaceholder: 'Search podcasts, hosts, topics...',
+    podcastNotFoundYt: 'Not found on YouTube',
+
 
   },
 
@@ -1159,6 +1185,15 @@ const translations: Record<Language, TranslationKeys> = {
     trayPrev: '前の曲',
     trayShow: 'アプリを表示',
     trayQuit: '終了',
+
+    // Podcast
+    podcast: 'ポッドキャスト',
+    music: '音楽',
+    topPodcasts: 'トップポッドキャスト',
+    podcastByHost: '著:',
+    podcastLinking: 'YouTubeでエピソードを検索中...',
+    searchPodcastPlaceholder: 'ポッドキャスト・ホスト・トピックを検索...',
+    podcastNotFoundYt: 'YouTubeで見つかりません',
 
 
   }
