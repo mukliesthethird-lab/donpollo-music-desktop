@@ -33,6 +33,13 @@
     "extraMetadata": {
       "main": "dist-electron/main.cjs"
     },
+    "mac": {
+      "icon": "public/icon.png",
+      "target": [
+        "dmg",
+        "zip"
+      ]
+    },
     "win": {
       "icon": "public/icon.png",
       "target": [
