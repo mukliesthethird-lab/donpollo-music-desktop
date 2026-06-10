@@ -9,6 +9,9 @@ on:
 permissions:
   contents: write # Required to upload files to GitHub Releases
 
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+
 jobs:
   build-mac:
     runs-on: macos-latest
