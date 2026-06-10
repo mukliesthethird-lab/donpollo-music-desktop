@@ -35,3 +35,9 @@ jobs:
           npx electron-builder --mac --publish always
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Upload Mac Installer to Actions
+        uses: actions/upload-artifact@v4
+        with:
+          name: Mac-Installer
+          path: release/*.dmg
