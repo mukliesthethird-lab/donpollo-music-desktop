@@ -2377,7 +2377,7 @@ body {
 
 .toast-popup {
   position: fixed;
-  top: 24px;
+  bottom: 110px;
   left: 50%;
   transform: translateX(-50%);
   color: white;
@@ -2390,17 +2390,17 @@ body {
   display: flex;
   align-items: center;
   gap: 12px;
-  animation: slideDown 0.3s cubic-bezier(0.2, 0.8, 0.2, 1);
+  animation: slideUpToast 0.3s cubic-bezier(0.2, 0.8, 0.2, 1);
 }
 
-@keyframes slideDown {
+@keyframes slideUpToast {
   from {
-    top: -100px;
+    transform: translateY(20px);
     opacity: 0;
   }
 
   to {
-    top: 24px;
+    transform: translateY(0);
     opacity: 1;
   }
 }

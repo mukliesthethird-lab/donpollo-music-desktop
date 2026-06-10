@@ -797,16 +797,18 @@ function App() {
   const toastTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const setupAudioContext = (audio: HTMLAudioElement) => {
-    if (!audioContextRef.current) {
-      try {
-        const AudioContextClass = window.AudioContext || (window as any).webkitAudioContext;
-        const ctx = new AudioContextClass();
-        audioContextRef.current = ctx;
+    try {
+      const AudioContextClass = window.AudioContext || (window as any).webkitAudioContext;
+      const ctx = audioContextRef.current || new AudioContextClass();
+      audioContextRef.current = ctx;
 
-        const source = ctx.createMediaElementSource(audio);
-        sourceNodeRef.current = source;
+      if ((audio as any)._webaudio_connected) return;
 
-        // Create 5-band EQ
+      const source = ctx.createMediaElementSource(audio);
+      (audio as any)._webaudio_connected = true;
+      sourceNodeRef.current = source;
+
+      if (!filtersRef.current || filtersRef.current.length === 0) {
         const freqs = [60, 230, 910, 3600, 14000];
         const newFilters = freqs.map(freq => {
           const filter = ctx.createBiquadFilter();
@@ -824,9 +826,17 @@ function App() {
           prevNode = filter;
         }
         prevNode.connect(ctx.destination);
-      } catch (e) {
-        console.error('AudioContext setup failed', e);
+      } else {
+        source.connect(filtersRef.current[0]);
       }
+
+      const isEqEnabled = settings.eqEnabled;
+      const bands = settings.eqBands || [0, 0, 0, 0, 0];
+      filtersRef.current.forEach((f, i) => {
+        f.gain.value = isEqEnabled ? bands[i] : 0;
+      });
+    } catch (e) {
+      console.error('AudioContext setup failed', e);
     }
   };
   const recentScrollRef = useRef<HTMLDivElement>(null);
@@ -987,14 +997,30 @@ function App() {
     audio.addEventListener('error', handleError);
   }, []);
 
-  useEffect(() => {
+  const ensureAudioType = (isPodcast: boolean, forceRecreate = false) => {
+    const currentIsPodcast = audioRef.current?.dataset.isPodcast === 'true';
+    if (!forceRecreate && audioRef.current && currentIsPodcast === isPodcast) return;
+
+    if (audioRef.current) {
+      audioRef.current.pause();
+      audioRef.current.removeAttribute('src');
+      audioRef.current.load();
+    }
+
     const audio = new Audio();
-    // audio.crossOrigin = "anonymous"; // Dicomment sementara agar tidak error CORS di mode Dev
     audio.volume = isMuted ? 0 : volume;
     audio.loop = loopMode === 'one';
+    audio.dataset.isPodcast = isPodcast ? 'true' : 'false';
+    
     audioRef.current = audio;
-    setupAudioContext(audio);
+    if (!isPodcast) {
+      setupAudioContext(audio);
+    }
     setupAudioListeners(audio);
+  };
+
+  useEffect(() => {
+    ensureAudioType(false);
     return () => {
       if (audioRef.current) audioRef.current.pause();
     };
@@ -1037,11 +1063,10 @@ function App() {
           }
         }, 100);
 
-        const newAudio = new Audio();
-        audioRef.current = newAudio;
-        setupAudioListeners(newAudio);
+        const nextSong = queue[currentIndex + 1];
+        ensureAudioType(!!nextSong?.isPodcast, true);
+        const newAudio = audioRef.current!;
         newAudio.volume = 0;
-        newAudio.loop = loopMode === 'one';
 
         const targetVol = isMuted ? 0 : volume;
         // Fade in new audio gradually
@@ -1417,8 +1442,27 @@ function App() {
       }
       cleanTitle = cleanTitle.replace(/['"“”‘’]/g, '').trim();
       if (!cleanTitle) cleanTitle = title.replace(/['"“”‘’]/g, '').trim();
-      const query = encodeURIComponent(`${cleanTitle} ${finalArtist}`);
-      const data = await (await fetch(`https://lrclib.net/api/search?q=${query}`)).json();
+      const queriesToTry = [
+        encodeURIComponent(`${cleanTitle} ${finalArtist}`),
+        encodeURIComponent(`${title} ${artist}`),
+        encodeURIComponent(`${cleanTitle} ${artist}`),
+        encodeURIComponent(cleanTitle),
+        encodeURIComponent(`${title.split('-')[0]?.trim() || cleanTitle} ${finalArtist}`),
+        encodeURIComponent(title)
+      ];
+
+      let data = null;
+      for (const q of queriesToTry) {
+        try {
+          const res = await fetch(`https://lrclib.net/api/search?q=${q}`);
+          const resData = await res.json();
+          if (resData && resData.length > 0) {
+             data = resData;
+             break;
+          }
+        } catch (e) {}
+      }
+
       if (data && data.length > 0) {
         const syncedMatches = data.filter((item: any) => item.syncedLyrics);
         
@@ -1603,6 +1647,8 @@ function App() {
       fetchLyrics(song.title, song.artist, song.duration || 0);
 
       // 3. Stream audio
+      ensureAudioType(!!song.isPodcast);
+
       if (audioRef.current) {
         // PODCAST with direct RSS audio URL → stream directly (no YouTube)
         if (song.isPodcast && song.audioUrl) {
@@ -1813,7 +1859,21 @@ function App() {
         audioRef.current.pause();
         if (fadeAudioRef.current) fadeAudioRef.current.pause();
       } else {
-        audioRef.current.play();
+        const playPromise = audioRef.current.play();
+        if (playPromise !== undefined) {
+          playPromise.catch(err => {
+            console.error("Resume play failed", err);
+            // Recover by reloading the stream
+            if (audioRef.current) {
+              const currentSrc = audioRef.current.src;
+              const currentTime = audioRef.current.currentTime;
+              audioRef.current.src = currentSrc;
+              audioRef.current.load();
+              audioRef.current.currentTime = currentTime;
+              audioRef.current.play().catch(e => console.error("Recovery failed", e));
+            }
+          });
+        }
         if (fadeAudioRef.current) fadeAudioRef.current.play();
       }
       setIsPlaying(!isPlaying);
@@ -2375,9 +2435,23 @@ function App() {
                     <div className="library-item-artist">{song.artist}</div>
                   </div>
                   <div className="library-item-duration">{formatTime(song.duration)}</div>
-                  <button className="library-item-action" onClick={() => removeSongFromPlaylist(pl.id, song.id)} title="Hapus dari playlist">
-                    <Trash2 size={16} />
-                  </button>
+                  <div style={{ display: 'flex', gap: '4px' }}>
+                    <button 
+                      className="library-item-action" 
+                      onClick={(e) => { e.stopPropagation(); toggleLike(song); }} 
+                      style={{ color: isLiked(song.id) ? '#ff6b9d' : 'var(--text-secondary)' }}
+                      title="Like"
+                    >
+                      <Heart size={16} fill={isLiked(song.id) ? 'currentColor' : 'none'} />
+                    </button>
+                    <button 
+                      className="library-item-action" 
+                      onClick={(e) => { e.stopPropagation(); removeSongFromPlaylist(pl.id, song.id); }} 
+                      title="Hapus dari playlist"
+                    >
+                      <Trash2 size={16} />
+                    </button>
+                  </div>
                 </div>
               ))}
             </div>
@@ -3800,7 +3874,7 @@ function App() {
   return (
     <div className={`app-layout theme-${settings.theme || 'default'}`} style={{ '--glass-bg': `url(${glassBgUrl})` } as any}>
       {/* Toast Container */}
-      <div style={{ position: 'fixed', top: '24px', left: '50%', transform: 'translateX(-50%)', display: 'flex', flexDirection: 'column', gap: '12px', zIndex: 9999 }}>
+      <div style={{ position: 'fixed', bottom: '110px', left: '50%', transform: 'translateX(-50%)', display: 'flex', flexDirection: 'column', gap: '12px', zIndex: 9999 }}>
         {toastData && (
           <div className={`toast-popup ${toastData.type === 'error' ? 'toast-error' : 'toast-success'}`} style={{ position: 'relative', top: 0, left: 0, transform: 'none' }}>
             {toastData.icon}
