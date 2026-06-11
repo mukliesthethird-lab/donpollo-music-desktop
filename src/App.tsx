@@ -929,6 +929,7 @@ function App() {
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const fadeAudioRef = useRef<HTMLAudioElement | null>(null);
   const isCrossfadingRef = useRef(false);
+  const fadeIntervalsRef = useRef<{ out: any, in: any }>({ out: null, in: null });
   const currentSongRef = useRef<any>(null);
   currentSongRef.current = currentSong;
   const executePlayRef = useRef<any>(null);
@@ -1149,9 +1150,11 @@ function App() {
     if (!forceRecreate && audioRef.current && currentIsPodcast === isPodcast) return;
 
     if (audioRef.current) {
-      audioRef.current.pause();
-      audioRef.current.removeAttribute('src');
-      audioRef.current.load();
+      if (audioRef.current !== fadeAudioRef.current) {
+        audioRef.current.pause();
+        audioRef.current.removeAttribute('src');
+        audioRef.current.load();
+      }
     }
 
     const audio = new Audio();
@@ -1197,16 +1200,21 @@ function App() {
         const oldAudio = audio;
         fadeAudioRef.current = oldAudio;
 
+        if (fadeIntervalsRef.current.out) clearInterval(fadeIntervalsRef.current.out);
+        if (fadeIntervalsRef.current.in) clearInterval(fadeIntervalsRef.current.in);
+
         const fadeStep = oldAudio.volume / (cfDuration * 10);
-        const fadeOutInt = setInterval(() => {
+        fadeIntervalsRef.current.out = setInterval(() => {
           if (oldAudio.volume - fadeStep > 0) {
             oldAudio.volume -= fadeStep;
           } else {
             oldAudio.volume = 0;
             oldAudio.pause();
-            oldAudio.src = '';
-            clearInterval(fadeOutInt);
+            oldAudio.removeAttribute('src');
+            oldAudio.load();
+            clearInterval(fadeIntervalsRef.current.out);
             if (fadeAudioRef.current === oldAudio) fadeAudioRef.current = null;
+            isCrossfadingRef.current = false;
           }
         }, 100);
 
@@ -1216,21 +1224,19 @@ function App() {
         newAudio.volume = 0;
 
         const targetVol = isMuted ? 0 : volume;
-        // Fade in new audio gradually
         if (targetVol > 0) {
           const fadeInStep = targetVol / (cfDuration * 10);
-          const fadeInInt = setInterval(() => {
+          fadeIntervalsRef.current.in = setInterval(() => {
             if (newAudio.volume + fadeInStep < targetVol) {
               newAudio.volume = Math.min(newAudio.volume + fadeInStep, targetVol);
             } else {
               newAudio.volume = targetVol;
-              clearInterval(fadeInInt);
+              clearInterval(fadeIntervalsRef.current.in);
             }
           }, 100);
         } else {
           newAudio.volume = 0;
         }
-        isCrossfadingRef.current = false;
 
         handleNextRef.current();
       }
@@ -1833,6 +1839,10 @@ function App() {
 
         if (startTime !== undefined) {
           audioRef.current.currentTime = startTime;
+        }
+
+        if (!isCrossfadingRef.current) {
+          audioRef.current.volume = isMuted ? 0 : volume;
         }
 
         audioRef.current.play().catch(async (err) => {
