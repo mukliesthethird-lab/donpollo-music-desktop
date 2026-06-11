@@ -1,4 +1,6 @@
 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700;800;900&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Roboto:wght@400;500;700;900&display=swap');
 
 :root {
   --bg-main: #000000;
@@ -11,13 +13,17 @@
   --text-secondary: #B5BAC1;
   --text-muted: #949BA4;
   --border-color: rgba(255, 255, 255, 0.08);
+  
+  --global-font: 'Inter', sans-serif;
+  --global-radius: 8px;
+  --pill-radius: 24px;
 }
 
 * {
   margin: 0;
   padding: 0;
   box-sizing: border-box;
-  font-family: 'Inter', sans-serif;
+  font-family: var(--global-font);
 }
 
 body {
@@ -61,7 +67,7 @@ body {
 
 .nav-top-box {
   background-color: var(--bg-sidebar);
-  border-radius: 8px;
+  border-radius: var(--global-radius);
   padding: 24px 16px 12px 16px;
   display: flex;
   flex-direction: column;
@@ -101,7 +107,7 @@ body {
   gap: 16px;
   padding: 12px 16px;
   color: var(--text-secondary);
-  border-radius: 6px;
+  border-radius: var(--global-radius);
   cursor: pointer;
   transition: all 0.2s;
   font-weight: 600;
@@ -122,7 +128,7 @@ body {
   flex-direction: column;
   margin-top: auto;
   background-color: var(--bg-sidebar);
-  border-radius: 8px;
+  border-radius: var(--global-radius);
   padding: 8px;
 }
 
@@ -134,7 +140,7 @@ body {
   background-color: transparent;
   border: none;
   color: var(--text-secondary);
-  border-radius: 6px;
+  border-radius: var(--global-radius);
   cursor: pointer;
   transition: all 0.2s;
   font-weight: 600;
@@ -153,7 +159,7 @@ body {
   left: 16px;
   background-color: var(--bg-card-hover);
   border: 1px solid var(--border-color);
-  border-radius: 8px;
+  border-radius: var(--global-radius);
   padding: 8px;
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.5);
   z-index: 100;
@@ -241,7 +247,7 @@ body {
   flex-direction: column;
   flex: 1;
   background-color: var(--bg-sidebar);
-  border-radius: 8px;
+  border-radius: var(--global-radius);
   overflow: hidden;
 }
 
@@ -334,7 +340,7 @@ body {
   align-items: center;
   gap: 12px;
   padding: 8px;
-  border-radius: 6px;
+  border-radius: var(--global-radius);
   cursor: pointer;
   transition: background-color 0.2s;
   text-align: left;
@@ -506,12 +512,14 @@ body {
 
 /* Custom Scrollbar */
 .main-scroll::-webkit-scrollbar,
-.queue-list::-webkit-scrollbar {
+.queue-list::-webkit-scrollbar,
+.friend-activity-section::-webkit-scrollbar {
   width: 6px;
 }
 
 .main-scroll::-webkit-scrollbar-thumb,
-.queue-list::-webkit-scrollbar-thumb {
+.queue-list::-webkit-scrollbar-thumb,
+.friend-activity-section::-webkit-scrollbar-thumb {
   background-color: var(--bg-card-hover);
   border-radius: 10px;
 }
@@ -673,7 +681,7 @@ body {
   display: flex;
   align-items: center;
   padding: 12px 16px;
-  border-radius: 8px;
+  border-radius: var(--global-radius);
   cursor: pointer;
   transition: background-color 0.2s;
 }
@@ -758,7 +766,7 @@ body {
 
 .bento-card {
   position: relative;
-  border-radius: 12px;
+  border-radius: var(--global-radius);
   overflow: hidden;
   cursor: pointer;
   background: var(--bg-card);
@@ -1262,7 +1270,7 @@ body {
   flex-direction: column;
   padding: 16px;
   background-color: var(--bg-sidebar);
-  border-radius: 8px;
+  border-radius: var(--global-radius);
   min-height: 180px;
   max-height: 300px;
   overflow-y: auto;
@@ -1283,7 +1291,7 @@ body {
 
 .friend-item.active-party {
   background: rgba(var(--accent-primary-rgb), 0.1);
-  border-radius: 8px;
+  border-radius: var(--global-radius);
   padding: 12px;
   margin: 0 -12px;
   border-bottom: none;
@@ -1344,7 +1352,7 @@ body {
   color: var(--text-primary);
   font-size: 11px;
   padding: 4px 8px;
-  border-radius: 12px;
+  border-radius: var(--global-radius);
   cursor: pointer;
   display: flex;
   align-items: center;
@@ -1509,7 +1517,7 @@ body {
   min-width: 180px;
   padding: 16px;
   background-color: var(--bg-card);
-  border-radius: 8px;
+  border-radius: var(--global-radius);
   cursor: pointer;
   transition: background-color 0.3s ease;
 }
@@ -1523,7 +1531,7 @@ body {
   aspect-ratio: 1 / 1;
   margin-bottom: 16px;
   position: relative;
-  border-radius: 6px;
+  border-radius: var(--global-radius);
   overflow: hidden;
   box-shadow: 0 8px 24px rgba(0, 0, 0, 0.5);
 }
@@ -1590,7 +1598,7 @@ body {
 .right-sidebar {
   width: 360px;
   background-color: var(--bg-sidebar);
-  border-radius: 8px;
+  border-radius: var(--global-radius);
   display: flex;
   flex-direction: column;
   padding: 24px 0 0 0;
@@ -1642,7 +1650,7 @@ body {
   align-items: center;
   gap: 12px;
   padding: 10px 8px;
-  border-radius: 8px;
+  border-radius: var(--global-radius);
   cursor: pointer;
   transition: background-color 0.2s;
 }
@@ -1674,7 +1682,7 @@ body {
 .queue-cover {
   width: 100%;
   height: 100%;
-  border-radius: 6px;
+  border-radius: var(--global-radius);
   object-fit: cover;
 }
 
@@ -1685,7 +1693,7 @@ body {
   right: 0;
   bottom: 0;
   background-color: rgba(0, 0, 0, 0.5);
-  border-radius: 6px;
+  border-radius: var(--global-radius);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -1799,7 +1807,7 @@ body {
 .player-cover {
   width: 56px;
   height: 56px;
-  border-radius: 8px;
+  border-radius: var(--global-radius);
   object-fit: cover;
   margin-right: 16px;
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4);
@@ -2057,7 +2065,7 @@ body {
   width: 100%;
   max-width: 500px;
   aspect-ratio: 1/1;
-  border-radius: 12px;
+  border-radius: var(--global-radius);
   overflow: hidden;
   box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5);
 }
@@ -2382,7 +2390,7 @@ body {
   transform: translateX(-50%);
   color: white;
   padding: 16px 24px;
-  border-radius: 8px;
+  border-radius: var(--global-radius);
   font-size: 15px;
   font-weight: 600;
   box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
@@ -2418,7 +2426,7 @@ body {
 .download-toast {
   background-color: var(--bg-card);
   border: 1px solid var(--border-color);
-  border-radius: 12px;
+  border-radius: var(--global-radius);
   padding: 12px 16px;
   width: 300px;
   box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
@@ -2507,7 +2515,7 @@ body {
   width: 44px;
   height: 44px;
   flex-shrink: 0;
-  border-radius: 8px;
+  border-radius: var(--global-radius);
   overflow: hidden;
 }
 
@@ -2569,7 +2577,7 @@ body {
   color: var(--text-muted);
   cursor: pointer;
   padding: 6px;
-  border-radius: 6px;
+  border-radius: var(--global-radius);
   transition: all 0.2s;
   display: flex;
   align-items: center;
@@ -2607,7 +2615,7 @@ body {
   position: relative;
   width: 100%;
   aspect-ratio: 1;
-  border-radius: 12px;
+  border-radius: var(--global-radius);
   overflow: hidden;
   background-color: var(--bg-card);
   margin-bottom: 12px;
@@ -2706,7 +2714,7 @@ body {
 .settings-toggle {
   width: 44px;
   height: 24px;
-  border-radius: 12px;
+  border-radius: var(--global-radius);
   border: none;
   background-color: var(--bg-card-hover);
   cursor: pointer;
@@ -2729,7 +2737,7 @@ body {
   border: 1px solid var(--border-color);
   color: var(--text-primary);
   padding: 8px 12px;
-  border-radius: 8px;
+  border-radius: var(--global-radius);
   font-size: 13px;
   cursor: pointer;
   outline: none;
@@ -2785,7 +2793,7 @@ body {
   padding: 12px 16px;
   background-color: rgba(255, 193, 7, 0.1);
   border: 1px solid rgba(255, 193, 7, 0.3);
-  border-radius: 8px;
+  border-radius: var(--global-radius);
   font-size: 12px;
   color: #ffc107;
   line-height: 1.5;
@@ -2851,7 +2859,7 @@ body {
   width: 100%;
   background-color: var(--bg-card-hover);
   border: 1px solid var(--border-color);
-  border-radius: 12px;
+  border-radius: var(--global-radius);
   padding: 14px 16px;
   color: var(--text-primary);
   font-size: 15px;
@@ -2877,7 +2885,7 @@ body {
   color: var(--text-primary);
   border: 1px solid var(--border-color);
   padding: 8px 16px;
-  border-radius: 8px;
+  border-radius: var(--global-radius);
   cursor: pointer;
   margin-right: 12px;
   transition: all 0.2s;
@@ -2968,7 +2976,7 @@ body {
 .modal-playlist-art {
   width: 40px;
   height: 40px;
-  border-radius: 6px;
+  border-radius: var(--global-radius);
   overflow: hidden;
   background-color: var(--bg-card-hover);
   display: flex;
@@ -3225,7 +3233,7 @@ body {
   padding: 10px 14px;
   background: rgba(255, 193, 7, 0.1);
   border: 1px solid rgba(255, 193, 7, 0.25);
-  border-radius: 8px;
+  border-radius: var(--global-radius);
   font-size: 12px;
   color: #ffc107;
 }
@@ -3241,7 +3249,7 @@ body {
 .context-menu {
   background-color: var(--bg-card);
   border: 1px solid var(--border-color);
-  border-radius: 8px;
+  border-radius: var(--global-radius);
   padding: 8px;
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.5);
   display: flex;
@@ -3255,7 +3263,7 @@ body {
   align-items: center;
   gap: 12px;
   padding: 10px 12px;
-  border-radius: 6px;
+  border-radius: var(--global-radius);
   cursor: pointer;
   color: var(--text-primary);
   font-size: 14px;
@@ -3391,7 +3399,7 @@ body {
   background: rgba(18, 18, 30, 0.97);
   backdrop-filter: blur(20px);
   border: 1px solid rgba(255, 255, 255, 0.08);
-  border-radius: 12px;
+  border-radius: var(--global-radius);
   overflow: hidden;
   z-index: 9999;
   box-shadow: 0 16px 48px rgba(0, 0, 0, 0.6);
@@ -3432,7 +3440,7 @@ body {
   position: relative;
   width: 40px;
   height: 40px;
-  border-radius: 6px;
+  border-radius: var(--global-radius);
   overflow: hidden;
   flex-shrink: 0;
 }
@@ -3812,7 +3820,7 @@ body {
   display: flex;
   align-items: center;
   padding: 8px 16px;
-  border-radius: 8px;
+  border-radius: var(--global-radius);
   cursor: pointer;
   transition: background 0.2s;
   gap: 16px;
@@ -4085,7 +4093,7 @@ body {
   flex-direction: column;
   gap: 12px;
   cursor: pointer;
-  border-radius: 12px;
+  border-radius: var(--global-radius);
   padding: 12px;
   background: transparent;
   transition: all 0.2s;
@@ -4102,7 +4110,7 @@ body {
 .podcast-card-art {
   width: 100%;
   aspect-ratio: 1 / 1;
-  border-radius: 12px;
+  border-radius: var(--global-radius);
   position: relative;
   overflow: hidden;
   box-shadow: 0 8px 24px rgba(0, 0, 0, 0.3);
@@ -4269,6 +4277,7 @@ body {
   letter-spacing: -0.5px;
   display: -webkit-box;
   -webkit-line-clamp: 2;
+  line-clamp: 2;
   -webkit-box-orient: vertical;
   overflow: hidden;
 }
@@ -4312,4 +4321,4 @@ body {
 
 .showcase-episodes:hover {
   background: rgba(255, 255, 255, 0.2);
-}
+}

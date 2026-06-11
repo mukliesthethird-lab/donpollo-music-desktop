@@ -1,7 +1,7 @@
 {
   "name": "donpollo-music-desktop",
   "private": true,
-  "version": "1.1.9",
+  "version": "1.2.0",
   "type": "module",
   "main": "dist-electron/main.cjs",
   "scripts": {
@@ -81,6 +81,7 @@
     "discord-rpc": "^4.0.1",
     "dotenv": "^17.4.2",
     "electron-updater": "^6.8.3",
+    "fast-average-color": "^9.5.2",
     "kuroshiro": "^1.2.0",
     "kuroshiro-analyzer-kuromoji": "^1.1.0",
     "lucide-react": "^1.17.0",

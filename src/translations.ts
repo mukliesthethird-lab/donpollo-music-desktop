@@ -163,6 +163,30 @@ type TranslationKeys = {
   themeDefaultDesc: string;
   themeMinimalist: string;
   themeMinimalistDesc: string;
+  themeCustom: string;
+  themeCustomDesc: string;
+  dynamicBackground: string;
+  dynamicBackgroundDesc: string;
+  accentColor: string;
+  bgImageUrl: string;
+  advCustomTitle: string;
+  bgMain: string;
+  bgSidebar: string;
+  bgCard: string;
+  textPrimary: string;
+  textSecondary: string;
+  layoutOrientation: string;
+  layoutLeft: string;
+  layoutRight: string;
+  fontFamily: string;
+  fontInter: string;
+  fontRoboto: string;
+  fontOutfit: string;
+  fontMono: string;
+  shapeStyle: string;
+  shapeRounded: string;
+  shapeSharp: string;
+  shapePill: string;
   dataSection: string;
   playHistory: string;
   savedSongs: string;
@@ -463,6 +487,30 @@ const translations: Record<Language, TranslationKeys> = {
     themeDefaultDesc: 'Klasik',
     themeMinimalist: 'Minimalis',
     themeMinimalistDesc: 'Bersih & Kompak',
+    themeCustom: 'Kustom',
+    themeCustomDesc: 'Gunakan warna & gambar sendiri',
+    dynamicBackground: 'Latar Belakang Dinamis',
+    dynamicBackgroundDesc: 'Latar beradaptasi dengan warna dominan dari sampul album',
+    accentColor: 'Warna Aksen',
+    bgImageUrl: 'URL Gambar Latar',
+    advCustomTitle: 'Kustomisasi Lanjutan',
+    bgMain: 'Latar Utama',
+    bgSidebar: 'Latar Sidebar',
+    bgCard: 'Latar Kartu',
+    textPrimary: 'Teks Utama',
+    textSecondary: 'Teks Sekunder',
+    layoutOrientation: 'Orientasi Tata Letak',
+    layoutLeft: 'Sidebar Kiri (Default)',
+    layoutRight: 'Sidebar Kanan',
+    fontFamily: 'Gaya Huruf (Font)',
+    fontInter: 'Inter (Default)',
+    fontRoboto: 'Roboto',
+    fontOutfit: 'Outfit',
+    fontMono: 'Monospace',
+    shapeStyle: 'Gaya Sudut (Bentuk)',
+    shapeRounded: 'Membulat (Default)',
+    shapeSharp: 'Kaku (Kotak)',
+    shapePill: 'Pill (Sangat Membulat)',
     dataSection: 'Data',
     playHistory: 'Riwayat Putar',
     savedSongs: 'lagu tersimpan',
@@ -763,6 +811,30 @@ const translations: Record<Language, TranslationKeys> = {
     themeDefaultDesc: 'Classic',
     themeMinimalist: 'Minimalist',
     themeMinimalistDesc: 'Clean & Compact',
+    themeCustom: 'Custom',
+    themeCustomDesc: 'Use your own colors & image',
+    dynamicBackground: 'Dynamic Background',
+    dynamicBackgroundDesc: 'Background adapts to the dominant color of the album cover',
+    accentColor: 'Accent Color',
+    bgImageUrl: 'Background Image URL',
+    advCustomTitle: 'Advanced Customization',
+    bgMain: 'Main Background',
+    bgSidebar: 'Sidebar Background',
+    bgCard: 'Card Background',
+    textPrimary: 'Primary Text',
+    textSecondary: 'Secondary Text',
+    layoutOrientation: 'Layout Orientation',
+    layoutLeft: 'Left Sidebar (Default)',
+    layoutRight: 'Right Sidebar',
+    fontFamily: 'Font Family',
+    fontInter: 'Inter (Default)',
+    fontRoboto: 'Roboto',
+    fontOutfit: 'Outfit',
+    fontMono: 'Monospace',
+    shapeStyle: 'Corner Shape',
+    shapeRounded: 'Rounded (Default)',
+    shapeSharp: 'Sharp',
+    shapePill: 'Pill',
     dataSection: 'Data',
     playHistory: 'Play History',
     savedSongs: 'songs saved',
@@ -1063,6 +1135,30 @@ const translations: Record<Language, TranslationKeys> = {
     themeDefaultDesc: 'クラシック',
     themeMinimalist: 'ミニマリスト',
     themeMinimalistDesc: 'クリーン＆コンパクト',
+    themeCustom: 'カスタム',
+    themeCustomDesc: '独自の色と画像を使用',
+    dynamicBackground: 'ダイナミックバックグラウンド',
+    dynamicBackgroundDesc: '背景がアルバムカバーの主な色に自動調整されます',
+    accentColor: 'アクセントカラー',
+    bgImageUrl: '背景画像URL',
+    advCustomTitle: '高度なカスタマイズ',
+    bgMain: 'メイン背景',
+    bgSidebar: 'サイドバー背景',
+    bgCard: 'カード背景',
+    textPrimary: 'プライマリテキスト',
+    textSecondary: 'セカンダリテキスト',
+    layoutOrientation: 'レイアウトの向き',
+    layoutLeft: '左サイドバー (デフォルト)',
+    layoutRight: '右サイドバー',
+    fontFamily: 'フォントファミリー',
+    fontInter: 'Inter (デフォルト)',
+    fontRoboto: 'Roboto',
+    fontOutfit: 'Outfit',
+    fontMono: 'Monospace',
+    shapeStyle: '角の形状',
+    shapeRounded: '丸み (デフォルト)',
+    shapeSharp: 'シャープ',
+    shapePill: 'ピル',
     dataSection: 'データ',
     playHistory: '再生履歴',
     savedSongs: '曲が保存されています',
@@ -1364,6 +1460,30 @@ const translations: Record<Language, TranslationKeys> = {
     themeDefaultDesc: '클래식',
     themeMinimalist: '미니멀',
     themeMinimalistDesc: '깔끔 & 컴팩트',
+    themeCustom: '사용자 지정',
+    themeCustomDesc: '자신만의 색상과 이미지 사용',
+    dynamicBackground: '동적 배경',
+    dynamicBackgroundDesc: '배경이 앨범 커버의 주요 색상에 맞춰 조정됩니다',
+    accentColor: '포인트 색상',
+    bgImageUrl: '배경 이미지 URL',
+    advCustomTitle: '고급 사용자 지정',
+    bgMain: '기본 배경',
+    bgSidebar: '사이드바 배경',
+    bgCard: '카드 배경',
+    textPrimary: '기본 텍스트',
+    textSecondary: '보조 텍스트',
+    layoutOrientation: '레이아웃 방향',
+    layoutLeft: '왼쪽 사이드바 (기본)',
+    layoutRight: '오른쪽 사이드바',
+    fontFamily: '글꼴',
+    fontInter: 'Inter (기본)',
+    fontRoboto: 'Roboto',
+    fontOutfit: 'Outfit',
+    fontMono: 'Monospace',
+    shapeStyle: '모서리 모양',
+    shapeRounded: '둥글게 (기본)',
+    shapeSharp: '날카롭게',
+    shapePill: '알약 모양',
     dataSection: '데이터',
     playHistory: '재생 기록',
     savedSongs: '곡 저장됨',

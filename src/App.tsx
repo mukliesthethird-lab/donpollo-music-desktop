@@ -1,4 +1,5 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react';
+import { FastAverageColor } from 'fast-average-color';
 import { Home, Library, Plus, Mic2, Settings, Play, Pause, SkipBack, SkipForward, Repeat, Shuffle, Volume2, VolumeX, ListMusic, UserCircle, ChevronRight, Search, AlertCircle, Headset, Loader2, Maximize2, X, ChevronLeft, ChevronUp, ChevronDown, Music, PanelRight, Trash2, Heart, LogIn, LogOut, Check, FolderPlus, Globe, Headphones, Download, DownloadCloud, Database, WifiOff, CheckCircle2, Paintbrush, Clock, Trophy, Zap, Radio, Timer, Repeat1 } from 'lucide-react';
 import './index.css';
 import './themes.css';
@@ -77,7 +78,7 @@ function App() {
       window.removeEventListener('online', handleOnline);
     };
   }, []);
-  
+
   // ─── Artist Page State ──────────────────────────────────────
   const [activeArtist, setActiveArtist] = useState<string | null>(null);
   const [artistSongs, setArtistSongs] = useState<any[]>([]);
@@ -107,21 +108,21 @@ function App() {
   useEffect(() => {
     let unbind1: any, unbind2: any, unbind3: any, unbind4: any;
     if ((window as any).electronAPI && (window as any).electronAPI.onUpdateAvailable) {
-       unbind1 = (window as any).electronAPI.onUpdateAvailable(() => {
-          setUpdateInfo(prev => ({ ...prev, available: true }));
-          setToastData({ msg: 'Versi baru Don Pollo Music tersedia! Cek Pengaturan.', type: 'success', icon: <DownloadCloud size={20} /> });
-       });
-       unbind2 = (window as any).electronAPI.onDownloadProgress((_e: any, progressObj: any) => {
-          setUpdateInfo(prev => ({ ...prev, downloading: true, progress: progressObj.percent }));
-       });
-       unbind3 = (window as any).electronAPI.onUpdateDownloaded(() => {
-          setUpdateInfo(prev => ({ ...prev, downloading: false, ready: true }));
-          setToastData({ msg: 'Pembaruan siap diinstal!', type: 'success', icon: <CheckCircle2 size={20} /> });
-       });
-       unbind4 = (window as any).electronAPI.onUpdateError((_e: any, err: string) => {
-          setUpdateInfo(prev => ({ ...prev, error: err, downloading: false }));
-          setToastData({ msg: `Update Error: ${err}`, type: 'error', icon: <AlertCircle size={20} /> });
-       });
+      unbind1 = (window as any).electronAPI.onUpdateAvailable(() => {
+        setUpdateInfo(prev => ({ ...prev, available: true }));
+        setToastData({ msg: 'Versi baru Don Pollo Music tersedia! Cek Pengaturan.', type: 'success', icon: <DownloadCloud size={20} /> });
+      });
+      unbind2 = (window as any).electronAPI.onDownloadProgress((_e: any, progressObj: any) => {
+        setUpdateInfo(prev => ({ ...prev, downloading: true, progress: progressObj.percent }));
+      });
+      unbind3 = (window as any).electronAPI.onUpdateDownloaded(() => {
+        setUpdateInfo(prev => ({ ...prev, downloading: false, ready: true }));
+        setToastData({ msg: 'Pembaruan siap diinstal!', type: 'success', icon: <CheckCircle2 size={20} /> });
+      });
+      unbind4 = (window as any).electronAPI.onUpdateError((_e: any, err: string) => {
+        setUpdateInfo(prev => ({ ...prev, error: err, downloading: false }));
+        setToastData({ msg: `Update Error: ${err}`, type: 'error', icon: <AlertCircle size={20} /> });
+      });
     }
     return () => {
       if (unbind1) unbind1();
@@ -206,10 +207,10 @@ function App() {
 
   // ─── Real Data ──────────────────────────────────────────────
   const [playHistory, setPlayHistory] = useState<any[]>(() => {
-    try { 
+    try {
       const user = JSON.parse(localStorage.getItem('donpollo_user') || 'null');
       const suffix = user ? `_${user.id}` : '';
-      return JSON.parse(localStorage.getItem(`donpollo_history${suffix}`) || '[]'); 
+      return JSON.parse(localStorage.getItem(`donpollo_history${suffix}`) || '[]');
     } catch { return []; }
   });
   const [recommendations, setRecommendations] = useState<any[]>([]);
@@ -223,10 +224,10 @@ function App() {
 
   // ─── Playlists ──────────────────────────────────────────────
   const [playlists, setPlaylists] = useState<Playlist[]>(() => {
-    try { 
+    try {
       const user = JSON.parse(localStorage.getItem('donpollo_user') || 'null');
       const suffix = user ? `_${user.id}` : '';
-      return JSON.parse(localStorage.getItem(`donpollo_playlists${suffix}`) || '[]'); 
+      return JSON.parse(localStorage.getItem(`donpollo_playlists${suffix}`) || '[]');
     } catch { return []; }
   });
   const [hitsInternational, setHitsInternational] = useState<any[]>([]);
@@ -235,7 +236,7 @@ function App() {
   const [hitsKorean, setHitsKorean] = useState<any[]>([]);
   const [hitsLatin, setHitsLatin] = useState<any[]>([]);
   const [hitsLocal, setHitsLocal] = useState<any[]>([]);
-  const [localCountry, setLocalCountry] = useState<{name: string, code: string, flag: string} | null>(null);
+  const [localCountry, setLocalCountry] = useState<{ name: string, code: string, flag: string } | null>(null);
   const intScrollRef = useRef<HTMLDivElement>(null);
   const idScrollRef = useRef<HTMLDivElement>(null);
   const jpScrollRef = useRef<HTMLDivElement>(null);
@@ -249,13 +250,13 @@ function App() {
         const fetchItunesRSS = async (countryCode: string) => {
           try {
             const targetUrl = `https://rss.applemarketingtools.com/api/v2/${countryCode}/music/most-played/25/songs.json`;
-            const data = (window as any).electronAPI 
+            const data = (window as any).electronAPI
               ? await (window as any).electronAPI.fetchUrl(targetUrl)
               : await (await fetch(`https://api.allorigins.win/get?url=${encodeURIComponent(targetUrl)}`)).json();
 
             let feedData = data;
             if (data && data.contents) {
-              try { feedData = JSON.parse(data.contents); } catch {}
+              try { feedData = JSON.parse(data.contents); } catch { }
             }
 
             if (feedData && feedData.feed && feedData.feed.results) {
@@ -277,7 +278,7 @@ function App() {
           const songs = await fetchItunesRSS(countryCode);
           if (songs.length > 0) {
             setter(songs);
-            
+
             // Background Mapping for YouTube ID (Sequentially to prevent congestion)
             (async () => {
               for (let idx = 0; idx < songs.length; idx++) {
@@ -287,7 +288,7 @@ function App() {
                   const data = (window as any).electronAPI
                     ? await (window as any).electronAPI.fetchUrl(url)
                     : await (await fetch(url)).json();
-                  
+
                   if (data && data.results) {
                     const validYt = data.results.find((item: any) => item.duration >= 60 && item.duration <= 480);
                     if (validYt) {
@@ -326,10 +327,10 @@ function App() {
               flag: getFlagEmoji(ipData.countryCode)
             });
           }
-        } catch (err) {}
+        } catch (err) { }
 
         loadCategory(localCountryCode, setHitsLocal);
-        loadCategory('us', setHitsInternational); 
+        loadCategory('us', setHitsInternational);
         loadCategory('id', setHitsIndonesia);
         loadCategory('jp', setHitsJapan);
         loadCategory('kr', setHitsKorean);
@@ -354,7 +355,7 @@ function App() {
 
             let feedData = data;
             if (data && data.contents) {
-              try { feedData = JSON.parse(data.contents); } catch {}
+              try { feedData = JSON.parse(data.contents); } catch { }
             }
             if (feedData && feedData.feed && feedData.feed.results) {
               const items = feedData.feed.results.map((p: any) => ({
@@ -372,7 +373,7 @@ function App() {
               setter(items);
               return items;
             }
-          } catch (e) {}
+          } catch (e) { }
           return null;
         };
 
@@ -495,10 +496,10 @@ function App() {
   const [playlistSearchResults, setPlaylistSearchResults] = useState<any[]>([]);
   const [isPlaylistSearching, setIsPlaylistSearching] = useState(false);
   const [likedSongs, setLikedSongs] = useState<any[]>(() => {
-    try { 
+    try {
       const user = JSON.parse(localStorage.getItem('donpollo_user') || 'null');
       const suffix = user ? `_${user.id}` : '';
-      return JSON.parse(localStorage.getItem(`donpollo_liked${suffix}`) || '[]'); 
+      return JSON.parse(localStorage.getItem(`donpollo_liked${suffix}`) || '[]');
     } catch { return []; }
   });
 
@@ -514,10 +515,24 @@ function App() {
 
   // ─── Settings ────────────────────────────────────────────────
   const [settings, setSettings] = useState<any>(() => {
-    try { 
+    try {
       const saved = JSON.parse(localStorage.getItem('donpollo_settings') || '{}');
-      return { theme: 'default', ...saved };
-    } catch { return { theme: 'default' }; }
+      return {
+        theme: 'default',
+        customAccentColor: '#1db954',
+        customBgUrl: '',
+        dynamicBackground: false,
+        customBgMain: '',
+        customBgSidebar: '',
+        customBgCard: '',
+        customTextPrimary: '',
+        customTextSecondary: '',
+        layoutMode: 'left',
+        fontFamily: 'Inter',
+        borderRadiusMode: 'rounded',
+        ...saved
+      };
+    } catch { return { theme: 'default', customAccentColor: '#1db954', customBgUrl: '', dynamicBackground: false }; }
   });
 
   useEffect(() => {
@@ -538,10 +553,133 @@ function App() {
   const [loopMode, setLoopMode] = useState<'off' | 'all' | 'one'>('off');
   const [showLyrics, setShowLyrics] = useState(false);
   const [isWidgetMode, setIsWidgetMode] = useState(false);
+
+  // ─── Custom Theme & Dynamic Background Effect ────────────────
+  useEffect(() => {
+    const root = document.documentElement;
+    const isCustom = settings.theme === 'custom';
+
+    // Font Settings (applied globally regardless of theme)
+    const fontMap: Record<string, string> = {
+      'Inter': "'Inter', sans-serif",
+      'Roboto': "'Roboto', sans-serif",
+      'Outfit': "'Outfit', sans-serif",
+      'monospace': "monospace"
+    };
+    root.style.setProperty('--global-font', fontMap[settings.fontFamily || 'Inter'] || fontMap['Inter']);
+
+    if (settings.borderRadiusMode === 'sharp') root.style.setProperty('--global-radius', '0px');
+    else if (settings.borderRadiusMode === 'pill') root.style.setProperty('--global-radius', '24px');
+    else root.style.setProperty('--global-radius', '8px');
+
+    if (isCustom) {
+      document.body.classList.add('theme-custom');
+      root.style.setProperty('--accent-primary', settings.customAccentColor || '#1db954');
+      root.style.setProperty('--accent-text', '#ffffff');
+
+      if (settings.customBgMain) root.style.setProperty('--bg-main', settings.customBgMain);
+      if (settings.customBgSidebar) root.style.setProperty('--bg-sidebar', settings.customBgSidebar);
+      if (settings.customBgCard) {
+        root.style.setProperty('--bg-card', settings.customBgCard);
+        root.style.setProperty('--bg-card-hover', settings.customBgCard);
+      }
+      if (settings.customTextPrimary) root.style.setProperty('--text-primary', settings.customTextPrimary);
+      if (settings.customTextSecondary) root.style.setProperty('--text-secondary', settings.customTextSecondary);
+
+      if (!settings.dynamicBackground && settings.customBgUrl) {
+        root.style.setProperty('background-image', `url(${settings.customBgUrl})`);
+        root.style.setProperty('background-size', 'cover');
+        root.style.setProperty('background-position', 'center');
+        root.style.setProperty('background-color', 'transparent');
+      } else if (!settings.dynamicBackground) {
+        root.style.removeProperty('background-image');
+        root.style.setProperty('background-color', settings.customBgMain || 'var(--bg-main)');
+      }
+    } else {
+      document.body.classList.remove('theme-custom');
+      root.style.removeProperty('--accent-primary');
+      root.style.removeProperty('--accent-text');
+      root.style.removeProperty('--bg-main');
+      root.style.removeProperty('--bg-sidebar');
+      root.style.removeProperty('--bg-card');
+      root.style.removeProperty('--bg-card-hover');
+      root.style.removeProperty('--text-primary');
+      root.style.removeProperty('--text-secondary');
+      root.style.removeProperty('background-image');
+      root.style.removeProperty('background-color');
+    }
+
+    if (isCustom && settings.dynamicBackground && currentSong?.thumbnail) {
+      const fac = new FastAverageColor();
+      const imgUrl = getCleanThumbnail(currentSong.thumbnail);
+      fac.getColorAsync(imgUrl, { algorithm: 'dominant', crossOrigin: 'anonymous' })
+        .then(color => {
+          root.style.setProperty('background-image', 'none');
+          root.style.setProperty('background-color', color.rgba);
+        })
+        .catch(e => {
+          console.error('Failed to extract color', e);
+        });
+    }
+  }, [
+    settings.theme,
+    settings.customAccentColor,
+    settings.customBgUrl,
+    settings.dynamicBackground,
+    settings.layoutOrder,
+    settings.fontFamily,
+    settings.borderRadiusMode,
+    settings.customBgMain,
+    settings.customBgSidebar,
+    settings.customBgCard,
+    settings.customTextPrimary,
+    settings.customTextSecondary,
+    currentSong?.thumbnail
+  ]);
   const [isRightSidebarOpen, setIsRightSidebarOpen] = useState(true);
 
+  const wasClosedByResize = useRef(false);
+
+  useEffect(() => {
+    let lastWidth = window.innerWidth;
+    const handleResize = () => {
+      const currentWidth = window.innerWidth;
+
+      if (currentWidth <= 1100 && lastWidth > 1100) {
+        setIsRightSidebarOpen((prev) => {
+          if (prev) {
+            wasClosedByResize.current = true;
+            return false;
+          }
+          return prev;
+        });
+      } else if (currentWidth > 1100 && lastWidth <= 1100) {
+        if (wasClosedByResize.current) {
+          setIsRightSidebarOpen(true);
+          wasClosedByResize.current = false;
+        }
+      }
+
+      lastWidth = currentWidth;
+    };
+
+    window.addEventListener('resize', handleResize);
+    // Cek saat pertama kali dimuat
+    if (window.innerWidth <= 1100) {
+      setIsRightSidebarOpen((prev) => {
+        if (prev) {
+          wasClosedByResize.current = true;
+          return false;
+        }
+        return prev;
+      });
+    }
+    return () => window.removeEventListener('resize', handleResize);
+  }, []);
+
+
   const [userStatus, setUserStatus] = useState<'online' | 'idle' | 'dnd'>(localStorage.getItem('donpollo_status') as any || 'online');
-  const [joinRequests, setJoinRequests] = useState<{incoming: any[], outgoing: any[]}>({ incoming: [], outgoing: [] });
+  const [joinRequests, setJoinRequests] = useState<{ incoming: any[], outgoing: any[] }>({ incoming: [], outgoing: [] });
   const [showProfileStats, setShowProfileStats] = useState(false);
   const [totalListenSeconds, setTotalListenSeconds] = useState<number>(() => {
     try { return parseInt(localStorage.getItem('donpollo_listen_seconds') || '0', 10); } catch { return 0; }
@@ -560,7 +698,7 @@ function App() {
     const handleProgress = (_event: any, _data: { songId: string, progress: number, songData: any }) => {
       // setActiveDownloads(prev => ({ ...prev, [data.songId]: { progress: data.progress, songData: data.songData } }));
     };
-    
+
     const handleComplete = (_event: any, songData: any) => {
       /* setActiveDownloads(prev => {
         const next = { ...prev };
@@ -625,7 +763,7 @@ function App() {
       const ctx = canvas.getContext('2d');
       if (!ctx) return '';
       ctx.fillStyle = 'white';
-      
+
       if (type === 'play') {
         ctx.beginPath(); ctx.moveTo(8, 6); ctx.lineTo(26, 16); ctx.lineTo(8, 26); ctx.fill();
       } else if (type === 'pause') {
@@ -675,7 +813,7 @@ function App() {
     if (queue.length > 0 && currentIndex >= 0 && currentIndex < queue.length - 1) {
       const nextSong = queue[currentIndex + 1];
       if (!nextSong) return;
-      
+
       const prefetch = async () => {
         if ((window as any).electronAPI?.checkCache) {
           const isCached = await (window as any).electronAPI.checkCache(nextSong.id);
@@ -687,7 +825,7 @@ function App() {
         }
       };
       // Delay sedikit agar tidak mengganggu proses load lagu utama
-      const timer = setTimeout(prefetch, 8000); 
+      const timer = setTimeout(prefetch, 8000);
       return () => clearTimeout(timer);
     }
   }, [currentIndex, queue]);
@@ -695,7 +833,7 @@ function App() {
   // ─── Listen Along & Presence Sync ───
   useEffect(() => {
     if (!discordUser) return;
-    
+
     const syncPresence = async () => {
       if ((window as any).electronAPI) {
         try {
@@ -725,7 +863,7 @@ function App() {
           if (reqs.outgoing && reqs.outgoing.length > 0) {
             const allAccepted = reqs.outgoing.filter((r: any) => r.status === 'accepted');
             const allRejected = reqs.outgoing.filter((r: any) => r.status === 'rejected');
-            
+
             if (allAccepted.length > 0) {
               if (!isGuest) {
                 setActivePartyId(allAccepted[0].hostId);
@@ -736,7 +874,7 @@ function App() {
                 await (window as any).electronAPI.respondJoinRequest(req.id, 'consumed');
               }
             }
-            
+
             if (allRejected.length > 0) {
               showToast(t('joinRequestRejected'), 'error');
               for (const req of allRejected) {
@@ -750,10 +888,10 @@ function App() {
             const queueReqs = await (window as any).electronAPI.pollQueueRequests(discordUser.id);
             if (queueReqs && queueReqs.length > 0) {
               const newSongs = queueReqs.map((r: any) => r.songData);
-              
+
               setQueue((prevQueue: any[]) => [...prevQueue, ...newSongs]);
               setOriginalQueue((prevQueue: any[]) => [...prevQueue, ...newSongs]);
-              
+
               for (const req of queueReqs) {
                 showToast(`${req.guestName} menambahkan lagu ke antrean!`, 'success');
                 (window as any).electronAPI.respondQueueRequest(req.id, 'consumed');
@@ -791,6 +929,10 @@ function App() {
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const fadeAudioRef = useRef<HTMLAudioElement | null>(null);
   const isCrossfadingRef = useRef(false);
+  const currentSongRef = useRef<any>(null);
+  currentSongRef.current = currentSong;
+  const executePlayRef = useRef<any>(null);
+  const lastPausedAtRef = useRef<number>(0);
   const audioContextRef = useRef<AudioContext | null>(null);
   const sourceNodeRef = useRef<MediaElementAudioSourceNode | null>(null);
   const filtersRef = useRef<BiquadFilterNode[]>([]);
@@ -864,7 +1006,7 @@ function App() {
 
   useEffect(() => {
     const suffix = discordUser ? `_${discordUser.id}` : '';
-    
+
     try {
       const hist = localStorage.getItem(`donpollo_history${suffix}`);
       setPlayHistory(hist ? JSON.parse(hist) : []);
@@ -874,7 +1016,7 @@ function App() {
       const liked = localStorage.getItem(`donpollo_liked${suffix}`);
       setLikedSongs(liked ? JSON.parse(liked) : []);
     } catch { setLikedSongs([]); }
-    
+
     // Only load playlists from localStorage for guest mode (no DB connection).
     // When logged in with electronAPI, the DB fetch effect (above) handles loading.
     if (!(window as any).electronAPI || !discordUser) {
@@ -883,7 +1025,7 @@ function App() {
         setPlaylists(pl ? JSON.parse(pl) : []);
       } catch { setPlaylists([]); }
     }
-    
+
   }, [discordUser]);
 
   useEffect(() => {
@@ -940,12 +1082,12 @@ function App() {
         ];
         const responses = await Promise.all(queries.map(q => fetch(`${API_BASE_URL}/api/search?q=${encodeURIComponent(q)}`).catch(() => null)));
         const dataArrays = await Promise.all(responses.filter(r => r !== null).map((r: any) => r.json().catch(() => ({}))));
-        
+
         let combined: any[] = [];
         dataArrays.forEach(data => {
           if (data && data.results) combined = [...combined, ...data.results];
         });
-        
+
         // Remove duplicates by id
         const unique = combined.filter((item, index, self) => index === self.findIndex((t) => t.id === item.id));
         setRecommendations(unique.slice(0, 25));
@@ -990,7 +1132,12 @@ function App() {
     };
     const handleError = () => {
       if (audioRef.current !== audio) return;
-      setIsPlaying(false);
+      if (audio.error && currentSongRef.current && executePlayRef.current) {
+         console.warn("Audio error, attempting auto-recovery...", audio.error);
+         executePlayRef.current(currentSongRef.current, audio.currentTime);
+      } else {
+         setIsPlaying(false);
+      }
     };
     audio.addEventListener('timeupdate', handleTimeUpdate);
     audio.addEventListener('ended', handleEnded);
@@ -1011,7 +1158,7 @@ function App() {
     audio.volume = isMuted ? 0 : volume;
     audio.loop = loopMode === 'one';
     audio.dataset.isPodcast = isPodcast ? 'true' : 'false';
-    
+
     audioRef.current = audio;
     if (!isPodcast) {
       setupAudioContext(audio);
@@ -1041,15 +1188,15 @@ function App() {
     const interval = setInterval(() => {
       const audio = audioRef.current;
       if (!audio || isGuest || isCrossfadingRef.current || queue.length <= currentIndex + 1) return;
-      
+
       const cfDurStr = localStorage.getItem('donpollo_crossfade');
       const cfDuration = cfDurStr ? parseInt(cfDurStr) : 0;
-      
+
       if (cfDuration > 0 && audio.duration > 0 && audio.currentTime >= audio.duration - cfDuration) {
         isCrossfadingRef.current = true;
         const oldAudio = audio;
         fadeAudioRef.current = oldAudio;
-        
+
         const fadeStep = oldAudio.volume / (cfDuration * 10);
         const fadeOutInt = setInterval(() => {
           if (oldAudio.volume - fadeStep > 0) {
@@ -1109,8 +1256,8 @@ function App() {
     const api = (window as any).electronAPI;
     if (api && api.onMiniPlayerMode) {
       unsub = api.onMiniPlayerMode((_event: any, mode: boolean) => {
-         setIsWidgetMode(mode);
-         if (mode) setActivePage('home');
+        setIsWidgetMode(mode);
+        if (mode) setActivePage('home');
       });
     }
     return () => {
@@ -1286,7 +1433,7 @@ function App() {
       if (!res.ok) throw new Error('Failed to connect to backend');
       const data = await res.json();
       if (data.error) throw new Error(data.error);
-      
+
       const newPlaylist: Playlist = {
         id: `playlist-${Date.now()}`,
         name: data.name || 'Imported Playlist',
@@ -1295,7 +1442,7 @@ function App() {
         createdAt: Date.now(),
         discordId: discordUser?.id || '',
       };
-      
+
       if ((window as any).electronAPI) await (window as any).electronAPI.savePlaylist(newPlaylist);
       setPlaylists((prev: any) => [...prev, newPlaylist]);
       showToast(`"${newPlaylist.name}" ${t('toastImportSuccess')}`);
@@ -1457,15 +1604,15 @@ function App() {
           const res = await fetch(`https://lrclib.net/api/search?q=${q}`);
           const resData = await res.json();
           if (resData && resData.length > 0) {
-             data = resData;
-             break;
+            data = resData;
+            break;
           }
-        } catch (e) {}
+        } catch (e) { }
       }
 
       if (data && data.length > 0) {
         const syncedMatches = data.filter((item: any) => item.syncedLyrics);
-        
+
         // 1. Filter by Artist Name
         let artistMatches = syncedMatches.filter((item: any) => {
           if (!item.artistName) return false;
@@ -1494,12 +1641,12 @@ function App() {
             if (diff > 4 && diff < 30) setLyricsOffset(diff);
           }
         }
-        
+
         if (bestMatch && bestMatch.syncedLyrics) {
           const parsed = parseLRC(bestMatch.syncedLyrics);
           if (parsed) {
             setLyricsData(parsed);
-            
+
             // Auto Romanization
             setTimeout(async () => {
               try {
@@ -1507,7 +1654,7 @@ function App() {
                 let lang: 'ko' | 'ja' | null = null;
                 if (/[\uac00-\ud7af\u1100-\u11ff\u3130-\u318f]/.test(textSample)) lang = 'ko';
                 else if (/[\u3040-\u30ff\u3400-\u4dbf\u4e00-\u9fff]/.test(textSample)) lang = 'ja';
-                
+
                 if (lang && (window as any).electronAPI) {
                   const combinedText = parsed.map((p: any) => p.text || '').join('\n');
                   const romText = await (window as any).electronAPI.romanizeLyrics(combinedText, lang);
@@ -1544,7 +1691,7 @@ function App() {
 
   // --- Title Similarity Helper ---
   const titleSimilarity = (a: string, b: string): number => {
-    const STOP = new Set(['the','a','an','and','or','of','in','on','is','it','to','for','ft','feat','featuring','episode','eps','ep','with','by','part','pt','vol','vs']);
+    const STOP = new Set(['the', 'a', 'an', 'and', 'or', 'of', 'in', 'on', 'is', 'it', 'to', 'for', 'ft', 'feat', 'featuring', 'episode', 'eps', 'ep', 'with', 'by', 'part', 'pt', 'vol', 'vs']);
     const norm = (s: string) => s.toLowerCase()
       .replace(/[^a-z0-9\s]/g, ' ')
       .split(/\s+/)
@@ -1591,7 +1738,7 @@ function App() {
           let resData = (window as any).electronAPI
             ? await (window as any).electronAPI.fetchUrl(url)
             : await (await fetch(url)).json();
-            
+
           if (resData && resData.results && resData.results.length > 0) {
             let validYt: any;
             if (song.isPodcast) {
@@ -1614,7 +1761,7 @@ function App() {
             if (validYt) {
               song.id = validYt.id;
               song.duration = validYt.duration;
-              
+
               // Update queue dynamically to fix future plays
               setQueue(prev => prev.map(q => q.title === song.title ? { ...q, id: song.id, duration: song.duration } : q));
               setOriginalQueue(prev => prev.map(q => q.title === song.title ? { ...q, id: song.id, duration: song.duration } : q));
@@ -1637,12 +1784,12 @@ function App() {
 
       setLyricsData(null);
       setLyricsOffset(0);
-      
+
       // 1. Update UI langsung agar terasa lebih cepat
       setCurrentSong(song);
       setDuration(song.duration || 0);
       setIsPlaying(true);
-      
+
       // 2. Fetch lyrics berjalan di background
       fetchLyrics(song.title, song.artist, song.duration || 0);
 
@@ -1654,19 +1801,19 @@ function App() {
         if (song.isPodcast && song.audioUrl) {
           audioRef.current.src = song.audioUrl;
           audioRef.current.load();
-          audioRef.current.play().catch(() => {});
+          audioRef.current.play().catch(() => { });
           return;
         }
 
         let streamUrl = `${API_BASE_URL}/api/stream?id=${song.id}`;
         let isCached = false;
-        
+
         if ((window as any).electronAPI?.checkCache) {
-           isCached = await (window as any).electronAPI.checkCache(song.id);
+          isCached = await (window as any).electronAPI.checkCache(song.id);
         }
 
         if ((window as any).electronAPI?.clearTempCache) {
-           (window as any).electronAPI.clearTempCache(song.id);
+          (window as any).electronAPI.clearTempCache(song.id);
         }
 
         const cacheMode = settings.cacheMode || 'smart';
@@ -1678,16 +1825,16 @@ function App() {
           audioRef.current.src = streamUrl;
           if (cacheMode !== 'stream' && !forceStream) {
             if ((window as any).electronAPI?.cacheAudio) {
-               const isTemp = cacheMode === 'temp';
-               (window as any).electronAPI.cacheAudio(song, streamUrl, true, isTemp);
+              const isTemp = cacheMode === 'temp';
+              (window as any).electronAPI.cacheAudio(song, streamUrl, true, isTemp);
             }
           }
         }
-        
+
         if (startTime !== undefined) {
           audioRef.current.currentTime = startTime;
         }
-        
+
         audioRef.current.play().catch(async (err) => {
           console.error("PLAY ERROR:", err.name, err.message, err);
           if (err.name === 'AbortError') return;
@@ -1721,7 +1868,7 @@ function App() {
       const hostUser = onlineUsers.find(u => u.discordId === activePartyId);
       if (hostUser && hostUser.currentSong) {
         const hs = hostUser.currentSong;
-        
+
         // Calculate exact time based on elapsed time since host reported it
         const elapsed = hs.timestamp ? (Date.now() - hs.timestamp) / 1000 : 0;
         let targetTime = (hs.currentTime || 0);
@@ -1733,7 +1880,7 @@ function App() {
           // Abaikan broadcast host jika host masih tertinggal (lagging) dari eager advance kita
           const lastAdvance = (window as any).lastGuestAdvance || 0;
           const isStaleHost = (Date.now() - lastAdvance < 15000) && queue[currentIndex - 1]?.id === hs.id;
-          
+
           if (!isStaleHost) {
             executePlay(hs, targetTime);
           }
@@ -1741,7 +1888,7 @@ function App() {
           // If already playing the same song, check if we need to sync time or play/pause state
           if (audioRef.current) {
             if (hs.isPlaying && audioRef.current.paused) {
-              audioRef.current.play().catch(()=>{});
+              audioRef.current.play().catch(() => { });
             } else if (!hs.isPlaying && !audioRef.current.paused) {
               audioRef.current.pause();
             }
@@ -1752,11 +1899,11 @@ function App() {
             }
           }
         }
-        
+
         // Sync queue for guest
         if (hostUser.queue && hostUser.queue.length > 0) {
-           setQueue(hostUser.queue);
-           setOriginalQueue(hostUser.queue);
+          setQueue(hostUser.queue);
+          setOriginalQueue(hostUser.queue);
         }
       }
     }
@@ -1774,11 +1921,11 @@ function App() {
   const startPlayingFromList = async (list: any[], startIndex: number) => {
     if (!list || list.length === 0) return;
     let song = list[startIndex];
-    
+
     if (isGuest && activePartyId) {
-       await (window as any).electronAPI.sendQueueRequest(activePartyId, discordUser?.id, discordUser?.global_name || discordUser?.username, song);
-       showToast(`Berhasil meminta Host untuk menambahkan "${song.title}" ke antrean!`, 'success');
-       return;
+      await (window as any).electronAPI.sendQueueRequest(activePartyId, discordUser?.id, discordUser?.global_name || discordUser?.username, song);
+      showToast(`Berhasil meminta Host untuk menambahkan "${song.title}" ke antrean!`, 'success');
+      return;
     }
 
     setQueue(list);
@@ -1802,7 +1949,7 @@ function App() {
       if (isGuest) {
         (window as any).lastGuestAdvance = Date.now();
       }
-      
+
       // On-the-fly fetch for next song if id is null
       let nextSong = queue[currentIndex + 1];
       setCurrentIndex(currentIndex + 1);
@@ -1828,9 +1975,9 @@ function App() {
   const playSingleSong = async (song: any) => {
     let finalSong = song;
     if (isGuest && activePartyId) {
-       await (window as any).electronAPI.sendQueueRequest(activePartyId, discordUser?.id, discordUser?.global_name || discordUser?.username, finalSong);
-       showToast(`Berhasil meminta Host untuk menambahkan "${finalSong.title}" ke antrean!`, 'success');
-       return;
+      await (window as any).electronAPI.sendQueueRequest(activePartyId, discordUser?.id, discordUser?.global_name || discordUser?.username, finalSong);
+      showToast(`Berhasil meminta Host untuk menambahkan "${finalSong.title}" ke antrean!`, 'success');
+      return;
     }
 
     setQueue([finalSong]);
@@ -1850,6 +1997,8 @@ function App() {
     else if (currentIndex > 0) { setCurrentIndex(currentIndex - 1); executePlay(queue[currentIndex - 1]); }
   };
 
+  executePlayRef.current = executePlay;
+
   const togglePlay = () => {
     if (audioContextRef.current && audioContextRef.current.state === 'suspended') {
       audioContextRef.current.resume();
@@ -1857,20 +2006,34 @@ function App() {
     if (audioRef.current) {
       if (isPlaying) {
         audioRef.current.pause();
+        lastPausedAtRef.current = Date.now();
         if (fadeAudioRef.current) fadeAudioRef.current.pause();
       } else {
+        const timeSincePause = Date.now() - (lastPausedAtRef.current || Date.now());
+        if (lastPausedAtRef.current > 0 && timeSincePause > 120000) {
+            console.log("Paused for too long, forcing fresh stream connection...");
+            const currentSrc = audioRef.current.src;
+            const currentTime = audioRef.current.currentTime;
+            
+            // Clean up old cache busters so URL doesn't grow infinitely
+            const cleanSrc = currentSrc.split('&cb=')[0].split('?cb=')[0];
+            const separator = cleanSrc.includes('?') ? '&' : '?';
+            audioRef.current.src = `${cleanSrc}${separator}cb=${Date.now()}`;
+            
+            audioRef.current.load();
+            audioRef.current.currentTime = currentTime;
+            audioRef.current.play().catch(e => console.error("Recovery play failed", e));
+            lastPausedAtRef.current = 0;
+            setIsPlaying(true);
+            return;
+        }
+
         const playPromise = audioRef.current.play();
         if (playPromise !== undefined) {
           playPromise.catch(err => {
             console.error("Resume play failed", err);
-            // Recover by reloading the stream
-            if (audioRef.current) {
-              const currentSrc = audioRef.current.src;
-              const currentTime = audioRef.current.currentTime;
-              audioRef.current.src = currentSrc;
-              audioRef.current.load();
-              audioRef.current.currentTime = currentTime;
-              audioRef.current.play().catch(e => console.error("Recovery failed", e));
+            if (audioRef.current && currentSongRef.current && executePlayRef.current) {
+              executePlayRef.current(currentSongRef.current, audioRef.current.currentTime);
             }
           });
         }
@@ -2009,10 +2172,10 @@ function App() {
         // RSS Fallback: Use iTunes episode search (old method)
         try {
           const targetUrl = `https://itunes.apple.com/search?term=${encodeURIComponent(artist)}&media=podcast&entity=podcastEpisode&limit=30`;
-          const itunesData = (window as any).electronAPI 
+          const itunesData = (window as any).electronAPI
             ? await (window as any).electronAPI.fetchUrl(targetUrl)
             : await (await fetch(`https://api.allorigins.win/raw?url=${encodeURIComponent(targetUrl)}`)).json();
-          
+
           if (itunesData.results && itunesData.results.length > 0) {
             const tracks = itunesData.results;
             if (filter === 'newest') {
@@ -2071,25 +2234,25 @@ function App() {
       // ============================================================
       try {
         const targetUrl = `https://itunes.apple.com/search?term=${encodeURIComponent(artist)}&entity=song&limit=100`;
-        const itunesData = (window as any).electronAPI 
+        const itunesData = (window as any).electronAPI
           ? await (window as any).electronAPI.fetchUrl(targetUrl)
           : await (await fetch(`https://api.allorigins.win/raw?url=${encodeURIComponent(targetUrl)}`)).json();
-        
+
         if (itunesData.results && itunesData.results.length > 0) {
           let tracks = itunesData.results;
           tracks = tracks.filter((t: any) => t.artistName && t.artistName.toLowerCase().includes(artist.toLowerCase()));
-          
+
           if (filter === 'newest') {
             tracks.sort((a: any, b: any) => new Date(b.releaseDate).getTime() - new Date(a.releaseDate).getTime());
           }
-          
+
           const uniqueTracks = new Map<string, any>();
           for (const t of tracks) {
             if (!uniqueTracks.has(t.trackName)) uniqueTracks.set(t.trackName, t);
           }
-          
+
           const topTracks = Array.from(uniqueTracks.values()).slice(0, 30);
-          
+
           const initialSongs = topTracks.map((t: any) => ({
             id: null,
             title: t.trackName,
@@ -2099,10 +2262,10 @@ function App() {
             originalQuery: `${t.artistName} ${t.trackName} official audio`,
             isPodcast: false
           }));
-          
+
           setArtistSongs(initialSongs);
           setIsArtistLoading(false);
-          
+
           // Background YouTube mapping for music
           (async () => {
             for (let idx = 0; idx < initialSongs.length; idx++) {
@@ -2126,7 +2289,7 @@ function App() {
               await new Promise(resolve => setTimeout(resolve, 300));
             }
           })();
-          
+
           return;
         }
       } catch (err) {
@@ -2135,7 +2298,7 @@ function App() {
 
       // Fallback if iTunes fails
       if (queries.length === 0) {
-        queries = filter === 'popular' 
+        queries = filter === 'popular'
           ? [`${artist} popular songs`, `${artist} hit songs`, `${artist} best songs`, `${artist} top hits`]
           : [`${artist} newest songs 2024`, `${artist} new release`, `${artist} comeback`, `${artist} latest mv`];
       }
@@ -2149,13 +2312,13 @@ function App() {
           .then(data => {
             if (data.results) {
               const validSong = data.results.find((item: any) => item.duration >= 60 && item.duration <= 480);
-              
+
               if (validSong) {
                 if (!firstBatchLoaded) {
                   setIsArtistLoading(false);
                   firstBatchLoaded = true;
                 }
-                
+
                 setArtistSongs(prev => {
                   if (!prev.find(s => s.id === validSong.id)) {
                     return [...prev, validSong].slice(0, 30);
@@ -2197,34 +2360,34 @@ function App() {
     <div className="page-content library-mode" style={{ minHeight: '100%', display: 'flex', flexDirection: 'column', background: 'var(--bg-primary)' }}>
       <div style={{ padding: '32px 32px 16px 32px' }}>
         <h1 style={{ fontSize: '28px', fontWeight: '800', marginBottom: '24px', color: 'var(--text-primary)' }}>{t('myLibrary')}</h1>
-        
+
         {/* Dashboard Cards */}
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(250px, 1fr))', gap: '16px', marginBottom: '32px' }}>
-          
+
           <div style={{ background: 'var(--bg-card)', padding: '20px', borderRadius: '12px', border: '1px solid var(--border-color)', display: 'flex', flexDirection: 'column', gap: '12px' }}>
-             <div style={{ display: 'flex', alignItems: 'center', gap: '8px', color: '#ff6b9d' }}>
-               <Heart size={20} fill="currentColor" />
-               <h3 style={{ fontSize: '12px', fontWeight: '700', letterSpacing: '1px', textTransform: 'uppercase' }}>{t('likedSongs')}</h3>
-             </div>
-             <div style={{ fontSize: '36px', fontWeight: '800' }}>{likedSongs.length} <span style={{ fontSize: '16px', color: 'var(--text-secondary)', fontWeight: '600' }}>Lagu</span></div>
-             <div style={{ fontSize: '12px', color: 'var(--text-secondary)' }}>{t('favoriteCollectionDesc')}</div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', color: '#ff6b9d' }}>
+              <Heart size={20} fill="currentColor" />
+              <h3 style={{ fontSize: '12px', fontWeight: '700', letterSpacing: '1px', textTransform: 'uppercase' }}>{t('likedSongs')}</h3>
+            </div>
+            <div style={{ fontSize: '36px', fontWeight: '800' }}>{likedSongs.length} <span style={{ fontSize: '16px', color: 'var(--text-secondary)', fontWeight: '600' }}>Lagu</span></div>
+            <div style={{ fontSize: '12px', color: 'var(--text-secondary)' }}>{t('favoriteCollectionDesc')}</div>
           </div>
-          
+
           <div style={{ background: 'var(--bg-card)', padding: '20px', borderRadius: '12px', border: '1px solid var(--border-color)', display: 'flex', flexDirection: 'column', gap: '12px' }}>
-             <div style={{ display: 'flex', alignItems: 'center', gap: '8px', color: 'var(--text-secondary)' }}>
-               <ListMusic size={20} />
-               <h3 style={{ fontSize: '12px', fontWeight: '700', letterSpacing: '1px', textTransform: 'uppercase' }}>{t('recentlyPlayed')}</h3>
-             </div>
-             <div style={{ fontSize: '36px', fontWeight: '800' }}>{playHistory.length} <span style={{fontSize: '16px', color: 'var(--text-secondary)', fontWeight: '600'}}>Lagu</span></div>
-             <div style={{ fontSize: '12px', color: 'var(--text-secondary)' }}>{t('recentPlaybackDesc')}</div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', color: 'var(--text-secondary)' }}>
+              <ListMusic size={20} />
+              <h3 style={{ fontSize: '12px', fontWeight: '700', letterSpacing: '1px', textTransform: 'uppercase' }}>{t('recentlyPlayed')}</h3>
+            </div>
+            <div style={{ fontSize: '36px', fontWeight: '800' }}>{playHistory.length} <span style={{ fontSize: '16px', color: 'var(--text-secondary)', fontWeight: '600' }}>Lagu</span></div>
+            <div style={{ fontSize: '12px', color: 'var(--text-secondary)' }}>{t('recentPlaybackDesc')}</div>
           </div>
-          
+
           <div style={{ background: 'linear-gradient(135deg, #ff6b9d, #ff4785)', padding: '20px', borderRadius: '12px', display: 'flex', flexDirection: 'column', gap: '8px', justifyContent: 'center', position: 'relative', overflow: 'hidden' }}>
-             <div style={{ position: 'absolute', right: '-15px', bottom: '-15px', opacity: 0.15 }}>
-               <Headphones size={100} />
-             </div>
-             <h3 style={{ fontSize: '16px', fontWeight: '800', color: '#fff', zIndex: 1, letterSpacing: '0.5px' }}>{t('myPersonalCollection').split('\n').map((line, i) => <span key={i}>{line}{i === 0 ? <br/> : ''}</span>)}</h3>
-             <p style={{ fontSize: '12px', color: 'rgba(255,255,255,0.85)', zIndex: 1, margin: 0, marginTop: '4px', lineHeight: '1.4' }}>{t('personalCollectionDesc')}</p>
+            <div style={{ position: 'absolute', right: '-15px', bottom: '-15px', opacity: 0.15 }}>
+              <Headphones size={100} />
+            </div>
+            <h3 style={{ fontSize: '16px', fontWeight: '800', color: '#fff', zIndex: 1, letterSpacing: '0.5px' }}>{t('myPersonalCollection').split('\n').map((line, i) => <span key={i}>{line}{i === 0 ? <br /> : ''}</span>)}</h3>
+            <p style={{ fontSize: '12px', color: 'rgba(255,255,255,0.85)', zIndex: 1, margin: 0, marginTop: '4px', lineHeight: '1.4' }}>{t('personalCollectionDesc')}</p>
           </div>
         </div>
 
@@ -2236,7 +2399,7 @@ function App() {
           </div>
         ) : (
           <div style={{ display: 'flex', flexDirection: 'column', gap: '32px' }}>
-            
+
             {/* Liked Songs List */}
             {likedSongs.length > 0 && (
               <section>
@@ -2244,7 +2407,7 @@ function App() {
                   <h2 style={{ fontSize: '18px', fontWeight: '700', color: 'var(--text-primary)', display: 'flex', alignItems: 'center', gap: '8px' }}><Heart size={20} fill="#ff6b9d" color="#ff6b9d" /> {t('likedSongs')}</h2>
                   <span style={{ fontSize: '12px', color: 'var(--accent-primary)', cursor: 'pointer', fontWeight: '600' }} onClick={() => startPlayingFromList(likedSongs, 0)}>{t('playAll')}</span>
                 </div>
-                
+
                 <div style={{ background: 'var(--bg-card)', borderRadius: '12px', border: '1px solid var(--border-color)', overflow: 'hidden' }}>
                   <div style={{ display: 'grid', gridTemplateColumns: '40px 1fr 100px 80px', padding: '16px 24px', borderBottom: '1px solid var(--border-color)', fontSize: '11px', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '1px', fontWeight: '700' }}>
                     <span>#</span>
@@ -2252,39 +2415,41 @@ function App() {
                     <span>{t('duration')}</span>
                     <span></span>
                   </div>
-                  
+
                   <div style={{ display: 'flex', flexDirection: 'column' }}>
-                     {likedSongs.map((song, i) => (
-                       <div key={i} className={`offline-row ${currentSong?.id === song.id ? 'active-row' : ''}`} style={{ display: 'grid', gridTemplateColumns: '40px 1fr 100px 80px', padding: '12px 24px', alignItems: 'center', transition: 'background 0.2s', cursor: 'pointer', borderBottom: i === likedSongs.length - 1 ? 'none' : '1px solid rgba(255,255,255,0.03)' }} onClick={() => startPlayingFromList(likedSongs, i)}>
-                          <span style={{ color: currentSong?.id === song.id ? 'var(--accent-primary)' : 'var(--text-muted)', fontSize: '13px', fontWeight: '600' }}>{currentSong?.id === song.id ? <Play size={14} fill="currentColor" /> : String(i + 1).padStart(2, '0')}</span>
-                          <div style={{ display: 'flex', gap: '16px', alignItems: 'center' }}>
-                             <div style={{ position: 'relative', width: '40px', height: '40px', borderRadius: '6px', overflow: 'hidden', flexShrink: 0 }}>
-                               <img src={getCleanThumbnail(song.thumbnail)} style={{ width: '100%', height: '100%', objectFit: 'cover' }} alt="Cover" />
-                               <div className="play-overlay" style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(0,0,0,0.6)', display: 'flex', alignItems: 'center', justifyContent: 'center', opacity: 0, transition: 'opacity 0.2s' }}>
-                                 <Play fill="currentColor" size={16} />
-                               </div>
-                             </div>
-                             <div style={{ display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
-                                <span style={{ fontWeight: '600', fontSize: '14px', color: currentSong?.id === song.id ? 'var(--accent-primary)' : 'var(--text-primary)', whiteSpace: 'nowrap', textOverflow: 'ellipsis', overflow: 'hidden', display: 'flex', alignItems: 'center', gap: '6px' }}>
-                                  {song.title}
-                                  {downloadedSongs.some(ds => ds.id === song.id) && <span title="Tersedia Offline"><CheckCircle2 size={14} color="#23a559" /></span>}
-                                </span>
-                                <span style={{ fontSize: '12px', color: 'var(--text-secondary)' }}>{song.artist}</span>
-                             </div>
+                    {likedSongs.map((song, i) => (
+                      <div key={i} className={`offline-row ${currentSong?.id === song.id ? 'active-row' : ''}`} style={{ display: 'grid', gridTemplateColumns: '40px 1fr 100px 80px', padding: '12px 24px', alignItems: 'center', transition: 'background 0.2s', cursor: 'pointer', borderBottom: i === likedSongs.length - 1 ? 'none' : '1px solid rgba(255,255,255,0.03)' }} onClick={() => startPlayingFromList(likedSongs, i)}>
+                        <span style={{ color: currentSong?.id === song.id ? 'var(--accent-primary)' : 'var(--text-muted)', fontSize: '13px', fontWeight: '600' }}>{currentSong?.id === song.id ? <Play size={14} fill="currentColor" /> : String(i + 1).padStart(2, '0')}</span>
+                        <div style={{ display: 'flex', gap: '16px', alignItems: 'center', minWidth: 0 }}>
+                          <div style={{ position: 'relative', width: '40px', height: '40px', borderRadius: '6px', overflow: 'hidden', flexShrink: 0 }}>
+                            <img src={getCleanThumbnail(song.thumbnail)} style={{ width: '100%', height: '100%', objectFit: 'cover' }} alt="Cover" />
+                            <div className="play-overlay" style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(0,0,0,0.6)', display: 'flex', alignItems: 'center', justifyContent: 'center', opacity: 0, transition: 'opacity 0.2s' }}>
+                              <Play fill="currentColor" size={16} />
+                            </div>
                           </div>
-                          <div>
-                            <span style={{ fontSize: '13px', color: 'var(--text-secondary)' }}>{formatTime(song.duration)}</span>
+                          <div style={{ display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '6px', overflow: 'hidden' }}>
+                              <span style={{ fontWeight: '600', fontSize: '14px', color: currentSong?.id === song.id ? 'var(--accent-primary)' : 'var(--text-primary)', whiteSpace: 'nowrap', textOverflow: 'ellipsis', overflow: 'hidden', display: 'block' }}>
+                                {song.title}
+                              </span>
+                              {downloadedSongs.some(ds => ds.id === song.id) && <span title="Tersedia Offline" style={{ flexShrink: 0 }}><CheckCircle2 size={14} color="#23a559" /></span>}
+                            </div>
+                            <span style={{ fontSize: '12px', color: 'var(--text-secondary)', whiteSpace: 'nowrap', textOverflow: 'ellipsis', overflow: 'hidden', display: 'block' }}>{song.artist}</span>
                           </div>
-                          <div style={{ display: 'flex', gap: '8px', justifyContent: 'flex-end' }}>
-                            <button className="btn-icon" onClick={(e) => { e.stopPropagation(); toggleLike(song); }} style={{ color: '#ff6b9d' }}>
-                              <Heart size={16} fill="currentColor" />
-                            </button>
-                            <button className="btn-icon" onClick={(e) => { e.stopPropagation(); setAddToPlaylistSong(song); }} style={{ color: 'var(--text-secondary)' }}>
-                              <FolderPlus size={16} />
-                            </button>
-                          </div>
-                       </div>
-                     ))}
+                        </div>
+                        <div>
+                          <span style={{ fontSize: '13px', color: 'var(--text-secondary)' }}>{formatTime(song.duration)}</span>
+                        </div>
+                        <div style={{ display: 'flex', gap: '8px', justifyContent: 'flex-end' }}>
+                          <button className="btn-icon" onClick={(e) => { e.stopPropagation(); toggleLike(song); }} style={{ color: '#ff6b9d' }}>
+                            <Heart size={16} fill="currentColor" />
+                          </button>
+                          <button className="btn-icon" onClick={(e) => { e.stopPropagation(); setAddToPlaylistSong(song); }} style={{ color: 'var(--text-secondary)' }}>
+                            <FolderPlus size={16} />
+                          </button>
+                        </div>
+                      </div>
+                    ))}
                   </div>
                 </div>
               </section>
@@ -2297,7 +2462,7 @@ function App() {
                   <h2 style={{ fontSize: '18px', fontWeight: '700', color: 'var(--text-primary)' }}>{t('recentlyPlayed')}</h2>
                   <span style={{ fontSize: '12px', color: 'var(--text-secondary)', cursor: 'pointer', fontWeight: '600' }} onClick={() => { setPlayHistory([]); showToast(t('toastHistoryCleared')); }}>{t('clearHistory')}</span>
                 </div>
-                
+
                 <div style={{ background: 'var(--bg-card)', borderRadius: '12px', border: '1px solid var(--border-color)', overflow: 'hidden' }}>
                   <div style={{ display: 'grid', gridTemplateColumns: '40px 1fr 100px 80px', padding: '16px 24px', borderBottom: '1px solid var(--border-color)', fontSize: '11px', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '1px', fontWeight: '700' }}>
                     <span>#</span>
@@ -2305,36 +2470,36 @@ function App() {
                     <span>{t('duration')}</span>
                     <span></span>
                   </div>
-                  
+
                   <div style={{ display: 'flex', flexDirection: 'column' }}>
-                     {playHistory.map((song, i) => (
-                       <div key={i} className={`offline-row ${currentSong?.id === song.id ? 'active-row' : ''}`} style={{ display: 'grid', gridTemplateColumns: '40px 1fr 100px 80px', padding: '12px 24px', alignItems: 'center', transition: 'background 0.2s', cursor: 'pointer', borderBottom: i === playHistory.length - 1 ? 'none' : '1px solid rgba(255,255,255,0.03)' }} onClick={() => playSingleSong(song)}>
-                          <span style={{ color: currentSong?.id === song.id ? 'var(--accent-primary)' : 'var(--text-muted)', fontSize: '13px', fontWeight: '600' }}>{currentSong?.id === song.id ? <Play size={14} fill="currentColor" /> : String(i + 1).padStart(2, '0')}</span>
-                          <div style={{ display: 'flex', gap: '16px', alignItems: 'center' }}>
-                             <div style={{ position: 'relative', width: '40px', height: '40px', borderRadius: '6px', overflow: 'hidden', flexShrink: 0 }}>
-                               <img src={getCleanThumbnail(song.thumbnail)} style={{ width: '100%', height: '100%', objectFit: 'cover' }} alt="Cover" />
-                               <div className="play-overlay" style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(0,0,0,0.6)', display: 'flex', alignItems: 'center', justifyContent: 'center', opacity: 0, transition: 'opacity 0.2s' }}>
-                                 <Play fill="currentColor" size={16} />
-                               </div>
-                             </div>
-                             <div style={{ display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
-                                <span style={{ fontWeight: '600', fontSize: '14px', color: currentSong?.id === song.id ? 'var(--accent-primary)' : 'var(--text-primary)', whiteSpace: 'nowrap', textOverflow: 'ellipsis', overflow: 'hidden' }}>{song.title}</span>
-                                <span style={{ fontSize: '12px', color: 'var(--text-secondary)' }}>{song.artist}</span>
-                             </div>
+                    {playHistory.map((song, i) => (
+                      <div key={i} className={`offline-row ${currentSong?.id === song.id ? 'active-row' : ''}`} style={{ display: 'grid', gridTemplateColumns: '40px 1fr 100px 80px', padding: '12px 24px', alignItems: 'center', transition: 'background 0.2s', cursor: 'pointer', borderBottom: i === playHistory.length - 1 ? 'none' : '1px solid rgba(255,255,255,0.03)' }} onClick={() => playSingleSong(song)}>
+                        <span style={{ color: currentSong?.id === song.id ? 'var(--accent-primary)' : 'var(--text-muted)', fontSize: '13px', fontWeight: '600' }}>{currentSong?.id === song.id ? <Play size={14} fill="currentColor" /> : String(i + 1).padStart(2, '0')}</span>
+                        <div style={{ display: 'flex', gap: '16px', alignItems: 'center', minWidth: 0 }}>
+                          <div style={{ position: 'relative', width: '40px', height: '40px', borderRadius: '6px', overflow: 'hidden', flexShrink: 0 }}>
+                            <img src={getCleanThumbnail(song.thumbnail)} style={{ width: '100%', height: '100%', objectFit: 'cover' }} alt="Cover" />
+                            <div className="play-overlay" style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(0,0,0,0.6)', display: 'flex', alignItems: 'center', justifyContent: 'center', opacity: 0, transition: 'opacity 0.2s' }}>
+                              <Play fill="currentColor" size={16} />
+                            </div>
                           </div>
-                          <div>
-                            <span style={{ fontSize: '13px', color: 'var(--text-secondary)' }}>{formatTime(song.duration)}</span>
+                          <div style={{ display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+                            <span style={{ fontWeight: '600', fontSize: '14px', color: currentSong?.id === song.id ? 'var(--accent-primary)' : 'var(--text-primary)', whiteSpace: 'nowrap', textOverflow: 'ellipsis', overflow: 'hidden', display: 'block' }}>{song.title}</span>
+                            <span style={{ fontSize: '12px', color: 'var(--text-secondary)', whiteSpace: 'nowrap', textOverflow: 'ellipsis', overflow: 'hidden', display: 'block' }}>{song.artist}</span>
                           </div>
-                          <div style={{ display: 'flex', gap: '8px', justifyContent: 'flex-end' }}>
-                            <button className="btn-icon" onClick={(e) => { e.stopPropagation(); toggleLike(song); }} style={{ color: isLiked(song.id) ? '#ff6b9d' : 'var(--text-secondary)' }}>
-                              <Heart size={16} fill={isLiked(song.id) ? 'currentColor' : 'none'} />
-                            </button>
-                            <button className="btn-icon" onClick={(e) => { e.stopPropagation(); setAddToPlaylistSong(song); }} style={{ color: 'var(--text-secondary)' }}>
-                              <FolderPlus size={16} />
-                            </button>
-                          </div>
-                       </div>
-                     ))}
+                        </div>
+                        <div>
+                          <span style={{ fontSize: '13px', color: 'var(--text-secondary)' }}>{formatTime(song.duration)}</span>
+                        </div>
+                        <div style={{ display: 'flex', gap: '8px', justifyContent: 'flex-end' }}>
+                          <button className="btn-icon" onClick={(e) => { e.stopPropagation(); toggleLike(song); }} style={{ color: isLiked(song.id) ? '#ff6b9d' : 'var(--text-secondary)' }}>
+                            <Heart size={16} fill={isLiked(song.id) ? 'currentColor' : 'none'} />
+                          </button>
+                          <button className="btn-icon" onClick={(e) => { e.stopPropagation(); setAddToPlaylistSong(song); }} style={{ color: 'var(--text-secondary)' }}>
+                            <FolderPlus size={16} />
+                          </button>
+                        </div>
+                      </div>
+                    ))}
                   </div>
                 </div>
               </section>
@@ -2365,10 +2530,10 @@ function App() {
                 onClick={() => { setAvatarUrlInput(pl.avatar || ''); setShowAvatarPrompt(true); }}
               >
                 {pl.avatar ? (
-                  <img 
-                    src={pl.avatar} 
-                    alt="Avatar" 
-                    style={{ width: '100%', height: '100%', objectFit: 'cover' }} 
+                  <img
+                    src={pl.avatar}
+                    alt="Avatar"
+                    style={{ width: '100%', height: '100%', objectFit: 'cover' }}
                     onError={(e) => {
                       if (pl.songs.length > 0) {
                         e.currentTarget.src = getCleanThumbnail(pl.songs[0].thumbnail);
@@ -2436,17 +2601,17 @@ function App() {
                   </div>
                   <div className="library-item-duration">{formatTime(song.duration)}</div>
                   <div style={{ display: 'flex', gap: '4px' }}>
-                    <button 
-                      className="library-item-action" 
-                      onClick={(e) => { e.stopPropagation(); toggleLike(song); }} 
+                    <button
+                      className="library-item-action"
+                      onClick={(e) => { e.stopPropagation(); toggleLike(song); }}
                       style={{ color: isLiked(song.id) ? '#ff6b9d' : 'var(--text-secondary)' }}
                       title="Like"
                     >
                       <Heart size={16} fill={isLiked(song.id) ? 'currentColor' : 'none'} />
                     </button>
-                    <button 
-                      className="library-item-action" 
-                      onClick={(e) => { e.stopPropagation(); removeSongFromPlaylist(pl.id, song.id); }} 
+                    <button
+                      className="library-item-action"
+                      onClick={(e) => { e.stopPropagation(); removeSongFromPlaylist(pl.id, song.id); }}
                       title="Hapus dari playlist"
                     >
                       <Trash2 size={16} />
@@ -2573,7 +2738,7 @@ function App() {
                 t('updateAvailableMsg')
               )}
             </div>
-            
+
             <div style={{ display: 'flex', gap: '8px' }}>
               {updateInfo.downloading ? (
                 <div style={{ width: 100, height: 6, background: 'rgba(255,255,255,0.1)', borderRadius: 3, overflow: 'hidden' }}>
@@ -2604,13 +2769,13 @@ function App() {
               <div className="settings-item-desc" style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                 {t('manualUpdateDesc')}
                 {updateInfo.checkMsg && (
-                   <span style={{ 
-                     color: updateInfo.checkMsg.includes('Error') ? '#f23f43' : 'var(--accent-primary)',
-                     fontSize: '0.95em',
-                     fontWeight: 500
-                   }}>
-                     {updateInfo.checkMsg}
-                   </span>
+                  <span style={{
+                    color: updateInfo.checkMsg.includes('Error') ? '#f23f43' : 'var(--accent-primary)',
+                    fontSize: '0.95em',
+                    fontWeight: 500
+                  }}>
+                    {updateInfo.checkMsg}
+                  </span>
                 )}
               </div>
             </div>
@@ -2619,14 +2784,14 @@ function App() {
                 setUpdateInfo(prev => ({ ...prev, isChecking: true, checkMsg: t('checkingUpdate') }));
                 const hasUpdate = await (window as any).electronAPI.checkForUpdates();
                 if (!hasUpdate) {
-                   setUpdateInfo(prev => ({ ...prev, isChecking: false, checkMsg: t('alreadyLatest') }));
+                  setUpdateInfo(prev => ({ ...prev, isChecking: false, checkMsg: t('alreadyLatest') }));
                 } else {
-                   setUpdateInfo(prev => ({ ...prev, isChecking: false, checkMsg: '' }));
+                  setUpdateInfo(prev => ({ ...prev, isChecking: false, checkMsg: '' }));
                 }
               } catch (err: any) {
                 let errorMsg = err.message || err;
                 if (typeof errorMsg === 'string' && errorMsg.includes('No published versions on GitHub')) {
-                   errorMsg = t('noPublishedVersions');
+                  errorMsg = t('noPublishedVersions');
                 }
                 setUpdateInfo(prev => ({ ...prev, isChecking: false, checkMsg: `Error: ${errorMsg}` }));
               }
@@ -2643,17 +2808,18 @@ function App() {
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(120px, 1fr))', gap: '12px' }}>
           {[
             { id: 'default', name: t('themeDefault'), desc: t('themeDefaultDesc') },
-            { id: 'minimalist', name: t('themeMinimalist'), desc: t('themeMinimalistDesc') }
+            { id: 'minimalist', name: t('themeMinimalist'), desc: t('themeMinimalistDesc') },
+            { id: 'custom', name: t('themeCustom'), desc: t('themeCustomDesc') }
           ].map(theme => (
-            <button 
+            <button
               key={theme.id}
               onClick={() => {
                 const newSettings = { ...settings, theme: theme.id };
                 setSettings(newSettings);
                 localStorage.setItem('donpollo_settings', JSON.stringify(newSettings));
               }}
-              style={{ 
-                background: settings.theme === theme.id ? 'var(--accent-primary)' : 'var(--bg-card)', 
+              style={{
+                background: settings.theme === theme.id ? 'var(--accent-primary)' : 'var(--bg-card)',
                 color: settings.theme === theme.id ? 'var(--accent-text, #ffffff)' : 'var(--text-primary)',
                 border: `1px solid ${settings.theme === theme.id ? 'var(--accent-primary)' : 'var(--border-color)'}`,
                 padding: '16px', borderRadius: '12px', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '8px', cursor: 'pointer', transition: 'all 0.2s'
@@ -2664,6 +2830,107 @@ function App() {
             </button>
           ))}
         </div>
+
+        {settings.theme === 'custom' && (
+          <div style={{ marginTop: '16px', display: 'flex', flexDirection: 'column', gap: '16px', padding: '16px', background: 'var(--bg-secondary)', borderRadius: '12px', border: '1px solid var(--border-color)' }}>
+            <div className="settings-row" style={{ padding: 0, border: 'none' }}>
+              <div>
+                <div className="settings-label">{t('dynamicBackground')}</div>
+                <div className="settings-desc">{t('dynamicBackgroundDesc')}</div>
+              </div>
+              <button className={`settings-toggle ${settings.dynamicBackground ? 'on' : ''}`}
+                onClick={() => {
+                  const newSettings = { ...settings, dynamicBackground: !settings.dynamicBackground };
+                  setSettings(newSettings);
+                  localStorage.setItem('donpollo_settings', JSON.stringify(newSettings));
+                }}>
+                {settings.dynamicBackground && <Check size={14} />}
+              </button>
+            </div>
+
+            {!settings.dynamicBackground && (
+              <div className="settings-row" style={{ padding: 0, border: 'none' }}>
+                <div style={{ flex: 1 }}>
+                  <div className="settings-label">{t('bgImageUrl')}</div>
+                  <input type="text" value={settings.customBgUrl || ''} placeholder="https://..."
+                    onChange={(e) => {
+                      const newSettings = { ...settings, customBgUrl: e.target.value };
+                      setSettings(newSettings);
+                      localStorage.setItem('donpollo_settings', JSON.stringify(newSettings));
+                    }}
+                    style={{ marginTop: '8px', width: '100%', padding: '10px 14px', borderRadius: '8px', background: 'var(--bg-card)', border: '1px solid var(--border-color)', color: 'white' }}
+                  />
+                </div>
+              </div>
+            )}
+
+            <div style={{ marginTop: '24px', paddingTop: '24px', borderTop: '1px solid var(--border-color)' }}>
+              <div style={{ fontSize: '14px', fontWeight: 'bold', marginBottom: '16px', color: 'var(--text-primary)' }}>{t('advCustomTitle')}</div>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: '12px' }}>
+
+                {[
+                  { id: 'customAccentColor', label: t('accentColor'), default: '#1db954' },
+                  { id: 'customBgMain', label: t('bgMain'), default: '#000000' },
+                  { id: 'customBgSidebar', label: t('bgSidebar'), default: '#1E1F22' },
+                  { id: 'customBgCard', label: t('bgCard'), default: '#2B2D31' },
+                  { id: 'customTextPrimary', label: t('textPrimary'), default: '#F2F3F5' },
+                  { id: 'customTextSecondary', label: t('textSecondary'), default: '#B5BAC1' }
+                ].map((colorOpt) => (
+                  <div key={colorOpt.id} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', background: 'var(--bg-card)', padding: '12px 16px', borderRadius: '8px', border: '1px solid var(--border-color)' }}>
+                    <div style={{ fontSize: '13px', color: 'var(--text-primary)' }}>{colorOpt.label}</div>
+                    <input type="color" value={settings[colorOpt.id] || colorOpt.default}
+                      onChange={(e) => {
+                        const newSettings = { ...settings, [colorOpt.id]: e.target.value };
+                        setSettings(newSettings);
+                        localStorage.setItem('donpollo_settings', JSON.stringify(newSettings));
+                      }}
+                      style={{ width: '32px', height: '32px', border: 'none', borderRadius: '4px', cursor: 'pointer', background: 'transparent' }}
+                    />
+                  </div>
+                ))}
+              </div>
+            </div>
+
+
+
+            <div style={{ marginTop: '16px', display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '16px' }}>
+
+              {/* Font Family */}
+              <div style={{ background: 'var(--bg-card)', padding: '12px 16px', borderRadius: '8px' }}>
+                <div style={{ fontSize: '13px', color: 'var(--text-primary)', marginBottom: '8px' }}>{t('fontFamily')}</div>
+                <select value={settings.fontFamily || 'Inter'}
+                  onChange={(e) => {
+                    const newSettings = { ...settings, fontFamily: e.target.value };
+                    setSettings(newSettings);
+                    localStorage.setItem('donpollo_settings', JSON.stringify(newSettings));
+                  }}
+                  className="settings-select" style={{ width: '100%', padding: '8px', borderRadius: '6px', background: 'var(--bg-sidebar)', color: 'white', border: '1px solid var(--border-color)' }}>
+                  <option value="Inter">{t('fontInter')}</option>
+                  <option value="Roboto">{t('fontRoboto')}</option>
+                  <option value="Outfit">{t('fontOutfit')}</option>
+                  <option value="monospace">{t('fontMono')}</option>
+                </select>
+              </div>
+
+              {/* Border Radius */}
+              <div style={{ background: 'var(--bg-card)', padding: '12px 16px', borderRadius: '8px' }}>
+                <div style={{ fontSize: '13px', color: 'var(--text-primary)', marginBottom: '8px' }}>{t('shapeStyle')}</div>
+                <select value={settings.borderRadiusMode || 'rounded'}
+                  onChange={(e) => {
+                    const newSettings = { ...settings, borderRadiusMode: e.target.value };
+                    setSettings(newSettings);
+                    localStorage.setItem('donpollo_settings', JSON.stringify(newSettings));
+                  }}
+                  className="settings-select" style={{ width: '100%', padding: '8px', borderRadius: '6px', background: 'var(--bg-sidebar)', color: 'white', border: '1px solid var(--border-color)' }}>
+                  <option value="rounded">{t('shapeRounded')}</option>
+                  <option value="sharp">{t('shapeSharp')}</option>
+                  <option value="pill">{t('shapePill')}</option>
+                </select>
+              </div>
+            </div>
+
+          </div>
+        )}
       </div>
 
       {/* Akun Discord */}
@@ -2719,9 +2986,9 @@ function App() {
               >
                 <img src={
                   lang === 'id' ? 'https://flagcdn.com/id.svg' :
-                  lang === 'en' ? 'https://flagcdn.com/us.svg' :
-                  lang === 'ja' ? 'https://flagcdn.com/jp.svg' :
-                  'https://flagcdn.com/kr.svg'
+                    lang === 'en' ? 'https://flagcdn.com/us.svg' :
+                      lang === 'ja' ? 'https://flagcdn.com/jp.svg' :
+                        'https://flagcdn.com/kr.svg'
                 } alt={lang} />
                 {lang === 'id' ? 'Indonesia' : lang === 'en' ? 'English' : lang === 'ja' ? '日本語' : '한국어'}
               </button>
@@ -2812,7 +3079,7 @@ function App() {
               const newVal = !settings.closeToTray;
               setSettings((p: any) => ({ ...p, closeToTray: newVal }));
               if ((window as any).electronAPI?.setCloseToTray) {
-                 (window as any).electronAPI.setCloseToTray(newVal);
+                (window as any).electronAPI.setCloseToTray(newVal);
               }
             }}>
             {settings.closeToTray && <Check size={14} />}
@@ -2836,44 +3103,44 @@ function App() {
         {settings.eqEnabled && (
           <div className="settings-eq-container" style={{ position: 'relative', marginTop: '16px', background: 'var(--bg-secondary)', borderRadius: '12px', padding: '24px', border: '1px solid rgba(255,255,255,0.05)' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '16px', alignItems: 'center' }}>
-               <div style={{ display: 'flex', gap: '12px', alignItems: 'center' }}>
-                 <span style={{ fontSize: '12px', fontWeight: 'bold', color: 'var(--text-secondary)', textTransform: 'uppercase' }}>Preset</span>
-                 <select 
-                    className="settings-select"
-                    style={{ padding: '4px 8px', fontSize: '12px', minWidth: '120px' }}
-                    value={
-                      (() => {
-                        const b = (settings.eqBands || [0,0,0,0,0]).join(',');
-                        if (b === '0,0,0,0,0') return 'default';
-                        if (b === '6,4,0,-2,-4') return 'bass_booster';
-                        if (b === '-2,2,4,3,-1') return 'pop';
-                        if (b === '4,3,-1,2,5') return 'electronic';
-                        if (b === '3,1,0,1,3') return 'acoustic';
-                        return 'custom';
-                      })()
-                    }
-                    onChange={(e) => {
-                      const v = e.target.value;
-                      let newBands = [...(settings.eqBands || [0,0,0,0,0])];
-                      if (v === 'default') newBands = [0,0,0,0,0];
-                      if (v === 'bass_booster') newBands = [6,4,0,-2,-4];
-                      if (v === 'pop') newBands = [-2,2,4,3,-1];
-                      if (v === 'electronic') newBands = [4,3,-1,2,5];
-                      if (v === 'acoustic') newBands = [3,1,0,1,3];
-                      setSettings((p: any) => ({ ...p, eqBands: newBands }));
-                    }}
-                 >
-                    <option value="custom">Custom</option>
-                    <option value="default">Default (Flat)</option>
-                    <option value="bass_booster">Bass Booster</option>
-                    <option value="pop">Pop</option>
-                    <option value="electronic">Electronic</option>
-                    <option value="acoustic">Acoustic</option>
-                 </select>
-               </div>
-               <span style={{ fontSize: '11px', fontWeight: 'bold', color: 'var(--text-secondary)' }}>+12dB</span>
+              <div style={{ display: 'flex', gap: '12px', alignItems: 'center' }}>
+                <span style={{ fontSize: '12px', fontWeight: 'bold', color: 'var(--text-secondary)', textTransform: 'uppercase' }}>Preset</span>
+                <select
+                  className="settings-select"
+                  style={{ padding: '4px 8px', fontSize: '12px', minWidth: '120px' }}
+                  value={
+                    (() => {
+                      const b = (settings.eqBands || [0, 0, 0, 0, 0]).join(',');
+                      if (b === '0,0,0,0,0') return 'default';
+                      if (b === '6,4,0,-2,-4') return 'bass_booster';
+                      if (b === '-2,2,4,3,-1') return 'pop';
+                      if (b === '4,3,-1,2,5') return 'electronic';
+                      if (b === '3,1,0,1,3') return 'acoustic';
+                      return 'custom';
+                    })()
+                  }
+                  onChange={(e) => {
+                    const v = e.target.value;
+                    let newBands = [...(settings.eqBands || [0, 0, 0, 0, 0])];
+                    if (v === 'default') newBands = [0, 0, 0, 0, 0];
+                    if (v === 'bass_booster') newBands = [6, 4, 0, -2, -4];
+                    if (v === 'pop') newBands = [-2, 2, 4, 3, -1];
+                    if (v === 'electronic') newBands = [4, 3, -1, 2, 5];
+                    if (v === 'acoustic') newBands = [3, 1, 0, 1, 3];
+                    setSettings((p: any) => ({ ...p, eqBands: newBands }));
+                  }}
+                >
+                  <option value="custom">Custom</option>
+                  <option value="default">Default (Flat)</option>
+                  <option value="bass_booster">Bass Booster</option>
+                  <option value="pop">Pop</option>
+                  <option value="electronic">Electronic</option>
+                  <option value="acoustic">Acoustic</option>
+                </select>
+              </div>
+              <span style={{ fontSize: '11px', fontWeight: 'bold', color: 'var(--text-secondary)' }}>+12dB</span>
             </div>
-            
+
             <div style={{ position: 'relative', height: '180px', width: '100%', marginBottom: '8px' }}>
               {/* SVG Background Curve */}
               <svg viewBox="0 0 1000 180" style={{ position: 'absolute', top: 0, left: 0, width: '100%', height: '100%', overflow: 'visible', pointerEvents: 'none' }} preserveAspectRatio="none">
@@ -2884,7 +3151,7 @@ function App() {
                   </linearGradient>
                 </defs>
                 <path d={(() => {
-                  const bands = settings.eqBands || [0,0,0,0,0];
+                  const bands = settings.eqBands || [0, 0, 0, 0, 0];
                   let path = "";
                   const points = bands.map((val: number, i: number) => ({
                     x: 100 + (i * 200),
@@ -2892,16 +3159,16 @@ function App() {
                   }));
                   path += `M 0,180 L 0,${points[0].y} L ${points[0].x},${points[0].y} `;
                   for (let i = 1; i < points.length; i++) {
-                    const p0 = points[i-1];
+                    const p0 = points[i - 1];
                     const p1 = points[i];
                     const dx = (p1.x - p0.x) / 2;
                     path += `C ${p0.x + dx},${p0.y} ${p1.x - dx},${p1.y} ${p1.x},${p1.y} `;
                   }
-                  path += `L 1000,${points[points.length-1].y} L 1000,180 Z`;
+                  path += `L 1000,${points[points.length - 1].y} L 1000,180 Z`;
                   return path;
                 })()} fill="url(#eqGrad)" />
                 <path d={(() => {
-                  const bands = settings.eqBands || [0,0,0,0,0];
+                  const bands = settings.eqBands || [0, 0, 0, 0, 0];
                   let path = "";
                   const points = bands.map((val: number, i: number) => ({
                     x: 100 + (i * 200),
@@ -2909,44 +3176,44 @@ function App() {
                   }));
                   path += `M 0,${points[0].y} L ${points[0].x},${points[0].y} `;
                   for (let i = 1; i < points.length; i++) {
-                    const p0 = points[i-1];
+                    const p0 = points[i - 1];
                     const p1 = points[i];
                     const dx = (p1.x - p0.x) / 2;
                     path += `C ${p0.x + dx},${p0.y} ${p1.x - dx},${p1.y} ${p1.x},${p1.y} `;
                   }
-                  path += `L 1000,${points[points.length-1].y}`;
+                  path += `L 1000,${points[points.length - 1].y}`;
                   return path;
                 })()} fill="none" stroke="#1db954" strokeWidth="3" />
-                
+
                 {/* Reference lines */}
                 <line x1="0" y1="90" x2="1000" y2="90" stroke="rgba(255,255,255,0.1)" strokeWidth="1" />
-                {Array.from({length: 5}).map((_, i) => (
+                {Array.from({ length: 5 }).map((_, i) => (
                   <line key={i} x1={100 + (i * 200)} y1="0" x2={100 + (i * 200)} y2="180" stroke="rgba(255,255,255,0.05)" strokeWidth="1" />
                 ))}
               </svg>
-              
+
               {/* Sliders Overlaid */}
               <div style={{ position: 'absolute', top: 0, left: 0, width: '100%', height: '100%', zIndex: 2 }}>
                 {['60Hz', '150Hz', '400Hz', '1kHz', '15kHz'].map((label, i) => (
                   <div key={label} style={{ position: 'absolute', left: `${10 + i * 20}%`, transform: 'translateX(-50%)', height: '100%', width: '30px' }}>
                     <div style={{ flex: 1, position: 'relative', width: '100%', height: '100%' }}>
-                      <input type="range" min="-12" max="12" step="0.1" 
-                        value={(settings.eqBands || [0,0,0,0,0])[i]}
+                      <input type="range" min="-12" max="12" step="0.1"
+                        value={(settings.eqBands || [0, 0, 0, 0, 0])[i]}
                         onChange={(e) => {
-                           const newBands = [...(settings.eqBands || [0,0,0,0,0])];
-                           newBands[i] = parseFloat(e.target.value);
-                           setSettings((p: any) => ({ ...p, eqBands: newBands }));
+                          const newBands = [...(settings.eqBands || [0, 0, 0, 0, 0])];
+                          newBands[i] = parseFloat(e.target.value);
+                          setSettings((p: any) => ({ ...p, eqBands: newBands }));
                         }}
-                        style={{ 
+                        style={{
                           position: 'absolute', top: '50%', left: '50%', transform: 'translate(-50%, -50%) rotate(-90deg)',
                           width: '180px', height: '20px', margin: 0, opacity: 0, cursor: 'pointer', zIndex: 3
-                        }} 
+                        }}
                       />
                       {/* Fake Knob */}
-                      <div style={{ 
+                      <div style={{
                         position: 'absolute', left: '50%', transform: 'translate(-50%, -50%)',
-                        top: `${(1 - (((settings.eqBands || [0,0,0,0,0])[i] + 12) / 24)) * 100}%`,
-                        width: '14px', height: '14px', borderRadius: '50%', background: '#fff', 
+                        top: `${(1 - (((settings.eqBands || [0, 0, 0, 0, 0])[i] + 12) / 24)) * 100}%`,
+                        width: '14px', height: '14px', borderRadius: '50%', background: '#fff',
                         boxShadow: '0 2px 4px rgba(0,0,0,0.5)', pointerEvents: 'none'
                       }} />
                     </div>
@@ -2954,9 +3221,9 @@ function App() {
                 ))}
               </div>
             </div>
-            
+
             <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '4px' }}>
-               <span style={{ fontSize: '11px', fontWeight: 'bold', color: 'var(--text-secondary)' }}>-12dB</span>
+              <span style={{ fontSize: '11px', fontWeight: 'bold', color: 'var(--text-secondary)' }}>-12dB</span>
             </div>
             <div style={{ position: 'relative', width: '100%', height: '20px' }}>
               {['60Hz', '150Hz', '400Hz', '1kHz', '15kHz'].map((label, i) => (
@@ -2994,15 +3261,15 @@ function App() {
           <div style={{ flex: 1, paddingRight: '16px' }}>
             <div className="settings-label">{t('cacheModeLabel')}</div>
             <div className="settings-desc">{t('cacheModeDesc')}</div>
-            
+
             <div style={{ marginTop: '12px', display: 'flex', flexDirection: 'column', gap: '8px' }}>
               <label style={{ display: 'flex', alignItems: 'flex-start', gap: '8px', cursor: 'pointer' }}>
-                <input type="radio" name="cacheMode" value="smart" 
+                <input type="radio" name="cacheMode" value="smart"
                   checked={!settings.cacheMode || settings.cacheMode === 'smart'}
                   onChange={() => {
-                    setSettings((p: any) => ({...p, cacheMode: 'smart'}));
-                    localStorage.setItem('donpollo_settings', JSON.stringify({...settings, cacheMode: 'smart'}));
-                  }} 
+                    setSettings((p: any) => ({ ...p, cacheMode: 'smart' }));
+                    localStorage.setItem('donpollo_settings', JSON.stringify({ ...settings, cacheMode: 'smart' }));
+                  }}
                   style={{ marginTop: '4px' }}
                 />
                 <div>
@@ -3012,12 +3279,12 @@ function App() {
               </label>
 
               <label style={{ display: 'flex', alignItems: 'flex-start', gap: '8px', cursor: 'pointer' }}>
-                <input type="radio" name="cacheMode" value="stream" 
+                <input type="radio" name="cacheMode" value="stream"
                   checked={settings.cacheMode === 'stream'}
                   onChange={() => {
-                    setSettings((p: any) => ({...p, cacheMode: 'stream'}));
-                    localStorage.setItem('donpollo_settings', JSON.stringify({...settings, cacheMode: 'stream'}));
-                  }} 
+                    setSettings((p: any) => ({ ...p, cacheMode: 'stream' }));
+                    localStorage.setItem('donpollo_settings', JSON.stringify({ ...settings, cacheMode: 'stream' }));
+                  }}
                   style={{ marginTop: '4px' }}
                 />
                 <div>
@@ -3025,14 +3292,14 @@ function App() {
                   <div style={{ fontSize: '12px', color: 'var(--text-secondary)' }}>{t('cacheModeStreamDesc')}</div>
                 </div>
               </label>
-              
+
               <label style={{ display: 'flex', alignItems: 'flex-start', gap: '8px', cursor: 'pointer' }}>
-                <input type="radio" name="cacheMode" value="temp" 
+                <input type="radio" name="cacheMode" value="temp"
                   checked={settings.cacheMode === 'temp'}
                   onChange={() => {
-                    setSettings((p: any) => ({...p, cacheMode: 'temp'}));
-                    localStorage.setItem('donpollo_settings', JSON.stringify({...settings, cacheMode: 'temp'}));
-                  }} 
+                    setSettings((p: any) => ({ ...p, cacheMode: 'temp' }));
+                    localStorage.setItem('donpollo_settings', JSON.stringify({ ...settings, cacheMode: 'temp' }));
+                  }}
                   style={{ marginTop: '4px' }}
                 />
                 <div>
@@ -3074,34 +3341,34 @@ function App() {
     <div className="page-content offline-mode" style={{ minHeight: '100%', display: 'flex', flexDirection: 'column', background: 'var(--bg-primary)' }}>
       <div style={{ padding: '32px 32px 16px 32px' }}>
         <h1 style={{ fontSize: '28px', fontWeight: '800', marginBottom: '24px', color: 'var(--text-primary)' }}>{t('offlineVault')}</h1>
-        
+
         {/* Dashboard Cards */}
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(250px, 1fr))', gap: '16px', marginBottom: '32px' }}>
-          
+
           <div style={{ background: 'var(--bg-card)', padding: '20px', borderRadius: '12px', border: '1px solid var(--border-color)', display: 'flex', flexDirection: 'column', gap: '12px' }}>
-             <div style={{ display: 'flex', alignItems: 'center', gap: '8px', color: 'var(--accent-primary)' }}>
-               <DownloadCloud size={20} />
-               <h3 style={{ fontSize: '12px', fontWeight: '700', letterSpacing: '1px', textTransform: 'uppercase' }}>{t('localCollection')}</h3>
-             </div>
-             <div style={{ fontSize: '36px', fontWeight: '800' }}>{downloadedSongs.length} <span style={{ fontSize: '16px', color: 'var(--text-secondary)', fontWeight: '600' }}>{t('songs')}</span></div>
-             <div style={{ fontSize: '12px', color: 'var(--text-secondary)' }}>{t('availableOffline')}</div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', color: 'var(--accent-primary)' }}>
+              <DownloadCloud size={20} />
+              <h3 style={{ fontSize: '12px', fontWeight: '700', letterSpacing: '1px', textTransform: 'uppercase' }}>{t('localCollection')}</h3>
+            </div>
+            <div style={{ fontSize: '36px', fontWeight: '800' }}>{downloadedSongs.length} <span style={{ fontSize: '16px', color: 'var(--text-secondary)', fontWeight: '600' }}>{t('songs')}</span></div>
+            <div style={{ fontSize: '12px', color: 'var(--text-secondary)' }}>{t('availableOffline')}</div>
           </div>
-          
+
           <div style={{ background: 'var(--bg-card)', padding: '20px', borderRadius: '12px', border: '1px solid var(--border-color)', display: 'flex', flexDirection: 'column', gap: '12px' }}>
-             <div style={{ display: 'flex', alignItems: 'center', gap: '8px', color: 'var(--text-secondary)' }}>
-               <Database size={20} />
-               <h3 style={{ fontSize: '12px', fontWeight: '700', letterSpacing: '1px', textTransform: 'uppercase' }}>{t('storage')}</h3>
-             </div>
-             <div style={{ fontSize: '36px', fontWeight: '800' }}>{(cacheSize / (1024 * 1024)).toFixed(1)} <span style={{fontSize: '16px', color: 'var(--text-secondary)', fontWeight: '600'}}>MB</span></div>
-             <div style={{ fontSize: '12px', color: 'var(--text-secondary)' }}>{t('totalStorageUsed')}</div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', color: 'var(--text-secondary)' }}>
+              <Database size={20} />
+              <h3 style={{ fontSize: '12px', fontWeight: '700', letterSpacing: '1px', textTransform: 'uppercase' }}>{t('storage')}</h3>
+            </div>
+            <div style={{ fontSize: '36px', fontWeight: '800' }}>{(cacheSize / (1024 * 1024)).toFixed(1)} <span style={{ fontSize: '16px', color: 'var(--text-secondary)', fontWeight: '600' }}>MB</span></div>
+            <div style={{ fontSize: '12px', color: 'var(--text-secondary)' }}>{t('totalStorageUsed')}</div>
           </div>
-          
+
           <div style={{ background: 'linear-gradient(135deg, #00c6ff, #0072ff)', padding: '20px', borderRadius: '12px', display: 'flex', flexDirection: 'column', gap: '8px', justifyContent: 'center', position: 'relative', overflow: 'hidden' }}>
-             <div style={{ position: 'absolute', right: '-15px', bottom: '-15px', opacity: 0.15 }}>
-               <WifiOff size={100} />
-             </div>
-             <h3 style={{ fontSize: '16px', fontWeight: '800', color: '#fff', zIndex: 1, letterSpacing: '0.5px' }}>{t('listenUnlimited').split('\n').map((line, i) => <span key={i}>{line}{i === 0 ? <br/> : ''}</span>)}</h3>
-             <p style={{ fontSize: '12px', color: 'rgba(255,255,255,0.85)', zIndex: 1, margin: 0, marginTop: '4px', lineHeight: '1.4' }}>{t('listenUnlimitedDesc')}</p>
+            <div style={{ position: 'absolute', right: '-15px', bottom: '-15px', opacity: 0.15 }}>
+              <WifiOff size={100} />
+            </div>
+            <h3 style={{ fontSize: '16px', fontWeight: '800', color: '#fff', zIndex: 1, letterSpacing: '0.5px' }}>{t('listenUnlimited').split('\n').map((line, i) => <span key={i}>{line}{i === 0 ? <br /> : ''}</span>)}</h3>
+            <p style={{ fontSize: '12px', color: 'rgba(255,255,255,0.85)', zIndex: 1, margin: 0, marginTop: '4px', lineHeight: '1.4' }}>{t('listenUnlimitedDesc')}</p>
           </div>
 
         </div>
@@ -3120,7 +3387,7 @@ function App() {
                 <h2 style={{ fontSize: '18px', fontWeight: '700', color: 'var(--text-primary)', display: 'flex', alignItems: 'center', gap: '8px' }}><FolderPlus size={20} color="#00c6ff" /> Unduhan Offline</h2>
                 <span style={{ fontSize: '12px', color: 'var(--accent-primary)', cursor: 'pointer', fontWeight: '600' }} onClick={() => startPlayingFromList(downloadedSongs, 0)}>{t('playAll')}</span>
               </div>
-              
+
               <div style={{ background: 'var(--bg-card)', borderRadius: '12px', border: '1px solid var(--border-color)', overflow: 'hidden' }}>
                 <div style={{ display: 'grid', gridTemplateColumns: '40px 1fr 100px 80px', padding: '16px 24px', borderBottom: '1px solid var(--border-color)', fontSize: '11px', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '1px', fontWeight: '700' }}>
                   <span>#</span>
@@ -3128,49 +3395,51 @@ function App() {
                   <span>{t('duration')}</span>
                   <span></span>
                 </div>
-                
+
                 <div style={{ display: 'flex', flexDirection: 'column' }}>
-                   {downloadedSongs.map((song, i) => (
-                     <div key={i} className={`offline-row ${currentSong?.id === song.id ? 'active-row' : ''}`} style={{ display: 'grid', gridTemplateColumns: '40px 1fr 100px 80px', padding: '12px 24px', alignItems: 'center', transition: 'background 0.2s', cursor: 'pointer', borderBottom: i === downloadedSongs.length - 1 ? 'none' : '1px solid rgba(255,255,255,0.03)' }} onClick={() => startPlayingFromList(downloadedSongs, i)}>
-                        <span style={{ color: currentSong?.id === song.id ? 'var(--accent-primary)' : 'var(--text-muted)', fontSize: '13px', fontWeight: '600' }}>{currentSong?.id === song.id ? <Play size={14} fill="currentColor" /> : String(i + 1).padStart(2, '0')}</span>
-                        <div style={{ display: 'flex', gap: '16px', alignItems: 'center' }}>
-                           <div style={{ position: 'relative', width: '40px', height: '40px', borderRadius: '6px', overflow: 'hidden', flexShrink: 0 }}>
-                             <img src={getCleanThumbnail(song.thumbnail) || getHighResImage(song.cover)} style={{ width: '100%', height: '100%', objectFit: 'cover' }} alt="Cover" />
-                             <div className="play-overlay" style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(0,0,0,0.6)', display: 'flex', alignItems: 'center', justifyContent: 'center', opacity: 0, transition: 'opacity 0.2s' }}>
-                               <Play fill="currentColor" size={16} />
-                             </div>
-                           </div>
-                           <div style={{ display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
-                              <span style={{ fontWeight: '600', fontSize: '14px', color: currentSong?.id === song.id ? 'var(--accent-primary)' : 'var(--text-primary)', whiteSpace: 'nowrap', textOverflow: 'ellipsis', overflow: 'hidden', display: 'flex', alignItems: 'center', gap: '6px' }}>
-                                {song.title}
-                                <span title="Tersedia Offline"><CheckCircle2 size={14} color="#23a559" /></span>
-                              </span>
-                              <span style={{ fontSize: '12px', color: 'var(--text-secondary)' }}>{song.artist}</span>
-                           </div>
+                  {downloadedSongs.map((song, i) => (
+                    <div key={i} className={`offline-row ${currentSong?.id === song.id ? 'active-row' : ''}`} style={{ display: 'grid', gridTemplateColumns: '40px 1fr 100px 80px', padding: '12px 24px', alignItems: 'center', transition: 'background 0.2s', cursor: 'pointer', borderBottom: i === downloadedSongs.length - 1 ? 'none' : '1px solid rgba(255,255,255,0.03)' }} onClick={() => startPlayingFromList(downloadedSongs, i)}>
+                      <span style={{ color: currentSong?.id === song.id ? 'var(--accent-primary)' : 'var(--text-muted)', fontSize: '13px', fontWeight: '600' }}>{currentSong?.id === song.id ? <Play size={14} fill="currentColor" /> : String(i + 1).padStart(2, '0')}</span>
+                      <div style={{ display: 'flex', gap: '16px', alignItems: 'center', minWidth: 0 }}>
+                        <div style={{ position: 'relative', width: '40px', height: '40px', borderRadius: '6px', overflow: 'hidden', flexShrink: 0 }}>
+                          <img src={getCleanThumbnail(song.thumbnail) || getHighResImage(song.cover)} style={{ width: '100%', height: '100%', objectFit: 'cover' }} alt="Cover" />
+                          <div className="play-overlay" style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(0,0,0,0.6)', display: 'flex', alignItems: 'center', justifyContent: 'center', opacity: 0, transition: 'opacity 0.2s' }}>
+                            <Play fill="currentColor" size={16} />
+                          </div>
                         </div>
-                        <div>
-                          <span style={{ fontSize: '13px', color: 'var(--text-secondary)' }}>{formatTime(song.duration)}</span>
+                        <div style={{ display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '6px', overflow: 'hidden' }}>
+                            <span style={{ fontWeight: '600', fontSize: '14px', color: currentSong?.id === song.id ? 'var(--accent-primary)' : 'var(--text-primary)', whiteSpace: 'nowrap', textOverflow: 'ellipsis', overflow: 'hidden', display: 'block' }}>
+                              {song.title}
+                            </span>
+                            <span title="Tersedia Offline" style={{ flexShrink: 0 }}><CheckCircle2 size={14} color="#23a559" /></span>
+                          </div>
+                          <span style={{ fontSize: '12px', color: 'var(--text-secondary)', whiteSpace: 'nowrap', textOverflow: 'ellipsis', overflow: 'hidden', display: 'block' }}>{song.artist}</span>
                         </div>
-                        <div style={{ display: 'flex', gap: '8px', justifyContent: 'flex-end' }}>
-                          <button 
-                            className="btn-icon delete-btn" 
-                            onClick={(e) => { 
-                              e.stopPropagation(); 
-                              if ((window as any).electronAPI) {
-                                (window as any).electronAPI.deleteDownloadedSong(song.id).then(() => {
-                                  setDownloadedSongs(prev => prev.filter(s => s.id !== song.id));
-                                });
-                              }
-                            }}
-                            style={{ color: 'var(--text-secondary)' }}
-                            onMouseEnter={(e) => { e.currentTarget.style.color = '#ff4d4d'; }}
-                            onMouseLeave={(e) => { e.currentTarget.style.color = 'var(--text-secondary)'; }}
-                          >
-                            <Trash2 size={16} />
-                          </button>
-                        </div>
-                     </div>
-                   ))}
+                      </div>
+                      <div>
+                        <span style={{ fontSize: '13px', color: 'var(--text-secondary)' }}>{formatTime(song.duration)}</span>
+                      </div>
+                      <div style={{ display: 'flex', gap: '8px', justifyContent: 'flex-end' }}>
+                        <button
+                          className="btn-icon delete-btn"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            if ((window as any).electronAPI) {
+                              (window as any).electronAPI.deleteDownloadedSong(song.id).then(() => {
+                                setDownloadedSongs(prev => prev.filter(s => s.id !== song.id));
+                              });
+                            }
+                          }}
+                          style={{ color: 'var(--text-secondary)' }}
+                          onMouseEnter={(e) => { e.currentTarget.style.color = '#ff4d4d'; }}
+                          onMouseLeave={(e) => { e.currentTarget.style.color = 'var(--text-secondary)'; }}
+                        >
+                          <Trash2 size={16} />
+                        </button>
+                      </div>
+                    </div>
+                  ))}
                 </div>
               </div>
             </section>
@@ -3199,89 +3468,89 @@ function App() {
           </div>
         )}
         <div className="artist-hero" style={{ position: 'relative', zIndex: 1 }}>
-        <div className="artist-hero-info">
-          <h1 className="artist-hero-name">{activeArtist}</h1>
-          <p className="artist-hero-label">{isArtistPodcast ? t('podcast') : t('artistPage')}</p>
-          <div className="artist-hero-actions">
-            <button className="btn-primary" onClick={() => {
-              if (artistSongs.length > 0) startPlayingFromList(artistSongs, 0);
-            }}>
-              <Play size={20} fill="currentColor" /> {t('playAll')}
-            </button>
-            <div className="artist-filters">
-              <button 
-                className={`filter-btn ${artistFilter === 'popular' ? 'active' : ''}`}
-                onClick={() => {
-                  setArtistFilter('popular');
-                  if (activeArtist) fetchArtistSongs(activeArtist, 'popular', isArtistPodcast);
-                }}
-              >
-                {t('filterPopular')}
+          <div className="artist-hero-info">
+            <h1 className="artist-hero-name">{activeArtist}</h1>
+            <p className="artist-hero-label">{isArtistPodcast ? t('podcast') : t('artistPage')}</p>
+            <div className="artist-hero-actions">
+              <button className="btn-primary" onClick={() => {
+                if (artistSongs.length > 0) startPlayingFromList(artistSongs, 0);
+              }}>
+                <Play size={20} fill="currentColor" /> {t('playAll')}
               </button>
-              <button 
-                className={`filter-btn ${artistFilter === 'newest' ? 'active' : ''}`}
-                onClick={() => {
-                  setArtistFilter('newest');
-                  if (activeArtist) fetchArtistSongs(activeArtist, 'newest', isArtistPodcast);
-                }}
-              >
-                {t('filterNewest')}
-              </button>
+              <div className="artist-filters">
+                <button
+                  className={`filter-btn ${artistFilter === 'popular' ? 'active' : ''}`}
+                  onClick={() => {
+                    setArtistFilter('popular');
+                    if (activeArtist) fetchArtistSongs(activeArtist, 'popular', isArtistPodcast);
+                  }}
+                >
+                  {t('filterPopular')}
+                </button>
+                <button
+                  className={`filter-btn ${artistFilter === 'newest' ? 'active' : ''}`}
+                  onClick={() => {
+                    setArtistFilter('newest');
+                    if (activeArtist) fetchArtistSongs(activeArtist, 'newest', isArtistPodcast);
+                  }}
+                >
+                  {t('filterNewest')}
+                </button>
+              </div>
             </div>
           </div>
         </div>
+        <div className="artist-content" style={{ position: 'relative', zIndex: 1 }}>
+          {isArtistLoading ? (
+            <div className="loading-state">
+              <Loader2 size={48} className="spin-icon" />
+              <p>{t('loadingSongs')}</p>
+            </div>
+          ) : artistSongs.length > 0 ? (
+            <div className="song-list-container">
+              {artistSongs.map((song, idx) => (
+                <div
+                  key={idx}
+                  className={`song-row ${currentSong?.id === song.id ? 'active' : ''}`}
+                  onClick={() => playSingleSong(song)}
+                  onContextMenu={(e) => handleContextMenu(e, song)}
+                >
+                  <div className="song-index">
+                    {currentSong?.id === song.id && isPlaying ? (
+                      <div className="playing-eq"><div /><div /><div /></div>
+                    ) : (
+                      <span>{idx + 1}</span>
+                    )}
+                    <div className="play-overlay"><Play size={12} fill="currentColor" /></div>
+                  </div>
+                  <div className="song-thumb-wrapper">
+                    <img src={getCleanThumbnail(song.thumbnail)} alt={song.title} className="song-thumb" />
+                  </div>
+                  <div className="song-info">
+                    <div className="song-title">{song.title}</div>
+                    <div className="song-artist" onClick={(e) => {
+                      e.stopPropagation();
+                    }}>{song.artist}</div>
+                  </div>
+                  <div className="song-duration">{song.duration ? formatTime(song.duration) : ''}</div>
+                  <div className="song-actions">
+                    <button className={`action-btn ${isLiked(song.id) ? 'active' : ''}`} onClick={(e) => { e.stopPropagation(); toggleLike(song); }}>
+                      <Heart size={16} fill={isLiked(song.id) ? 'currentColor' : 'none'} />
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          ) : !isArtistLoading ? (
+            <div className="empty-state">
+              {isArtistPodcast ? <Mic2 size={40} /> : <Music size={40} />}
+              <p>{t('noResults')}</p>
+            </div>
+          ) : null}
+        </div>
       </div>
-      <div className="artist-content" style={{ position: 'relative', zIndex: 1 }}>
-        {isArtistLoading ? (
-          <div className="loading-state">
-            <Loader2 size={48} className="spin-icon" />
-            <p>{t('loadingSongs')}</p>
-          </div>
-        ) : artistSongs.length > 0 ? (
-          <div className="song-list-container">
-            {artistSongs.map((song, idx) => (
-              <div 
-                key={idx} 
-                className={`song-row ${currentSong?.id === song.id ? 'active' : ''}`}
-                onClick={() => playSingleSong(song)}
-                onContextMenu={(e) => handleContextMenu(e, song)}
-              >
-                <div className="song-index">
-                  {currentSong?.id === song.id && isPlaying ? (
-                    <div className="playing-eq"><div/><div/><div/></div>
-                  ) : (
-                    <span>{idx + 1}</span>
-                  )}
-                  <div className="play-overlay"><Play size={12} fill="currentColor"/></div>
-                </div>
-                <div className="song-thumb-wrapper">
-                  <img src={getCleanThumbnail(song.thumbnail)} alt={song.title} className="song-thumb" />
-                </div>
-                <div className="song-info">
-                  <div className="song-title">{song.title}</div>
-                  <div className="song-artist" onClick={(e) => {
-                    e.stopPropagation();
-                  }}>{song.artist}</div>
-                </div>
-                <div className="song-duration">{song.duration ? formatTime(song.duration) : ''}</div>
-                <div className="song-actions">
-                  <button className={`action-btn ${isLiked(song.id) ? 'active' : ''}`} onClick={(e) => { e.stopPropagation(); toggleLike(song); }}>
-                    <Heart size={16} fill={isLiked(song.id) ? 'currentColor' : 'none'} />
-                  </button>
-                </div>
-              </div>
-            ))}
-          </div>
-        ) : !isArtistLoading ? (
-          <div className="empty-state">
-            {isArtistPodcast ? <Mic2 size={40} /> : <Music size={40} />}
-            <p>{t('noResults')}</p>
-          </div>
-        ) : null}
-      </div>
-    </div>
-  );
-};
+    );
+  };
 
   const renderHomePage = () => (
     <div className="main-scroll">
@@ -3412,125 +3681,93 @@ function App() {
           {/* ── Music Mode: Bento + Sections ─────────── */}
           {homeMode === 'music' && (<>
 
-          {/* ── Bento Featured Grid (Daily Mix) ──────── */}
-          {(() => {
-            const getDailyMix = () => {
-              const mix: any[] = [];
-              if (playHistory.length > 0) mix.push({ ...playHistory[0], bentoTag: 'JUMP BACK IN', tagClass: 'tag-hero' });
-              else if (hitsInternational.length > 0) mix.push({ ...hitsInternational[0], bentoTag: 'TOP PICK', tagClass: 'tag-hero' });
+            {/* ── Bento Featured Grid (Daily Mix) ──────── */}
+            {(() => {
+              const getDailyMix = () => {
+                const mix: any[] = [];
+                if (playHistory.length > 0) mix.push({ ...playHistory[0], bentoTag: 'JUMP BACK IN', tagClass: 'tag-hero' });
+                else if (hitsInternational.length > 0) mix.push({ ...hitsInternational[0], bentoTag: 'TOP PICK', tagClass: 'tag-hero' });
 
-              const favs = likedSongs.filter(s => s.id !== mix[0]?.id).slice(0, 2);
-              favs.forEach(s => mix.push({ ...s, bentoTag: 'FAVORITE', tagClass: 'tag-fav' }));
+                const favs = likedSongs.filter(s => s.id !== mix[0]?.id).slice(0, 2);
+                favs.forEach(s => mix.push({ ...s, bentoTag: 'FAVORITE', tagClass: 'tag-fav' }));
 
-              const recs = playHistory.length > 0 ? recommendations : hitsInternational;
-              const usableRecs = recs.filter(s => !mix.some(m => m.id === s.id)).slice(0, 2);
-              usableRecs.forEach(s => mix.push({ ...s, bentoTag: 'SUGGESTED', tagClass: 'tag-sug' }));
+                const recs = playHistory.length > 0 ? recommendations : hitsInternational;
+                const usableRecs = recs.filter(s => !mix.some(m => m.id === s.id)).slice(0, 2);
+                usableRecs.forEach(s => mix.push({ ...s, bentoTag: 'SUGGESTED', tagClass: 'tag-sug' }));
 
-              const historyFill = playHistory.length > 0 ? playHistory.filter(s => !mix.some(m => m.id === s.id)) : hitsInternational.filter(s => !mix.some(m => m.id === s.id));
-              while (mix.length < 5 && historyFill.length > 0) {
-                mix.push({ ...historyFill.shift(), bentoTag: playHistory.length > 0 ? 'RECENTLY PLAYED' : 'TRENDING', tagClass: 'tag-recent' });
-              }
-              return mix;
-            };
+                const historyFill = playHistory.length > 0 ? playHistory.filter(s => !mix.some(m => m.id === s.id)) : hitsInternational.filter(s => !mix.some(m => m.id === s.id));
+                while (mix.length < 5 && historyFill.length > 0) {
+                  mix.push({ ...historyFill.shift(), bentoTag: playHistory.length > 0 ? 'RECENTLY PLAYED' : 'TRENDING', tagClass: 'tag-recent' });
+                }
+                return mix;
+              };
 
-            const dailyMix = getDailyMix();
-            if (dailyMix.length === 0) return null;
+              const dailyMix = getDailyMix();
+              if (dailyMix.length === 0) return null;
 
-            return (
-              <div className="bento-grid">
-                {/* Hero card */}
-                <div
-                  className={`bento-card bento-hero ${currentSong?.id === dailyMix[0].id ? 'bento-active' : ''}`}
-                  onClick={() => startPlayingFromList(dailyMix, 0)}
-                  onContextMenu={(e) => handleContextMenu(e, dailyMix[0])}
-                >
-                  <img src={getCleanThumbnail(dailyMix[0].thumbnail)} alt={dailyMix[0].title} className="bento-img" />
-                  <div className="bento-gradient" />
-                  <div className={`bento-tag ${dailyMix[0].tagClass}`}>{dailyMix[0].bentoTag}</div>
-                  <div className="bento-meta">
-                    <div className="bento-title-lg">{dailyMix[0].title}</div>
-                    <div className="bento-artist-lg">{dailyMix[0].artist}</div>
-                  </div>
-                  <button className="bento-play-btn" onClick={(e) => { e.stopPropagation(); startPlayingFromList(dailyMix, 0); }}>
-                    {currentSong?.id === dailyMix[0].id && isPlaying
-                      ? <Pause size={20} fill="currentColor" />
-                      : <Play size={20} fill="currentColor" style={{ marginLeft: '2px' }} />}
-                  </button>
-                </div>
-
-                {/* Mini cards */}
-                {dailyMix.slice(1, 5).map((item, i) => (
+              return (
+                <div className="bento-grid">
+                  {/* Hero card */}
                   <div
-                    key={i}
-                    className={`bento-card bento-mini ${currentSong?.id === item.id ? 'bento-active' : ''}`}
-                    onClick={() => startPlayingFromList(dailyMix, i + 1)}
-                    onContextMenu={(e) => handleContextMenu(e, item)}
+                    className={`bento-card bento-hero ${currentSong?.id === dailyMix[0].id ? 'bento-active' : ''}`}
+                    onClick={() => startPlayingFromList(dailyMix, 0)}
+                    onContextMenu={(e) => handleContextMenu(e, dailyMix[0])}
                   >
-                    <img src={getCleanThumbnail(item.thumbnail)} alt={item.title} className="bento-img" />
+                    <img src={getCleanThumbnail(dailyMix[0].thumbnail)} alt={dailyMix[0].title} className="bento-img" />
                     <div className="bento-gradient" />
-                    <div className={`bento-tag ${item.tagClass}`}>{item.bentoTag}</div>
-                    <div className="bento-meta bento-meta-sm">
-                      <div className="bento-title-sm">{item.title}</div>
-                      <div className="bento-artist-sm">{item.artist}</div>
+                    <div className={`bento-tag ${dailyMix[0].tagClass}`}>{dailyMix[0].bentoTag}</div>
+                    <div className="bento-meta">
+                      <div className="bento-title-lg">{dailyMix[0].title}</div>
+                      <div className="bento-artist-lg">{dailyMix[0].artist}</div>
                     </div>
-                    {currentSong?.id === item.id && isPlaying && (
-                      <div className="bento-eq-badge">
-                        <div className="eq-bar" /><div className="eq-bar" /><div className="eq-bar" />
-                      </div>
-                    )}
+                    <button className="bento-play-btn" onClick={(e) => { e.stopPropagation(); startPlayingFromList(dailyMix, 0); }}>
+                      {currentSong?.id === dailyMix[0].id && isPlaying
+                        ? <Pause size={20} fill="currentColor" />
+                        : <Play size={20} fill="currentColor" style={{ marginLeft: '2px' }} />}
+                    </button>
                   </div>
-                ))}
-              </div>
-            );
-          })()}
 
-          {/* ── Recently Played ──────────────────────── */}
-          {playHistory.length > 0 && (
-            <section className="home-section">
-              <div className="section-header-v2">
-                <div className="section-header-left">
-                  <div className="section-dot" />
-                  <h2 className="section-title-v2">{t('recentlyPlayed')}</h2>
-                </div>
-                <span className="show-all" onClick={() => setIsRecentExpanded(!isRecentExpanded)}>
-                  {isRecentExpanded ? t('showLess') : t('viewAll')}
-                </span>
-              </div>
-              
-              {isRecentExpanded ? (
-                <div className="card-expanded-grid">
-                  {playHistory.map((item, i) => (
+                  {/* Mini cards */}
+                  {dailyMix.slice(1, 5).map((item, i) => (
                     <div
                       key={i}
-                      className={`music-card-v2 ${currentSong?.id === item.id ? 'music-card-v2-playing' : ''}`}
-                      onClick={() => playSingleSong(item)}
+                      className={`bento-card bento-mini ${currentSong?.id === item.id ? 'bento-active' : ''}`}
+                      onClick={() => startPlayingFromList(dailyMix, i + 1)}
                       onContextMenu={(e) => handleContextMenu(e, item)}
                     >
-                      <div className="card-v2-art">
-                        <img src={getCleanThumbnail(item.thumbnail)} alt={item.title} />
-                        {currentSong?.id === item.id && isPlaying ? (
-                          <div className="card-v2-eq">
-                            <div className="eq-bar" /><div className="eq-bar" /><div className="eq-bar" />
-                          </div>
-                        ) : (
-                          <button className="card-v2-play-btn">
-                            <Play size={18} fill="currentColor" style={{ marginLeft: '2px' }} />
-                          </button>
-                        )}
+                      <img src={getCleanThumbnail(item.thumbnail)} alt={item.title} className="bento-img" />
+                      <div className="bento-gradient" />
+                      <div className={`bento-tag ${item.tagClass}`}>{item.bentoTag}</div>
+                      <div className="bento-meta bento-meta-sm">
+                        <div className="bento-title-sm">{item.title}</div>
+                        <div className="bento-artist-sm">{item.artist}</div>
                       </div>
-                      <div className="card-v2-info">
-                        <div className="card-v2-title" title={item.title}>{item.title}</div>
-                        <div className="card-v2-artist">{item.artist}</div>
-                      </div>
+                      {currentSong?.id === item.id && isPlaying && (
+                        <div className="bento-eq-badge">
+                          <div className="eq-bar" /><div className="eq-bar" /><div className="eq-bar" />
+                        </div>
+                      )}
                     </div>
                   ))}
                 </div>
-              ) : (
-                <div className="slider-wrapper">
-                  <button className="slider-nav-btn slider-nav-left" onClick={() => scrollSlider(recentScrollRef, 'left')} aria-label="Scroll left">
-                    <ChevronLeft size={20} />
-                  </button>
-                  <div className="card-scroll-container" ref={recentScrollRef}>
+              );
+            })()}
+
+            {/* ── Recently Played ──────────────────────── */}
+            {playHistory.length > 0 && (
+              <section className="home-section">
+                <div className="section-header-v2">
+                  <div className="section-header-left">
+                    <div className="section-dot" />
+                    <h2 className="section-title-v2">{t('recentlyPlayed')}</h2>
+                  </div>
+                  <span className="show-all" onClick={() => setIsRecentExpanded(!isRecentExpanded)}>
+                    {isRecentExpanded ? t('showLess') : t('viewAll')}
+                  </span>
+                </div>
+
+                {isRecentExpanded ? (
+                  <div className="card-expanded-grid">
                     {playHistory.map((item, i) => (
                       <div
                         key={i}
@@ -3557,70 +3794,74 @@ function App() {
                       </div>
                     ))}
                   </div>
-                  <button className="slider-nav-btn slider-nav-right" onClick={() => scrollSlider(recentScrollRef, 'right')} aria-label="Scroll right">
-                    <ChevronRight size={20} />
-                  </button>
-                </div>
-              )}
-            </section>
-          )}
-
-          {/* ── Discover / Recommendations ───────────── */}
-          {playHistory.length > 0 && recommendations.length > 0 && (
-            <section className="home-section">
-              <div className="section-header-v2">
-                <div className="section-header-left">
-                  <div className="section-dot section-dot-cyan" />
-                  <h2 className="section-title-v2">
-                    {(() => {
-                      if (playHistory.length === 0) return t('recommendations');
-                      const item = playHistory[0];
-                      let realArtist = item.artist || '';
-                      if (item.title && item.title.includes(' - ')) {
-                        realArtist = item.title.split(' - ')[0].trim();
-                      }
-                      return `${t('recommendations')} ${realArtist}`;
-                    })()}
-                  </h2>
-                </div>
-                <div style={{ display: 'flex', gap: '16px', alignItems: 'center' }}>
-                  <span className="show-all" onClick={() => setIsRecsExpanded(!isRecsExpanded)}>
-                    {isRecsExpanded ? t('showLess') : t('viewAll')}
-                  </span>
-                  <span className="show-all" onClick={() => startPlayingFromList(recommendations, 0)}>{t('playAll')}</span>
-                </div>
-              </div>
-              
-              {isRecsExpanded ? (
-                <div className="card-expanded-grid">
-                  {recommendations.map((item, i) => (
-                    <div
-                      key={i}
-                      className="music-card-circle"
-                      onClick={() => startPlayingFromList(recommendations, i)}
-                      onContextMenu={(e) => handleContextMenu(e, item)}
-                    >
-                      <div className="card-circle-art">
-                        <img src={getCleanThumbnail(item.thumbnail)} alt={item.title} />
-                        <div className="card-circle-overlay">
-                          <button className="card-circle-play">
-                            <Play size={18} fill="currentColor" style={{ marginLeft: '2px' }} />
-                          </button>
+                ) : (
+                  <div className="slider-wrapper">
+                    <button className="slider-nav-btn slider-nav-left" onClick={() => scrollSlider(recentScrollRef, 'left')} aria-label="Scroll left">
+                      <ChevronLeft size={20} />
+                    </button>
+                    <div className="card-scroll-container" ref={recentScrollRef}>
+                      {playHistory.map((item, i) => (
+                        <div
+                          key={i}
+                          className={`music-card-v2 ${currentSong?.id === item.id ? 'music-card-v2-playing' : ''}`}
+                          onClick={() => playSingleSong(item)}
+                          onContextMenu={(e) => handleContextMenu(e, item)}
+                        >
+                          <div className="card-v2-art">
+                            <img src={getCleanThumbnail(item.thumbnail)} alt={item.title} />
+                            {currentSong?.id === item.id && isPlaying ? (
+                              <div className="card-v2-eq">
+                                <div className="eq-bar" /><div className="eq-bar" /><div className="eq-bar" />
+                              </div>
+                            ) : (
+                              <button className="card-v2-play-btn">
+                                <Play size={18} fill="currentColor" style={{ marginLeft: '2px' }} />
+                              </button>
+                            )}
+                          </div>
+                          <div className="card-v2-info">
+                            <div className="card-v2-title" title={item.title}>{item.title}</div>
+                            <div className="card-v2-artist">{item.artist}</div>
+                          </div>
                         </div>
-                      </div>
-                      <div className="card-v2-info" style={{ textAlign: 'center' }}>
-                        <div className="card-v2-title" style={{ justifyContent: 'center' }} title={item.title}>{item.title}</div>
-                        <div className="card-v2-artist">{item.artist}</div>
-                      </div>
+                      ))}
                     </div>
-                  ))}
+                    <button className="slider-nav-btn slider-nav-right" onClick={() => scrollSlider(recentScrollRef, 'right')} aria-label="Scroll right">
+                      <ChevronRight size={20} />
+                    </button>
+                  </div>
+                )}
+              </section>
+            )}
+
+            {/* ── Discover / Recommendations ───────────── */}
+            {playHistory.length > 0 && recommendations.length > 0 && (
+              <section className="home-section">
+                <div className="section-header-v2">
+                  <div className="section-header-left">
+                    <div className="section-dot section-dot-cyan" />
+                    <h2 className="section-title-v2">
+                      {(() => {
+                        if (playHistory.length === 0) return t('recommendations');
+                        const item = playHistory[0];
+                        let realArtist = item.artist || '';
+                        if (item.title && item.title.includes(' - ')) {
+                          realArtist = item.title.split(' - ')[0].trim();
+                        }
+                        return `${t('recommendations')} ${realArtist}`;
+                      })()}
+                    </h2>
+                  </div>
+                  <div style={{ display: 'flex', gap: '16px', alignItems: 'center' }}>
+                    <span className="show-all" onClick={() => setIsRecsExpanded(!isRecsExpanded)}>
+                      {isRecsExpanded ? t('showLess') : t('viewAll')}
+                    </span>
+                    <span className="show-all" onClick={() => startPlayingFromList(recommendations, 0)}>{t('playAll')}</span>
+                  </div>
                 </div>
-              ) : (
-                <div className="slider-wrapper">
-                  <button className="slider-nav-btn slider-nav-left" onClick={() => scrollSlider(recsScrollRef, 'left')} aria-label="Scroll left">
-                    <ChevronLeft size={20} />
-                  </button>
-                  <div className="card-scroll-container" ref={recsScrollRef}>
+
+                {isRecsExpanded ? (
+                  <div className="card-expanded-grid">
                     {recommendations.map((item, i) => (
                       <div
                         key={i}
@@ -3643,54 +3884,61 @@ function App() {
                       </div>
                     ))}
                   </div>
-                  <button className="slider-nav-btn slider-nav-right" onClick={() => scrollSlider(recsScrollRef, 'right')} aria-label="Scroll right">
-                    <ChevronRight size={20} />
-                  </button>
-                </div>
-              )}
-            </section>
-          )}
-
-          {/* ── Hits Sections ───────────── */}
-          {(() => {
-            const renderHitsSection = (title: string, songs: any[], ref: React.RefObject<HTMLDivElement | null>, dotClass: string, isExpanded: boolean, setIsExpanded: (val: boolean) => void) => {
-              if (songs.length === 0) return null;
-              return (
-                <section className="home-section">
-                  <div className="section-header-v2">
-                    <div className="section-header-left">
-                      <div className={`section-dot ${dotClass}`} />
-                      <h2 className="section-title-v2">{title}</h2>
-                    </div>
-                    <div style={{ display: 'flex', gap: '16px', alignItems: 'center' }}>
-                      <span className="show-all" onClick={() => setIsExpanded(!isExpanded)}>{isExpanded ? t('showLess') : t('viewAll')}</span>
-                      <span className="show-all" onClick={() => startPlayingFromList(songs, 0)}>{t('playAll')}</span>
-                    </div>
-                  </div>
-                  
-                  {isExpanded ? (
-                    <div className="card-expanded-grid">
-                      {songs.map((item, i) => (
-                        <div key={i} className={`music-card-v2 ${currentSong?.id === item.id ? 'music-card-v2-playing' : ''}`} onClick={() => playSingleSong(item)} onContextMenu={(e) => handleContextMenu(e, item)}>
-                          <div className="card-v2-art">
+                ) : (
+                  <div className="slider-wrapper">
+                    <button className="slider-nav-btn slider-nav-left" onClick={() => scrollSlider(recsScrollRef, 'left')} aria-label="Scroll left">
+                      <ChevronLeft size={20} />
+                    </button>
+                    <div className="card-scroll-container" ref={recsScrollRef}>
+                      {recommendations.map((item, i) => (
+                        <div
+                          key={i}
+                          className="music-card-circle"
+                          onClick={() => startPlayingFromList(recommendations, i)}
+                          onContextMenu={(e) => handleContextMenu(e, item)}
+                        >
+                          <div className="card-circle-art">
                             <img src={getCleanThumbnail(item.thumbnail)} alt={item.title} />
-                            {currentSong?.id === item.id && isPlaying ? (
-                              <div className="card-v2-eq"><div className="eq-bar" /><div className="eq-bar" /><div className="eq-bar" /></div>
-                            ) : (
-                              <button className="card-v2-play-btn"><Play size={18} fill="currentColor" style={{ marginLeft: '2px' }} /></button>
-                            )}
+                            <div className="card-circle-overlay">
+                              <button className="card-circle-play">
+                                <Play size={18} fill="currentColor" style={{ marginLeft: '2px' }} />
+                              </button>
+                            </div>
                           </div>
-                          <div className="card-v2-info">
-                            <div className="card-v2-title" title={item.title}>{item.title}</div>
+                          <div className="card-v2-info" style={{ textAlign: 'center' }}>
+                            <div className="card-v2-title" style={{ justifyContent: 'center' }} title={item.title}>{item.title}</div>
                             <div className="card-v2-artist">{item.artist}</div>
                           </div>
                         </div>
                       ))}
                     </div>
-                  ) : (
-                    <div className="slider-wrapper">
-                      <button className="slider-nav-btn slider-nav-left" onClick={() => scrollSlider(ref, 'left')} aria-label="Scroll left"><ChevronLeft size={20} /></button>
-                      <div className="card-scroll-container" ref={ref}>
+                    <button className="slider-nav-btn slider-nav-right" onClick={() => scrollSlider(recsScrollRef, 'right')} aria-label="Scroll right">
+                      <ChevronRight size={20} />
+                    </button>
+                  </div>
+                )}
+              </section>
+            )}
+
+            {/* ── Hits Sections ───────────── */}
+            {(() => {
+              const renderHitsSection = (title: string, songs: any[], ref: React.RefObject<HTMLDivElement | null>, dotClass: string, isExpanded: boolean, setIsExpanded: (val: boolean) => void) => {
+                if (songs.length === 0) return null;
+                return (
+                  <section className="home-section">
+                    <div className="section-header-v2">
+                      <div className="section-header-left">
+                        <div className={`section-dot ${dotClass}`} />
+                        <h2 className="section-title-v2">{title}</h2>
+                      </div>
+                      <div style={{ display: 'flex', gap: '16px', alignItems: 'center' }}>
+                        <span className="show-all" onClick={() => setIsExpanded(!isExpanded)}>{isExpanded ? t('showLess') : t('viewAll')}</span>
+                        <span className="show-all" onClick={() => startPlayingFromList(songs, 0)}>{t('playAll')}</span>
+                      </div>
+                    </div>
+
+                    {isExpanded ? (
+                      <div className="card-expanded-grid">
                         {songs.map((item, i) => (
                           <div key={i} className={`music-card-v2 ${currentSong?.id === item.id ? 'music-card-v2-playing' : ''}`} onClick={() => playSingleSong(item)} onContextMenu={(e) => handleContextMenu(e, item)}>
                             <div className="card-v2-art">
@@ -3708,25 +3956,46 @@ function App() {
                           </div>
                         ))}
                       </div>
-                      <button className="slider-nav-btn slider-nav-right" onClick={() => scrollSlider(ref, 'right')} aria-label="Scroll right"><ChevronRight size={20} /></button>
-                    </div>
-                  )}
-                </section>
-              );
-            };
+                    ) : (
+                      <div className="slider-wrapper">
+                        <button className="slider-nav-btn slider-nav-left" onClick={() => scrollSlider(ref, 'left')} aria-label="Scroll left"><ChevronLeft size={20} /></button>
+                        <div className="card-scroll-container" ref={ref}>
+                          {songs.map((item, i) => (
+                            <div key={i} className={`music-card-v2 ${currentSong?.id === item.id ? 'music-card-v2-playing' : ''}`} onClick={() => playSingleSong(item)} onContextMenu={(e) => handleContextMenu(e, item)}>
+                              <div className="card-v2-art">
+                                <img src={getCleanThumbnail(item.thumbnail)} alt={item.title} />
+                                {currentSong?.id === item.id && isPlaying ? (
+                                  <div className="card-v2-eq"><div className="eq-bar" /><div className="eq-bar" /><div className="eq-bar" /></div>
+                                ) : (
+                                  <button className="card-v2-play-btn"><Play size={18} fill="currentColor" style={{ marginLeft: '2px' }} /></button>
+                                )}
+                              </div>
+                              <div className="card-v2-info">
+                                <div className="card-v2-title" title={item.title}>{item.title}</div>
+                                <div className="card-v2-artist">{item.artist}</div>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                        <button className="slider-nav-btn slider-nav-right" onClick={() => scrollSlider(ref, 'right')} aria-label="Scroll right"><ChevronRight size={20} /></button>
+                      </div>
+                    )}
+                  </section>
+                );
+              };
 
-            return (
-              <>
-                {localCountry && hitsLocal.length > 0 &&
-                  renderHitsSection(`${t('trendingLocal')} ${localCountry.name} ${localCountry.flag}`, hitsLocal, localScrollRef, 'section-dot-cyan', isLocalExpanded, setIsLocalExpanded)}
-                {renderHitsSection(t('hitsInt'), hitsInternational, intScrollRef, '', isIntExpanded, setIsIntExpanded)}
-                {renderHitsSection(t('hitsId'), hitsIndonesia, idScrollRef, 'section-dot-green', isIdExpanded, setIsIdExpanded)}
-                {renderHitsSection(t('hitsJp'), hitsJapan, jpScrollRef, 'section-dot-cyan', isJpExpanded, setIsJpExpanded)}
-                {renderHitsSection(t('hitsKr'), hitsKorean, krScrollRef, 'section-dot-pink', isKrExpanded, setIsKrExpanded)}
-                {renderHitsSection(t('hitsLatin'), hitsLatin, latinScrollRef, 'section-dot-yellow', isLatinExpanded, setIsLatinExpanded)}
-              </>
-            );
-          })()}
+              return (
+                <>
+                  {localCountry && hitsLocal.length > 0 &&
+                    renderHitsSection(`${t('trendingLocal')} ${localCountry.name} ${localCountry.flag}`, hitsLocal, localScrollRef, 'section-dot-cyan', isLocalExpanded, setIsLocalExpanded)}
+                  {renderHitsSection(t('hitsInt'), hitsInternational, intScrollRef, '', isIntExpanded, setIsIntExpanded)}
+                  {renderHitsSection(t('hitsId'), hitsIndonesia, idScrollRef, 'section-dot-green', isIdExpanded, setIsIdExpanded)}
+                  {renderHitsSection(t('hitsJp'), hitsJapan, jpScrollRef, 'section-dot-cyan', isJpExpanded, setIsJpExpanded)}
+                  {renderHitsSection(t('hitsKr'), hitsKorean, krScrollRef, 'section-dot-pink', isKrExpanded, setIsKrExpanded)}
+                  {renderHitsSection(t('hitsLatin'), hitsLatin, latinScrollRef, 'section-dot-yellow', isLatinExpanded, setIsLatinExpanded)}
+                </>
+              );
+            })()}
           </>)}
 
         </div>
@@ -3974,7 +4243,7 @@ function App() {
                 )}
                 {/* Status indicator on bottom right */}
                 <div style={{ position: 'absolute', bottom: '-2px', right: '-2px', width: '20px', height: '20px', borderRadius: '50%', backgroundColor: 'var(--surface-color)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                   <div className={`status-dot ${userStatus}`} style={{ width: '12px', height: '12px', margin: 0 }}></div>
+                  <div className={`status-dot ${userStatus}`} style={{ width: '12px', height: '12px', margin: 0 }}></div>
                 </div>
               </div>
               <div style={{ flex: 1, overflow: 'hidden' }}>
@@ -3986,12 +4255,12 @@ function App() {
             <div style={{ height: '1px', background: 'var(--border-color)', margin: '4px 0' }}></div>
 
             <div style={{ fontSize: '12px', fontWeight: '700', color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '0.5px' }}>{t('profileStats')}</div>
-            
+
             {/* Stats Grid */}
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
-               {[
+              {[
                 { label: t('totalSongsPlayed'), value: playHistory.length, icon: <ListMusic size={16} /> },
-                { label: t('listeningTime'), value: totalListenSeconds >= 3600 ? `${Math.floor(totalListenSeconds/3600)}${t('listeningTimeHours')} ${Math.floor((totalListenSeconds%3600)/60)}${t('listeningTimeMins')}` : `${Math.floor(totalListenSeconds/60)}${t('listeningTimeMins')}`, icon: <Clock size={16} /> },
+                { label: t('listeningTime'), value: totalListenSeconds >= 3600 ? `${Math.floor(totalListenSeconds / 3600)}${t('listeningTimeHours')} ${Math.floor((totalListenSeconds % 3600) / 60)}${t('listeningTimeMins')}` : `${Math.floor(totalListenSeconds / 60)}${t('listeningTimeMins')}`, icon: <Clock size={16} /> },
                 { label: t('songsLikedStat'), value: likedSongs.length, icon: <Heart size={16} /> },
                 { label: t('playlistsCreated'), value: playlists.length, icon: <FolderPlus size={16} /> },
                 { label: t('songsDownloaded'), value: downloadedSongs.length, icon: <Download size={16} /> },
@@ -4206,10 +4475,10 @@ function App() {
                 }}>
                   <div className="sidebar-item-img">
                     {pl.avatar ? (
-                      <img 
-                        src={pl.avatar} 
-                        alt="cover" 
-                        style={{ width: '100%', height: '100%', objectFit: 'cover', borderRadius: '4px' }} 
+                      <img
+                        src={pl.avatar}
+                        alt="cover"
+                        style={{ width: '100%', height: '100%', objectFit: 'cover', borderRadius: '4px' }}
                         onError={(e) => {
                           if (pl.songs.length > 0) {
                             e.currentTarget.src = getCleanThumbnail(pl.songs[0].thumbnail);
@@ -4235,166 +4504,166 @@ function App() {
             </div>
           </div>
 
-        {/* FRIEND ACTIVITY SIDEBAR - DEFAULT THEME */}
-        {discordUser && settings.theme !== 'minimalist' && (
-          <div className="friend-activity-section">
-            <div className="friend-activity-inner">
-            <div className="sidebar-header" style={{ padding: '0 0 12px 0', borderBottom: '1px solid rgba(255,255,255,0.05)', marginBottom: '8px' }}>
-              <div className="sidebar-title" style={{ fontSize: '12px' }}>{t('friendActivityTitle')}</div>
-              <div className="sidebar-subtitle" style={{ fontSize: '11px' }}>{t('friendActivitySubtitle')}</div>
-            </div>
-            
-            {joinRequests.incoming && joinRequests.incoming.length > 0 && (
-              <div className="join-requests-container" style={{ marginBottom: '12px', padding: '8px', backgroundColor: 'rgba(240, 178, 50, 0.1)', border: '1px solid rgba(240, 178, 50, 0.3)', borderRadius: '8px' }}>
-                <div style={{ fontSize: '11px', color: '#f0b232', fontWeight: 700, marginBottom: '8px' }}>{t('pendingRequests')}</div>
-                {joinRequests.incoming.map((req: any) => (
-                  <div key={req.id} style={{ display: 'flex', flexDirection: 'column', gap: '8px', marginBottom: '8px', paddingBottom: '8px', borderBottom: '1px solid rgba(255,255,255,0.05)' }}>
-                    <div style={{ fontSize: '12px', color: 'var(--text-primary)' }}>
-                      <strong>{req.guestName}</strong> {t('joinRequestReceived')}
-                    </div>
-                    <div style={{ display: 'flex', gap: '8px' }}>
-                      <button onClick={async () => {
-                        await (window as any).electronAPI.respondJoinRequest(req.id, 'accepted');
-                        setJoinRequests(prev => ({ ...prev, incoming: prev.incoming.filter(r => r.id !== req.id) }));
-                      }} style={{ flex: 1, padding: '4px 0', backgroundColor: '#23a559', color: 'white', border: 'none', borderRadius: '4px', cursor: 'pointer', fontSize: '11px', fontWeight: 600 }}>{t('accept')}</button>
-                      
-                      <button onClick={async () => {
-                        await (window as any).electronAPI.respondJoinRequest(req.id, 'rejected');
-                        setJoinRequests(prev => ({ ...prev, incoming: prev.incoming.filter(r => r.id !== req.id) }));
-                      }} style={{ flex: 1, padding: '4px 0', backgroundColor: '#f23f43', color: 'white', border: 'none', borderRadius: '4px', cursor: 'pointer', fontSize: '11px', fontWeight: 600 }}>{t('reject')}</button>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            )}
+          {/* FRIEND ACTIVITY SIDEBAR - DEFAULT THEME */}
+          {discordUser && settings.theme !== 'minimalist' && (
+            <div className="friend-activity-section">
+              <div className="friend-activity-inner">
+                <div className="sidebar-header" style={{ padding: '0 0 12px 0', borderBottom: '1px solid rgba(255,255,255,0.05)', marginBottom: '8px' }}>
+                  <div className="sidebar-title" style={{ fontSize: '12px' }}>{t('friendActivityTitle')}</div>
+                  <div className="sidebar-subtitle" style={{ fontSize: '11px' }}>{t('friendActivitySubtitle')}</div>
+                </div>
 
-            <div className="friend-list">
-              {(() => {
-                const effectivePartyId = activePartyId || (discordUser && onlineUsers.some(u => u.partyId === discordUser.id) ? discordUser.id : null);
-                const currentPartyMembers = onlineUsers.filter(u => effectivePartyId && (u.partyId === effectivePartyId || u.discordId === effectivePartyId));
-                const otherFriends = onlineUsers.filter(u => !effectivePartyId || (u.partyId !== effectivePartyId && u.discordId !== effectivePartyId));
-                
-                const partyAvatars = [];
-                if (effectivePartyId && discordUser) {
-                  partyAvatars.push({
-                    id: discordUser.id,
-                    url: discordUser.avatar ? `https://cdn.discordapp.com/avatars/${discordUser.id}/${discordUser.avatar}.png` : `https://ui-avatars.com/api/?name=${discordUser.username}`,
-                    name: discordUser.username
-                  });
-                  currentPartyMembers.forEach(u => {
-                    partyAvatars.push({
-                      id: u.discordId,
-                      url: u.avatarUrl || `https://ui-avatars.com/api/?name=${u.username}`,
-                      name: u.username
-                    });
-                  });
-                }
+                {joinRequests.incoming && joinRequests.incoming.length > 0 && (
+                  <div className="join-requests-container" style={{ marginBottom: '12px', padding: '8px', backgroundColor: 'rgba(240, 178, 50, 0.1)', border: '1px solid rgba(240, 178, 50, 0.3)', borderRadius: '8px' }}>
+                    <div style={{ fontSize: '11px', color: '#f0b232', fontWeight: 700, marginBottom: '8px' }}>{t('pendingRequests')}</div>
+                    {joinRequests.incoming.map((req: any) => (
+                      <div key={req.id} style={{ display: 'flex', flexDirection: 'column', gap: '8px', marginBottom: '8px', paddingBottom: '8px', borderBottom: '1px solid rgba(255,255,255,0.05)' }}>
+                        <div style={{ fontSize: '12px', color: 'var(--text-primary)' }}>
+                          <strong>{req.guestName}</strong> {t('joinRequestReceived')}
+                        </div>
+                        <div style={{ display: 'flex', gap: '8px' }}>
+                          <button onClick={async () => {
+                            await (window as any).electronAPI.respondJoinRequest(req.id, 'accepted');
+                            setJoinRequests(prev => ({ ...prev, incoming: prev.incoming.filter(r => r.id !== req.id) }));
+                          }} style={{ flex: 1, padding: '4px 0', backgroundColor: '#23a559', color: 'white', border: 'none', borderRadius: '4px', cursor: 'pointer', fontSize: '11px', fontWeight: 600 }}>{t('accept')}</button>
 
-                return (
-                  <>
-                    {effectivePartyId && partyAvatars.length > 0 && (
-                      <div className="friend-item current-party-block" style={{ flexDirection: 'row', alignItems: 'center', padding: '10px', background: 'rgba(255,255,255,0.03)', borderRadius: '8px', position: 'relative', marginBottom: '8px', width: '100%', boxSizing: 'border-box' }}>
-                        <div className="party-avatars" style={{ display: 'flex', marginRight: '12px' }}>
-                          {partyAvatars.map((av, idx) => (
-                            <img 
-                              key={av.id} 
-                              src={av.url} 
-                              alt={av.name} 
-                              title={av.name}
-                              style={{ 
-                                width: '28px', 
-                                height: '28px', 
-                                borderRadius: '50%', 
-                                border: '2px solid var(--background-secondary)',
-                                marginLeft: idx === 0 ? '0' : '-10px',
-                                zIndex: partyAvatars.length - idx,
-                                objectFit: 'cover'
-                              }} 
-                            />
-                          ))}
+                          <button onClick={async () => {
+                            await (window as any).electronAPI.respondJoinRequest(req.id, 'rejected');
+                            setJoinRequests(prev => ({ ...prev, incoming: prev.incoming.filter(r => r.id !== req.id) }));
+                          }} style={{ flex: 1, padding: '4px 0', backgroundColor: '#f23f43', color: 'white', border: 'none', borderRadius: '4px', cursor: 'pointer', fontSize: '11px', fontWeight: 600 }}>{t('reject')}</button>
                         </div>
-                        <div style={{ display: 'flex', flexDirection: 'column', flex: 1, overflow: 'hidden' }}>
-                          <span style={{ fontSize: '10px', color: 'var(--accent-primary)', fontWeight: 600, marginBottom: '2px', letterSpacing: '0.5px' }}>
-                            {t('listenAlong')}
-                          </span>
-                          {currentPartyMembers.length > 0 && currentPartyMembers[0].currentSong ? (
-                            <div className="friend-song" style={{ fontSize: '12px', color: 'var(--text-primary)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', width: '100%' }} title={currentPartyMembers[0].currentSong.title}>
-                              ♫ {currentPartyMembers[0].currentSong.title}
-                            </div>
-                          ) : currentSong ? (
-                            <div className="friend-song" style={{ fontSize: '12px', color: 'var(--text-primary)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', width: '100%' }} title={currentSong.title}>
-                              ♫ {currentSong.title}
-                            </div>
-                          ) : (
-                            <div className="friend-song" style={{ fontSize: '12px', color: 'var(--text-muted)' }}>Browsing...</div>
-                          )}
-                        </div>
-                        {isGuest && (
-                          <button 
-                            className="leave-party-icon-btn" 
-                            onClick={() => {
-                              setIsGuest(false);
-                              setActivePartyId(null);
-                              if (audioRef.current) audioRef.current.pause();
-                              setIsPlaying(false);
-                            }}
-                            title={t('leaveParty')}
-                            style={{ marginLeft: '8px' }}
-                          >
-                            <LogOut size={16} />
-                          </button>
-                        )}
                       </div>
-                    )}
+                    ))}
+                  </div>
+                )}
 
-                    {otherFriends.length === 0 && !effectivePartyId ? (
-                      <div style={{ color: 'var(--text-muted)', fontSize: '11px', textAlign: 'center', marginTop: '12px' }}>{t('noFriendsOnline')}</div>
-                    ) : (
-                      otherFriends.map(user => (
-                        <div key={user.discordId} className="friend-item">
-                          <div className="friend-avatar-container" style={{ position: 'relative' }}>
-                            <img src={user.avatarUrl || `https://ui-avatars.com/api/?name=${user.username}`} alt={user.username} className="friend-avatar" />
-                            <div className={`status-dot-avatar status-dot ${user.status || 'online'}`}></div>
-                          </div>
-                          <div className="friend-info">
-                            <div className="friend-name">{user.username}</div>
-                            {user.currentSong ? (
-                              <>
-                                <div className="friend-song" title={user.currentSong.title}>♫ {user.currentSong.title}</div>
-                                {user.status !== 'dnd' && (
-                                  <button className="listen-along-btn" onClick={async () => {
-                                    if (user.status === 'idle') {
-                                      const success = await (window as any).electronAPI.sendJoinRequest(user.partyId || user.discordId, discordUser.id, discordUser.global_name || discordUser.username);
-                                      if (success) {
-                                        showToast(t('joinRequestSent'), 'success');
-                                      }
-                                    } else {
-                                      setActivePartyId(user.partyId || user.discordId);
-                                      setIsGuest(true);
-                                      showToast(`Listening along with ${user.username}...`, 'success');
-                                    }
-                                  }}><Headphones size={12} style={{ marginRight: '4px' }}/> {user.status === 'idle' ? t('askToJoin') : t('listenAlong')}</button>
-                                )}
-                                {user.status === 'dnd' && (
-                                  <button className="listen-along-btn" disabled style={{ opacity: 0.5, cursor: 'not-allowed' }}>
-                                    <Headphones size={12} style={{ marginRight: '4px' }}/> {t('joinDisabled')}
-                                  </button>
-                                )}
-                              </>
-                            ) : (
-                              <div className="friend-song" style={{ color: 'var(--text-muted)' }}>Browsing...</div>
+                <div className="friend-list">
+                  {(() => {
+                    const effectivePartyId = activePartyId || (discordUser && onlineUsers.some(u => u.partyId === discordUser.id) ? discordUser.id : null);
+                    const currentPartyMembers = onlineUsers.filter(u => effectivePartyId && (u.partyId === effectivePartyId || u.discordId === effectivePartyId));
+                    const otherFriends = onlineUsers.filter(u => !effectivePartyId || (u.partyId !== effectivePartyId && u.discordId !== effectivePartyId));
+
+                    const partyAvatars = [];
+                    if (effectivePartyId && discordUser) {
+                      partyAvatars.push({
+                        id: discordUser.id,
+                        url: discordUser.avatar ? `https://cdn.discordapp.com/avatars/${discordUser.id}/${discordUser.avatar}.png` : `https://ui-avatars.com/api/?name=${discordUser.username}`,
+                        name: discordUser.username
+                      });
+                      currentPartyMembers.forEach(u => {
+                        partyAvatars.push({
+                          id: u.discordId,
+                          url: u.avatarUrl || `https://ui-avatars.com/api/?name=${u.username}`,
+                          name: u.username
+                        });
+                      });
+                    }
+
+                    return (
+                      <>
+                        {effectivePartyId && partyAvatars.length > 0 && (
+                          <div className="friend-item current-party-block" style={{ flexDirection: 'row', alignItems: 'center', padding: '10px', background: 'rgba(255,255,255,0.03)', borderRadius: '8px', position: 'relative', marginBottom: '8px', width: '100%', boxSizing: 'border-box' }}>
+                            <div className="party-avatars" style={{ display: 'flex', marginRight: '12px' }}>
+                              {partyAvatars.map((av, idx) => (
+                                <img
+                                  key={av.id}
+                                  src={av.url}
+                                  alt={av.name}
+                                  title={av.name}
+                                  style={{
+                                    width: '28px',
+                                    height: '28px',
+                                    borderRadius: '50%',
+                                    border: '2px solid var(--background-secondary)',
+                                    marginLeft: idx === 0 ? '0' : '-10px',
+                                    zIndex: partyAvatars.length - idx,
+                                    objectFit: 'cover'
+                                  }}
+                                />
+                              ))}
+                            </div>
+                            <div style={{ display: 'flex', flexDirection: 'column', flex: 1, overflow: 'hidden' }}>
+                              <span style={{ fontSize: '10px', color: 'var(--accent-primary)', fontWeight: 600, marginBottom: '2px', letterSpacing: '0.5px' }}>
+                                {t('listenAlong')}
+                              </span>
+                              {currentPartyMembers.length > 0 && currentPartyMembers[0].currentSong ? (
+                                <div className="friend-song" style={{ fontSize: '12px', color: 'var(--text-primary)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', width: '100%' }} title={currentPartyMembers[0].currentSong.title}>
+                                  ♫ {currentPartyMembers[0].currentSong.title}
+                                </div>
+                              ) : currentSong ? (
+                                <div className="friend-song" style={{ fontSize: '12px', color: 'var(--text-primary)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', width: '100%' }} title={currentSong.title}>
+                                  ♫ {currentSong.title}
+                                </div>
+                              ) : (
+                                <div className="friend-song" style={{ fontSize: '12px', color: 'var(--text-muted)' }}>Browsing...</div>
+                              )}
+                            </div>
+                            {isGuest && (
+                              <button
+                                className="leave-party-icon-btn"
+                                onClick={() => {
+                                  setIsGuest(false);
+                                  setActivePartyId(null);
+                                  if (audioRef.current) audioRef.current.pause();
+                                  setIsPlaying(false);
+                                }}
+                                title={t('leaveParty')}
+                                style={{ marginLeft: '8px' }}
+                              >
+                                <LogOut size={16} />
+                              </button>
                             )}
                           </div>
-                        </div>
-                      ))
-                    )}
-                  </>
-                );
-              })()}
+                        )}
+
+                        {otherFriends.length === 0 && !effectivePartyId ? (
+                          <div style={{ color: 'var(--text-muted)', fontSize: '11px', textAlign: 'center', marginTop: '12px' }}>{t('noFriendsOnline')}</div>
+                        ) : (
+                          otherFriends.map(user => (
+                            <div key={user.discordId} className="friend-item">
+                              <div className="friend-avatar-container" style={{ position: 'relative' }}>
+                                <img src={user.avatarUrl || `https://ui-avatars.com/api/?name=${user.username}`} alt={user.username} className="friend-avatar" />
+                                <div className={`status-dot-avatar status-dot ${user.status || 'online'}`}></div>
+                              </div>
+                              <div className="friend-info">
+                                <div className="friend-name">{user.username}</div>
+                                {user.currentSong ? (
+                                  <>
+                                    <div className="friend-song" title={user.currentSong.title}>♫ {user.currentSong.title}</div>
+                                    {user.status !== 'dnd' && (
+                                      <button className="listen-along-btn" onClick={async () => {
+                                        if (user.status === 'idle') {
+                                          const success = await (window as any).electronAPI.sendJoinRequest(user.partyId || user.discordId, discordUser.id, discordUser.global_name || discordUser.username);
+                                          if (success) {
+                                            showToast(t('joinRequestSent'), 'success');
+                                          }
+                                        } else {
+                                          setActivePartyId(user.partyId || user.discordId);
+                                          setIsGuest(true);
+                                          showToast(`Listening along with ${user.username}...`, 'success');
+                                        }
+                                      }}><Headphones size={12} style={{ marginRight: '4px' }} /> {user.status === 'idle' ? t('askToJoin') : t('listenAlong')}</button>
+                                    )}
+                                    {user.status === 'dnd' && (
+                                      <button className="listen-along-btn" disabled style={{ opacity: 0.5, cursor: 'not-allowed' }}>
+                                        <Headphones size={12} style={{ marginRight: '4px' }} /> {t('joinDisabled')}
+                                      </button>
+                                    )}
+                                  </>
+                                ) : (
+                                  <div className="friend-song" style={{ color: 'var(--text-muted)' }}>Browsing...</div>
+                                )}
+                              </div>
+                            </div>
+                          ))
+                        )}
+                      </>
+                    );
+                  })()}
+                </div>
+              </div>
             </div>
-            </div>
-          </div>
-        )}
+          )}
 
           <div className="nav-bottom" style={{ position: 'relative' }}>
             {showLogoutDropdown && (
@@ -4452,20 +4721,20 @@ function App() {
             <div style={{ display: 'flex', alignItems: 'center' }}>
               {settings.theme === 'minimalist' && (
                 <div className="minimalist-nav" style={{ display: 'flex', gap: '8px', marginRight: '8px', alignItems: 'center' }}>
-                  <button className="btn-icon" onClick={goHome} disabled={isOffline} style={{ 
+                  <button className="btn-icon" onClick={goHome} disabled={isOffline} style={{
                     color: activePage === 'home' ? (settings.theme === 'minimalist' ? 'var(--accent-text, black)' : 'var(--accent-primary)') : 'var(--text-primary)',
                     background: activePage === 'home' && settings.theme === 'minimalist' ? 'var(--accent-primary)' : '',
                     opacity: isOffline ? 0.5 : 1
                   }} title="Home"><Home size={20} /></button>
-                  <button className="btn-icon" onClick={() => setActivePage('library')} style={{ 
+                  <button className="btn-icon" onClick={() => setActivePage('library')} style={{
                     color: activePage === 'library' ? (settings.theme === 'minimalist' ? 'var(--accent-text, black)' : 'var(--accent-primary)') : 'var(--text-primary)',
                     background: activePage === 'library' && settings.theme === 'minimalist' ? 'var(--accent-primary)' : ''
                   }} title={t('likedSongs') || 'Liked Songs'}><Heart size={20} /></button>
-                  <button className="btn-icon" onClick={() => setActivePage('playlist')} style={{ 
+                  <button className="btn-icon" onClick={() => setActivePage('playlist')} style={{
                     color: (activePage === 'playlist' || activePage === 'playlist-detail') ? (settings.theme === 'minimalist' ? 'var(--accent-text, black)' : 'var(--accent-primary)') : 'var(--text-primary)',
                     background: (activePage === 'playlist' || activePage === 'playlist-detail') && settings.theme === 'minimalist' ? 'var(--accent-primary)' : ''
                   }} title={t('playlist') || 'Playlists'}><ListMusic size={20} /></button>
-                  <button className="btn-icon" onClick={() => setActivePage('settings')} style={{ 
+                  <button className="btn-icon" onClick={() => setActivePage('settings')} style={{
                     color: activePage === 'settings' ? (settings.theme === 'minimalist' ? 'var(--accent-text, black)' : 'var(--accent-primary)') : 'var(--text-primary)',
                     background: activePage === 'settings' && settings.theme === 'minimalist' ? 'var(--accent-primary)' : ''
                   }} title="Pengaturan"><Settings size={20} /></button>
@@ -4477,7 +4746,7 @@ function App() {
                 <button className="arrow-btn"><ChevronRight size={20} /></button>
               </div>
             </div>
-            
+
             <div className="search-container" ref={searchContainerRef} style={settings.theme === 'minimalist' ? { marginLeft: 'auto' } : { position: 'relative' }}>
               <form onSubmit={e => e.preventDefault()} style={{ display: 'flex', alignItems: 'center', position: 'relative', opacity: isOffline ? 0.5 : 1, pointerEvents: isOffline ? 'none' : 'auto' }}>
                 <Search size={16} className="search-icon" />
@@ -4496,8 +4765,8 @@ function App() {
               {showSuggestions && searchQuery.length >= 2 && (
                 <div className="search-suggestions-dropdown">
                   {homeMode !== 'podcast' && (
-                    <div 
-                      className="suggestion-intent-row" 
+                    <div
+                      className="suggestion-intent-row"
                       onMouseDown={e => e.preventDefault()}
                       onClick={() => {
                         openArtistPage(searchQuery);
@@ -4628,7 +4897,7 @@ function App() {
             </div>
             <div className="topbar-right-actions" style={{ display: 'flex', alignItems: 'center', gap: '12px', minWidth: '60px', justifyContent: 'flex-end' }}>
               {updateStatus !== 'none' && (
-                <button 
+                <button
                   className={`update-badge ${updateStatus === 'downloaded' ? 'ready' : ''}`}
                   onClick={() => {
                     if (updateStatus === 'available') {
@@ -4642,10 +4911,10 @@ function App() {
                 >
                   <Download size={16} />
                   <span>
-                    {updateStatus === 'available' ? t('updateAvailable') : 
-                     updateStatus === 'downloading' ? `${t('updateDownloading')} (${updateProgress}%)` : 
-                     updateStatus === 'error' ? 'Update Gagal' :
-                     t('updateReady')}
+                    {updateStatus === 'available' ? t('updateAvailable') :
+                      updateStatus === 'downloading' ? `${t('updateDownloading')} (${updateProgress}%)` :
+                        updateStatus === 'error' ? 'Update Gagal' :
+                          t('updateReady')}
                   </span>
                 </button>
               )}
@@ -4674,10 +4943,10 @@ function App() {
               <div className="player-left">
                 {currentSong ? (
                   <>
-                    <img 
-                      src={getCleanThumbnail(currentSong.thumbnail)} 
-                      className="player-cover" 
-                      alt="cover" 
+                    <img
+                      src={getCleanThumbnail(currentSong.thumbnail)}
+                      className="player-cover"
+                      alt="cover"
                       style={{
                         animation: isPlaying ? 'spin 12s linear infinite' : 'none',
                         borderRadius: '50%',
@@ -4753,159 +5022,159 @@ function App() {
               </div>
             </div>
             <div className="friend-activity-inner">
-            <div className="sidebar-header" style={{ padding: '0 0 12px 0', borderBottom: '1px solid rgba(255,255,255,0.05)', marginBottom: '8px' }}>
-              <div className="sidebar-title" style={{ fontSize: '12px' }}>{t('friendActivityTitle')}</div>
-              <div className="sidebar-subtitle" style={{ fontSize: '11px' }}>{t('friendActivitySubtitle')}</div>
-            </div>
-            
-            {joinRequests.incoming && joinRequests.incoming.length > 0 && (
-              <div className="join-requests-container" style={{ marginBottom: '12px', padding: '8px', backgroundColor: 'rgba(240, 178, 50, 0.1)', border: '1px solid rgba(240, 178, 50, 0.3)', borderRadius: '8px' }}>
-                <div style={{ fontSize: '11px', color: '#f0b232', fontWeight: 700, marginBottom: '8px' }}>{t('pendingRequests')}</div>
-                {joinRequests.incoming.map((req: any) => (
-                  <div key={req.id} style={{ display: 'flex', flexDirection: 'column', gap: '8px', marginBottom: '8px', paddingBottom: '8px', borderBottom: '1px solid rgba(255,255,255,0.05)' }}>
-                    <div style={{ fontSize: '12px', color: 'var(--text-primary)' }}>
-                      <strong>{req.guestName}</strong> {t('joinRequestReceived')}
-                    </div>
-                    <div style={{ display: 'flex', gap: '8px' }}>
-                      <button onClick={async () => {
-                        await (window as any).electronAPI.respondJoinRequest(req.id, 'accepted');
-                        setJoinRequests(prev => ({ ...prev, incoming: prev.incoming.filter(r => r.id !== req.id) }));
-                      }} style={{ flex: 1, padding: '4px 0', backgroundColor: '#23a559', color: 'white', border: 'none', borderRadius: '4px', cursor: 'pointer', fontSize: '11px', fontWeight: 600 }}>{t('accept')}</button>
-                      
-                      <button onClick={async () => {
-                        await (window as any).electronAPI.respondJoinRequest(req.id, 'rejected');
-                        setJoinRequests(prev => ({ ...prev, incoming: prev.incoming.filter(r => r.id !== req.id) }));
-                      }} style={{ flex: 1, padding: '4px 0', backgroundColor: '#f23f43', color: 'white', border: 'none', borderRadius: '4px', cursor: 'pointer', fontSize: '11px', fontWeight: 600 }}>{t('reject')}</button>
-                    </div>
-                  </div>
-                ))}
+              <div className="sidebar-header" style={{ padding: '0 0 12px 0', borderBottom: '1px solid rgba(255,255,255,0.05)', marginBottom: '8px' }}>
+                <div className="sidebar-title" style={{ fontSize: '12px' }}>{t('friendActivityTitle')}</div>
+                <div className="sidebar-subtitle" style={{ fontSize: '11px' }}>{t('friendActivitySubtitle')}</div>
               </div>
-            )}
 
-            <div className="friend-list">
-              {(() => {
-                const effectivePartyId = activePartyId || (discordUser && onlineUsers.some(u => u.partyId === discordUser.id) ? discordUser.id : null);
-                const currentPartyMembers = onlineUsers.filter(u => effectivePartyId && (u.partyId === effectivePartyId || u.discordId === effectivePartyId));
-                const otherFriends = onlineUsers.filter(u => !effectivePartyId || (u.partyId !== effectivePartyId && u.discordId !== effectivePartyId));
-                
-                const partyAvatars = [];
-                if (effectivePartyId && discordUser) {
-                  partyAvatars.push({
-                    id: discordUser.id,
-                    url: discordUser.avatar ? `https://cdn.discordapp.com/avatars/${discordUser.id}/${discordUser.avatar}.png` : `https://ui-avatars.com/api/?name=${discordUser.username}`,
-                    name: discordUser.username
-                  });
-                  currentPartyMembers.forEach(u => {
-                    partyAvatars.push({
-                      id: u.discordId,
-                      url: u.avatarUrl || `https://ui-avatars.com/api/?name=${u.username}`,
-                      name: u.username
-                    });
-                  });
-                }
-
-                return (
-                  <>
-                    {effectivePartyId && partyAvatars.length > 0 && (
-                      <div className="friend-item current-party-block" style={{ flexDirection: 'row', alignItems: 'center', padding: '10px', background: 'rgba(255,255,255,0.03)', borderRadius: '8px', position: 'relative', marginBottom: '8px', width: '100%', boxSizing: 'border-box' }}>
-                        <div className="party-avatars" style={{ display: 'flex', marginRight: '12px' }}>
-                          {partyAvatars.map((av, idx) => (
-                            <img 
-                              key={av.id} 
-                              src={av.url} 
-                              alt={av.name} 
-                              title={av.name}
-                              style={{ 
-                                width: '28px', 
-                                height: '28px', 
-                                borderRadius: '50%', 
-                                border: '2px solid var(--background-secondary)',
-                                marginLeft: idx === 0 ? '0' : '-10px',
-                                zIndex: partyAvatars.length - idx,
-                                objectFit: 'cover'
-                              }} 
-                            />
-                          ))}
-                        </div>
-                        <div style={{ display: 'flex', flexDirection: 'column', flex: 1, overflow: 'hidden' }}>
-                          <span style={{ fontSize: '10px', color: 'var(--accent-primary)', fontWeight: 600, marginBottom: '2px', letterSpacing: '0.5px' }}>
-                            {t('listenAlong')}
-                          </span>
-                          {currentPartyMembers.length > 0 && currentPartyMembers[0].currentSong ? (
-                            <div className="friend-song" style={{ fontSize: '12px', color: 'var(--text-primary)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', width: '100%' }} title={currentPartyMembers[0].currentSong.title}>
-                              ♫ {currentPartyMembers[0].currentSong.title}
-                            </div>
-                          ) : currentSong ? (
-                            <div className="friend-song" style={{ fontSize: '12px', color: 'var(--text-primary)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', width: '100%' }} title={currentSong.title}>
-                              ♫ {currentSong.title}
-                            </div>
-                          ) : (
-                            <div className="friend-song" style={{ fontSize: '12px', color: 'var(--text-muted)' }}>Browsing...</div>
-                          )}
-                        </div>
-                        {isGuest && (
-                          <button 
-                            className="leave-party-icon-btn" 
-                            onClick={() => {
-                              setIsGuest(false);
-                              setActivePartyId(null);
-                              if (audioRef.current) audioRef.current.pause();
-                              setIsPlaying(false);
-                            }}
-                            title={t('leaveParty')}
-                            style={{ marginLeft: '8px' }}
-                          >
-                            <LogOut size={16} />
-                          </button>
-                        )}
+              {joinRequests.incoming && joinRequests.incoming.length > 0 && (
+                <div className="join-requests-container" style={{ marginBottom: '12px', padding: '8px', backgroundColor: 'rgba(240, 178, 50, 0.1)', border: '1px solid rgba(240, 178, 50, 0.3)', borderRadius: '8px' }}>
+                  <div style={{ fontSize: '11px', color: '#f0b232', fontWeight: 700, marginBottom: '8px' }}>{t('pendingRequests')}</div>
+                  {joinRequests.incoming.map((req: any) => (
+                    <div key={req.id} style={{ display: 'flex', flexDirection: 'column', gap: '8px', marginBottom: '8px', paddingBottom: '8px', borderBottom: '1px solid rgba(255,255,255,0.05)' }}>
+                      <div style={{ fontSize: '12px', color: 'var(--text-primary)' }}>
+                        <strong>{req.guestName}</strong> {t('joinRequestReceived')}
                       </div>
-                    )}
+                      <div style={{ display: 'flex', gap: '8px' }}>
+                        <button onClick={async () => {
+                          await (window as any).electronAPI.respondJoinRequest(req.id, 'accepted');
+                          setJoinRequests(prev => ({ ...prev, incoming: prev.incoming.filter(r => r.id !== req.id) }));
+                        }} style={{ flex: 1, padding: '4px 0', backgroundColor: '#23a559', color: 'white', border: 'none', borderRadius: '4px', cursor: 'pointer', fontSize: '11px', fontWeight: 600 }}>{t('accept')}</button>
 
-                    {otherFriends.length === 0 && !effectivePartyId ? (
-                      <div style={{ color: 'var(--text-muted)', fontSize: '11px', textAlign: 'center', marginTop: '12px' }}>{t('noFriendsOnline')}</div>
-                    ) : (
-                      otherFriends.map(user => (
-                        <div key={user.discordId} className="friend-item">
-                          <div className="friend-avatar-container" style={{ position: 'relative' }}>
-                            <img src={user.avatarUrl || `https://ui-avatars.com/api/?name=${user.username}`} alt={user.username} className="friend-avatar" />
-                            <div className={`status-dot-avatar status-dot ${user.status || 'online'}`}></div>
+                        <button onClick={async () => {
+                          await (window as any).electronAPI.respondJoinRequest(req.id, 'rejected');
+                          setJoinRequests(prev => ({ ...prev, incoming: prev.incoming.filter(r => r.id !== req.id) }));
+                        }} style={{ flex: 1, padding: '4px 0', backgroundColor: '#f23f43', color: 'white', border: 'none', borderRadius: '4px', cursor: 'pointer', fontSize: '11px', fontWeight: 600 }}>{t('reject')}</button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              <div className="friend-list">
+                {(() => {
+                  const effectivePartyId = activePartyId || (discordUser && onlineUsers.some(u => u.partyId === discordUser.id) ? discordUser.id : null);
+                  const currentPartyMembers = onlineUsers.filter(u => effectivePartyId && (u.partyId === effectivePartyId || u.discordId === effectivePartyId));
+                  const otherFriends = onlineUsers.filter(u => !effectivePartyId || (u.partyId !== effectivePartyId && u.discordId !== effectivePartyId));
+
+                  const partyAvatars = [];
+                  if (effectivePartyId && discordUser) {
+                    partyAvatars.push({
+                      id: discordUser.id,
+                      url: discordUser.avatar ? `https://cdn.discordapp.com/avatars/${discordUser.id}/${discordUser.avatar}.png` : `https://ui-avatars.com/api/?name=${discordUser.username}`,
+                      name: discordUser.username
+                    });
+                    currentPartyMembers.forEach(u => {
+                      partyAvatars.push({
+                        id: u.discordId,
+                        url: u.avatarUrl || `https://ui-avatars.com/api/?name=${u.username}`,
+                        name: u.username
+                      });
+                    });
+                  }
+
+                  return (
+                    <>
+                      {effectivePartyId && partyAvatars.length > 0 && (
+                        <div className="friend-item current-party-block" style={{ flexDirection: 'row', alignItems: 'center', padding: '10px', background: 'rgba(255,255,255,0.03)', borderRadius: '8px', position: 'relative', marginBottom: '8px', width: '100%', boxSizing: 'border-box' }}>
+                          <div className="party-avatars" style={{ display: 'flex', marginRight: '12px' }}>
+                            {partyAvatars.map((av, idx) => (
+                              <img
+                                key={av.id}
+                                src={av.url}
+                                alt={av.name}
+                                title={av.name}
+                                style={{
+                                  width: '28px',
+                                  height: '28px',
+                                  borderRadius: '50%',
+                                  border: '2px solid var(--background-secondary)',
+                                  marginLeft: idx === 0 ? '0' : '-10px',
+                                  zIndex: partyAvatars.length - idx,
+                                  objectFit: 'cover'
+                                }}
+                              />
+                            ))}
                           </div>
-                          <div className="friend-info">
-                            <div className="friend-name">{user.username}</div>
-                            {user.currentSong ? (
-                              <>
-                                <div className="friend-song" title={user.currentSong.title}>♫ {user.currentSong.title}</div>
-                                {user.status !== 'dnd' && (
-                                  <button className="listen-along-btn" onClick={async () => {
-                                    if (user.status === 'idle') {
-                                      const success = await (window as any).electronAPI.sendJoinRequest(user.partyId || user.discordId, discordUser.id, discordUser.global_name || discordUser.username);
-                                      if (success) {
-                                        showToast(t('joinRequestSent'), 'success');
-                                      }
-                                    } else {
-                                      setActivePartyId(user.partyId || user.discordId);
-                                      setIsGuest(true);
-                                      showToast(`Listening along with ${user.username}...`, 'success');
-                                    }
-                                  }}><Headphones size={12} style={{ marginRight: '4px' }}/> {user.status === 'idle' ? t('askToJoin') : t('listenAlong')}</button>
-                                )}
-                                {user.status === 'dnd' && (
-                                  <button className="listen-along-btn" disabled style={{ opacity: 0.5, cursor: 'not-allowed' }}>
-                                    <Headphones size={12} style={{ marginRight: '4px' }}/> {t('joinDisabled')}
-                                  </button>
-                                )}
-                              </>
+                          <div style={{ display: 'flex', flexDirection: 'column', flex: 1, overflow: 'hidden' }}>
+                            <span style={{ fontSize: '10px', color: 'var(--accent-primary)', fontWeight: 600, marginBottom: '2px', letterSpacing: '0.5px' }}>
+                              {t('listenAlong')}
+                            </span>
+                            {currentPartyMembers.length > 0 && currentPartyMembers[0].currentSong ? (
+                              <div className="friend-song" style={{ fontSize: '12px', color: 'var(--text-primary)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', width: '100%' }} title={currentPartyMembers[0].currentSong.title}>
+                                ♫ {currentPartyMembers[0].currentSong.title}
+                              </div>
+                            ) : currentSong ? (
+                              <div className="friend-song" style={{ fontSize: '12px', color: 'var(--text-primary)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', width: '100%' }} title={currentSong.title}>
+                                ♫ {currentSong.title}
+                              </div>
                             ) : (
-                              <div className="friend-song" style={{ color: 'var(--text-muted)' }}>Browsing...</div>
+                              <div className="friend-song" style={{ fontSize: '12px', color: 'var(--text-muted)' }}>Browsing...</div>
                             )}
                           </div>
+                          {isGuest && (
+                            <button
+                              className="leave-party-icon-btn"
+                              onClick={() => {
+                                setIsGuest(false);
+                                setActivePartyId(null);
+                                if (audioRef.current) audioRef.current.pause();
+                                setIsPlaying(false);
+                              }}
+                              title={t('leaveParty')}
+                              style={{ marginLeft: '8px' }}
+                            >
+                              <LogOut size={16} />
+                            </button>
+                          )}
                         </div>
-                      ))
-                    )}
-                  </>
-                );
-              })()}
-            </div>
+                      )}
+
+                      {otherFriends.length === 0 && !effectivePartyId ? (
+                        <div style={{ color: 'var(--text-muted)', fontSize: '11px', textAlign: 'center', marginTop: '12px' }}>{t('noFriendsOnline')}</div>
+                      ) : (
+                        otherFriends.map(user => (
+                          <div key={user.discordId} className="friend-item">
+                            <div className="friend-avatar-container" style={{ position: 'relative' }}>
+                              <img src={user.avatarUrl || `https://ui-avatars.com/api/?name=${user.username}`} alt={user.username} className="friend-avatar" />
+                              <div className={`status-dot-avatar status-dot ${user.status || 'online'}`}></div>
+                            </div>
+                            <div className="friend-info">
+                              <div className="friend-name">{user.username}</div>
+                              {user.currentSong ? (
+                                <>
+                                  <div className="friend-song" title={user.currentSong.title}>♫ {user.currentSong.title}</div>
+                                  {user.status !== 'dnd' && (
+                                    <button className="listen-along-btn" onClick={async () => {
+                                      if (user.status === 'idle') {
+                                        const success = await (window as any).electronAPI.sendJoinRequest(user.partyId || user.discordId, discordUser.id, discordUser.global_name || discordUser.username);
+                                        if (success) {
+                                          showToast(t('joinRequestSent'), 'success');
+                                        }
+                                      } else {
+                                        setActivePartyId(user.partyId || user.discordId);
+                                        setIsGuest(true);
+                                        showToast(`Listening along with ${user.username}...`, 'success');
+                                      }
+                                    }}><Headphones size={12} style={{ marginRight: '4px' }} /> {user.status === 'idle' ? t('askToJoin') : t('listenAlong')}</button>
+                                  )}
+                                  {user.status === 'dnd' && (
+                                    <button className="listen-along-btn" disabled style={{ opacity: 0.5, cursor: 'not-allowed' }}>
+                                      <Headphones size={12} style={{ marginRight: '4px' }} /> {t('joinDisabled')}
+                                    </button>
+                                  )}
+                                </>
+                              ) : (
+                                <div className="friend-song" style={{ color: 'var(--text-muted)' }}>Browsing...</div>
+                              )}
+                            </div>
+                          </div>
+                        ))
+                      )}
+                    </>
+                  );
+                })()}
+              </div>
             </div>
           </div>
         )}
@@ -4917,160 +5186,160 @@ function App() {
           backgroundPosition: 'center',
           position: settings.theme === 'minimalist' ? 'fixed' : 'relative'
         } : undefined}>
-            {settings.theme === 'minimalist' && (
-              <div className="xbox-widget-header" onClick={() => setIsRightSidebarOpen(!isRightSidebarOpen)} style={{ position: 'relative', zIndex: 1, borderBottom: isRightSidebarOpen ? '1px solid rgba(255,255,255,0.05)' : 'none' }}>
-                <div className="xbox-widget-header-info">
-                  <div className="xbox-widget-title">{showLyrics ? t('lyricsPanel') : t('queue')}</div>
-                  {currentSong && <div className="xbox-widget-subtitle">{currentSong.title}</div>}
-                </div>
-                <div className="xbox-widget-actions">
-                  <button style={{ background: 'none', border: 'none', color: !showLyrics ? 'var(--accent-primary)' : 'var(--text-secondary)', cursor: 'pointer', marginRight: '8px' }} onClick={(e) => { e.stopPropagation(); setShowLyrics(false); }} title="Queue">
-                    <ListMusic size={16} />
-                  </button>
-                  <button style={{ background: 'none', border: 'none', color: showLyrics ? 'var(--accent-primary)' : 'var(--text-secondary)', cursor: 'pointer', marginRight: '12px' }} onClick={(e) => { e.stopPropagation(); setShowLyrics(true); }} title="Lyrics">
-                    <Mic2 size={16} />
-                  </button>
-                  {isRightSidebarOpen ? <ChevronDown size={20} /> : <ChevronUp size={20} />}
+          {settings.theme === 'minimalist' && (
+            <div className="xbox-widget-header" onClick={() => setIsRightSidebarOpen(!isRightSidebarOpen)} style={{ position: 'relative', zIndex: 1, borderBottom: isRightSidebarOpen ? '1px solid rgba(255,255,255,0.05)' : 'none' }}>
+              <div className="xbox-widget-header-info">
+                <div className="xbox-widget-title">{showLyrics ? t('lyricsPanel') : t('queue')}</div>
+                {currentSong && <div className="xbox-widget-subtitle">{currentSong.title}</div>}
+              </div>
+              <div className="xbox-widget-actions">
+                <button style={{ background: 'none', border: 'none', color: !showLyrics ? 'var(--accent-primary)' : 'var(--text-secondary)', cursor: 'pointer', marginRight: '8px' }} onClick={(e) => { e.stopPropagation(); setShowLyrics(false); }} title="Queue">
+                  <ListMusic size={16} />
+                </button>
+                <button style={{ background: 'none', border: 'none', color: showLyrics ? 'var(--accent-primary)' : 'var(--text-secondary)', cursor: 'pointer', marginRight: '12px' }} onClick={(e) => { e.stopPropagation(); setShowLyrics(true); }} title="Lyrics">
+                  <Mic2 size={16} />
+                </button>
+                {isRightSidebarOpen ? <ChevronDown size={20} /> : <ChevronUp size={20} />}
+              </div>
+            </div>
+          )}
+
+          {showLyrics && currentSong && (
+            <div className="right-sidebar-overlay" style={{
+              position: 'absolute',
+              top: 0, left: 0, right: 0, bottom: 0,
+              backgroundColor: 'rgba(30, 31, 34, 0.5)',
+              backdropFilter: 'blur(80px)',
+              WebkitBackdropFilter: 'blur(80px)',
+              zIndex: 0
+            }}></div>
+          )}
+          {settings.theme !== 'minimalist' && (
+            <div className="sidebar-header" style={{ position: 'relative', zIndex: 1 }}>
+              <div>
+                <div className="sidebar-title">{showLyrics ? t('lyricsPanel') : t('queue')}</div>
+                <div className="sidebar-subtitle">
+                  {showLyrics ? (currentSong ? currentSong.title : 'No song') : `${Math.max(0, queue.length - Math.max(0, currentIndex))} ${t('songs')} • ${formatTime(queue.slice(Math.max(0, currentIndex)).reduce((acc, s) => acc + (s.duration || 0), 0))}`}
                 </div>
               </div>
-            )}
+              <div className="sidebar-actions">
+                <button style={{ background: 'none', border: 'none', color: !showLyrics ? 'var(--accent-primary)' : 'var(--text-secondary)', cursor: 'pointer' }} onClick={() => setShowLyrics(false)} title="Queue">
+                  <ListMusic size={18} />
+                </button>
+                <button style={{ background: 'none', border: 'none', color: showLyrics ? 'var(--accent-primary)' : 'var(--text-secondary)', cursor: 'pointer' }} onClick={() => setShowLyrics(true)} title="Lyrics">
+                  <Mic2 size={18} />
+                </button>
+                <button style={{ background: 'none', border: 'none', color: 'var(--text-secondary)', cursor: 'pointer', marginLeft: '8px' }} onClick={() => setIsRightSidebarOpen(false)} title="Tutup">
+                  <X size={18} />
+                </button>
+              </div>
+            </div>
+          )}
 
-            {showLyrics && currentSong && (
-              <div className="right-sidebar-overlay" style={{
-                position: 'absolute',
-                top: 0, left: 0, right: 0, bottom: 0,
-                backgroundColor: 'rgba(30, 31, 34, 0.5)',
-                backdropFilter: 'blur(80px)',
-                WebkitBackdropFilter: 'blur(80px)',
-                zIndex: 0
-              }}></div>
-            )}
-            {settings.theme !== 'minimalist' && (
-              <div className="sidebar-header" style={{ position: 'relative', zIndex: 1 }}>
-                <div>
-                  <div className="sidebar-title">{showLyrics ? t('lyricsPanel') : t('queue')}</div>
-                  <div className="sidebar-subtitle">
-                    {showLyrics ? (currentSong ? currentSong.title : 'No song') : `${Math.max(0, queue.length - Math.max(0, currentIndex))} ${t('songs')} • ${formatTime(queue.slice(Math.max(0, currentIndex)).reduce((acc, s) => acc + (s.duration || 0), 0))}`}
-                  </div>
+          {showLyrics ? (
+            <div className="lyrics-mode" style={{ position: 'relative', zIndex: 1 }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                  <div style={{ fontSize: '12px', color: 'var(--text-muted)', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '1px' }}>Sync</div>
+                  <button
+                    onClick={() => setShowRomanized(!showRomanized)}
+                    style={{
+                      background: showRomanized ? 'var(--accent-primary)' : 'transparent',
+                      border: '1px solid var(--accent-primary)',
+                      color: showRomanized ? (settings.theme === 'minimalist' ? 'black' : 'white') : 'var(--accent-primary)',
+                      fontSize: '10px', padding: '2px 6px', borderRadius: '4px', cursor: 'pointer', fontWeight: 600
+                    }}
+                    title="Toggle Romanization"
+                  >
+                    A/文
+                  </button>
                 </div>
-                <div className="sidebar-actions">
-                  <button style={{ background: 'none', border: 'none', color: !showLyrics ? 'var(--accent-primary)' : 'var(--text-secondary)', cursor: 'pointer' }} onClick={() => setShowLyrics(false)} title="Queue">
-                    <ListMusic size={18} />
-                  </button>
-                  <button style={{ background: 'none', border: 'none', color: showLyrics ? 'var(--accent-primary)' : 'var(--text-secondary)', cursor: 'pointer' }} onClick={() => setShowLyrics(true)} title="Lyrics">
-                    <Mic2 size={18} />
-                  </button>
-                  <button style={{ background: 'none', border: 'none', color: 'var(--text-secondary)', cursor: 'pointer', marginLeft: '8px' }} onClick={() => setIsRightSidebarOpen(false)} title="Tutup">
-                    <X size={18} />
-                  </button>
+                <div style={{ display: 'flex', gap: '4px', backgroundColor: 'var(--bg-card)', padding: '4px', borderRadius: '12px', border: '1px solid var(--border-color)' }}>
+                  <button onClick={() => setLyricsOffset(prev => prev - 0.5)} style={{ background: 'transparent', border: 'none', color: 'var(--text-secondary)', fontSize: '11px', padding: '4px 8px', borderRadius: '8px', cursor: 'pointer' }}>-0.5s</button>
+                  <div style={{ backgroundColor: 'var(--accent-primary)', color: settings.theme === 'minimalist' ? 'black' : 'white', fontSize: '11px', fontWeight: 'bold', padding: '4px 12px', borderRadius: '8px', display: 'flex', alignItems: 'center' }}>{lyricsOffset}s</div>
+                  <button onClick={() => setLyricsOffset(prev => prev + 0.5)} style={{ background: 'transparent', border: 'none', color: 'var(--text-secondary)', fontSize: '11px', padding: '4px 8px', borderRadius: '8px', cursor: 'pointer' }}>+0.5s</button>
                 </div>
               </div>
-            )}
-
-            {showLyrics ? (
-              <div className="lyrics-mode" style={{ position: 'relative', zIndex: 1 }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                    <div style={{ fontSize: '12px', color: 'var(--text-muted)', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '1px' }}>Sync</div>
-                    <button 
-                      onClick={() => setShowRomanized(!showRomanized)} 
-                      style={{ 
-                        background: showRomanized ? 'var(--accent-primary)' : 'transparent', 
-                        border: '1px solid var(--accent-primary)', 
-                        color: showRomanized ? (settings.theme === 'minimalist' ? 'black' : 'white') : 'var(--accent-primary)', 
-                        fontSize: '10px', padding: '2px 6px', borderRadius: '4px', cursor: 'pointer', fontWeight: 600
-                      }}
-                      title="Toggle Romanization"
-                    >
-                      A/文
-                    </button>
-                  </div>
-                  <div style={{ display: 'flex', gap: '4px', backgroundColor: 'var(--bg-card)', padding: '4px', borderRadius: '12px', border: '1px solid var(--border-color)' }}>
-                    <button onClick={() => setLyricsOffset(prev => prev - 0.5)} style={{ background: 'transparent', border: 'none', color: 'var(--text-secondary)', fontSize: '11px', padding: '4px 8px', borderRadius: '8px', cursor: 'pointer' }}>-0.5s</button>
-                    <div style={{ backgroundColor: 'var(--accent-primary)', color: settings.theme === 'minimalist' ? 'black' : 'white', fontSize: '11px', fontWeight: 'bold', padding: '4px 12px', borderRadius: '8px', display: 'flex', alignItems: 'center' }}>{lyricsOffset}s</div>
-                    <button onClick={() => setLyricsOffset(prev => prev + 0.5)} style={{ background: 'transparent', border: 'none', color: 'var(--text-secondary)', fontSize: '11px', padding: '4px 8px', borderRadius: '8px', cursor: 'pointer' }}>+0.5s</button>
-                  </div>
-                </div>
-                <div className="lyrics-container" ref={sidebarLyricsRef} onWheel={handleUserScroll} onTouchMove={handleUserScroll} onMouseDown={handleUserScroll}>
-                  {lyricsData ? (
-                    lyricsData.map((line, i) => {
-                      const nextLineTime = i < lyricsData.length - 1 ? lyricsData[i + 1].time : duration;
-                      const effectiveProgress = progress - lyricsOffset;
-                      const isActive = effectiveProgress >= line.time && effectiveProgress < nextLineTime;
-                      if (line.isInstrumental) {
-                        const timeLeft = nextLineTime - effectiveProgress;
-                        return (
-                          <div key={i} data-lyric-idx={i} className={`lyrics-line instrumental ${isActive ? 'active' : 'inactive'}`} onClick={() => jumpToLyric(line.time)}>
-                            <span className={`instrumental-dot ${isActive && timeLeft <= 3 ? 'lit' : ''}`}>•</span>
-                            <span className={`instrumental-dot ${isActive && timeLeft <= 2 ? 'lit' : ''}`}>•</span>
-                            <span className={`instrumental-dot ${isActive && timeLeft <= 1 ? 'lit' : ''}`}>•</span>
-                          </div>
-                        );
-                      }
+              <div className="lyrics-container" ref={sidebarLyricsRef} onWheel={handleUserScroll} onTouchMove={handleUserScroll} onMouseDown={handleUserScroll}>
+                {lyricsData ? (
+                  lyricsData.map((line, i) => {
+                    const nextLineTime = i < lyricsData.length - 1 ? lyricsData[i + 1].time : duration;
+                    const effectiveProgress = progress - lyricsOffset;
+                    const isActive = effectiveProgress >= line.time && effectiveProgress < nextLineTime;
+                    if (line.isInstrumental) {
+                      const timeLeft = nextLineTime - effectiveProgress;
                       return (
-                        <div key={i} data-lyric-idx={i} className={`lyrics-line ${isActive ? 'active' : 'inactive'}`} onClick={() => jumpToLyric(line.time)}>
-                          {showRomanized && line.romanizedText ? line.romanizedText : line.text}
+                        <div key={i} data-lyric-idx={i} className={`lyrics-line instrumental ${isActive ? 'active' : 'inactive'}`} onClick={() => jumpToLyric(line.time)}>
+                          <span className={`instrumental-dot ${isActive && timeLeft <= 3 ? 'lit' : ''}`}>•</span>
+                          <span className={`instrumental-dot ${isActive && timeLeft <= 2 ? 'lit' : ''}`}>•</span>
+                          <span className={`instrumental-dot ${isActive && timeLeft <= 1 ? 'lit' : ''}`}>•</span>
                         </div>
                       );
-                    })
-                  ) : (
-                    <div style={{ textAlign: 'center', color: 'var(--text-secondary)', marginTop: '40px', fontSize: '14px' }}>{plainLyrics}</div>
-                  )}
-                </div>
-              </div>
-            ) : (
-              <div className="queue-list">
-                {queue.length - Math.max(0, currentIndex) <= 0 ? (
-                  <div style={{ color: 'var(--text-secondary)', fontSize: '13px', textAlign: 'center', marginTop: '32px' }}>{t('emptyQueue')}</div>
+                    }
+                    return (
+                      <div key={i} data-lyric-idx={i} className={`lyrics-line ${isActive ? 'active' : 'inactive'}`} onClick={() => jumpToLyric(line.time)}>
+                        {showRomanized && line.romanizedText ? line.romanizedText : line.text}
+                      </div>
+                    );
+                  })
                 ) : (
-                  <>
-                    {queue.map((song, idx) => {
-                      if (idx < currentIndex) return null;
-                      const isPlayingNow = currentSong?.id === song.id;
-                      return (
-                        <div key={idx} className={`queue-item ${isPlayingNow ? 'playing' : ''}`} style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                          <div style={{ display: 'flex', flex: 1, alignItems: 'center', gap: '12px', cursor: 'pointer', minWidth: 0 }} onClick={() => { setCurrentIndex(idx); executePlay(song); }}>
-                            <img src={getCleanThumbnail(song.thumbnail)} alt={song.title} style={{ width: '40px', height: '40px', borderRadius: '6px', objectFit: 'cover', flexShrink: 0 }} />
-                            <div style={{ flex: 1, overflow: 'hidden', minWidth: 0 }}>
-                              <div title={song.title} style={{ fontSize: "13px", fontWeight: 600, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{song.title}</div>
-                              <div style={{ fontSize: '12px', color: 'var(--text-secondary)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{song.artist}</div>
-                            </div>
-                            <div style={{ fontSize: '12px', color: 'var(--text-muted)', flexShrink: 0 }}>{formatTime(song.duration)}</div>
-                          </div>
-                          
-                          {!isPlayingNow && !(isGuest && activePartyId) && (
-                            <button 
-                              className="queue-remove-btn"
-                              style={{
-                                background: 'transparent', border: 'none', color: 'var(--text-muted)', cursor: 'pointer', padding: '4px',
-                                display: 'flex', alignItems: 'center', justifyContent: 'center', borderRadius: '4px', flexShrink: 0
-                              }}
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                setQueue(prev => {
-                                  const newQ = [...prev];
-                                  newQ.splice(idx, 1);
-                                  setOriginalQueue(newQ);
-                                  return newQ;
-                                });
-                              }}
-                              onMouseEnter={(e) => e.currentTarget.style.color = 'var(--accent-primary)'}
-                              onMouseLeave={(e) => e.currentTarget.style.color = 'var(--text-muted)'}
-                            >
-                              <X size={16} />
-                            </button>
-                          )}
-                        </div>
-                      );
-                    })}
-                    {queue.length > 0 && !(isGuest && activePartyId) && (
-                      <div className="clear-queue" onClick={() => { setQueue([]); setOriginalQueue([]); setCurrentIndex(-1); }}>{t('clearQueue')}</div>
-                    )}
-                  </>
+                  <div style={{ textAlign: 'center', color: 'var(--text-secondary)', marginTop: '40px', fontSize: '14px' }}>{plainLyrics}</div>
                 )}
               </div>
-            )}
-          </div>
+            </div>
+          ) : (
+            <div className="queue-list">
+              {queue.length - Math.max(0, currentIndex) <= 0 ? (
+                <div style={{ color: 'var(--text-secondary)', fontSize: '13px', textAlign: 'center', marginTop: '32px' }}>{t('emptyQueue')}</div>
+              ) : (
+                <>
+                  {queue.map((song, idx) => {
+                    if (idx < currentIndex) return null;
+                    const isPlayingNow = currentSong?.id === song.id;
+                    return (
+                      <div key={idx} className={`queue-item ${isPlayingNow ? 'playing' : ''}`} style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                        <div style={{ display: 'flex', flex: 1, alignItems: 'center', gap: '12px', cursor: 'pointer', minWidth: 0 }} onClick={() => { setCurrentIndex(idx); executePlay(song); }}>
+                          <img src={getCleanThumbnail(song.thumbnail)} alt={song.title} style={{ width: '40px', height: '40px', borderRadius: '6px', objectFit: 'cover', flexShrink: 0 }} />
+                          <div style={{ flex: 1, overflow: 'hidden', minWidth: 0 }}>
+                            <div title={song.title} style={{ fontSize: "13px", fontWeight: 600, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{song.title}</div>
+                            <div style={{ fontSize: '12px', color: 'var(--text-secondary)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{song.artist}</div>
+                          </div>
+                          <div style={{ fontSize: '12px', color: 'var(--text-muted)', flexShrink: 0 }}>{formatTime(song.duration)}</div>
+                        </div>
+
+                        {!isPlayingNow && !(isGuest && activePartyId) && (
+                          <button
+                            className="queue-remove-btn"
+                            style={{
+                              background: 'transparent', border: 'none', color: 'var(--text-muted)', cursor: 'pointer', padding: '4px',
+                              display: 'flex', alignItems: 'center', justifyContent: 'center', borderRadius: '4px', flexShrink: 0
+                            }}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setQueue(prev => {
+                                const newQ = [...prev];
+                                newQ.splice(idx, 1);
+                                setOriginalQueue(newQ);
+                                return newQ;
+                              });
+                            }}
+                            onMouseEnter={(e) => e.currentTarget.style.color = 'var(--accent-primary)'}
+                            onMouseLeave={(e) => e.currentTarget.style.color = 'var(--text-muted)'}
+                          >
+                            <X size={16} />
+                          </button>
+                        )}
+                      </div>
+                    );
+                  })}
+                  {queue.length > 0 && !(isGuest && activePartyId) && (
+                    <div className="clear-queue" onClick={() => { setQueue([]); setOriginalQueue([]); setCurrentIndex(-1); }}>{t('clearQueue')}</div>
+                  )}
+                </>
+              )}
+            </div>
+          )}
+        </div>
       </div>
 
       {/* RIGHT SIDEBAR */}
@@ -5079,9 +5348,9 @@ function App() {
       {isWidgetMode && (
         <div className="fullscreen-player">
           <div className="fs-background">
-            <img 
-              key={currentSong?.id || 'bg'} 
-              src={getHighResImage(currentSong?.thumbnail)} 
+            <img
+              key={currentSong?.id || 'bg'}
+              src={getHighResImage(currentSong?.thumbnail)}
               onError={(e) => {
                 const target = e.currentTarget as HTMLImageElement;
                 const fallback = 'https://images.unsplash.com/photo-1614680376573-df3480f0c6ff?auto=format&fit=crop&w=500&q=80';
@@ -5093,16 +5362,16 @@ function App() {
                   target.src = fallback;
                 }
               }}
-              alt="bg" 
+              alt="bg"
             />
           </div>
 
           <div className="fs-content">
             <div className="fs-left">
               <div className="fs-art-container" onMouseEnter={() => setShowWidgetOverlay(true)} onMouseLeave={() => setShowWidgetOverlay(false)}>
-                <img 
-                  key={currentSong?.id || 'art'} 
-                  src={getHighResImage(currentSong?.thumbnail)} 
+                <img
+                  key={currentSong?.id || 'art'}
+                  src={getHighResImage(currentSong?.thumbnail)}
                   onError={(e) => {
                     const target = e.currentTarget as HTMLImageElement;
                     const fallback = 'https://images.unsplash.com/photo-1614680376573-df3480f0c6ff?auto=format&fit=crop&w=500&q=80';
@@ -5114,8 +5383,8 @@ function App() {
                       target.src = fallback;
                     }
                   }}
-                  alt="art" 
-                  className="fs-art" 
+                  alt="art"
+                  className="fs-art"
                 />
 
                 <div className={`fs-art-overlay ${showWidgetOverlay ? 'visible' : ''}`}>
@@ -5161,12 +5430,12 @@ function App() {
 
             <div className="fs-right" style={{ position: 'relative' }}>
               <div style={{ position: 'absolute', top: '32px', right: '32px', zIndex: 10, display: 'flex', gap: '8px' }}>
-                <button 
-                  onClick={() => setShowRomanized(!showRomanized)} 
-                  style={{ 
-                    background: showRomanized ? 'rgba(255,255,255,0.2)' : 'transparent', 
-                    border: '1px solid rgba(255,255,255,0.3)', 
-                    color: 'white', 
+                <button
+                  onClick={() => setShowRomanized(!showRomanized)}
+                  style={{
+                    background: showRomanized ? 'rgba(255,255,255,0.2)' : 'transparent',
+                    border: '1px solid rgba(255,255,255,0.3)',
+                    color: 'white',
                     fontSize: '12px', padding: '4px 10px', borderRadius: '8px', cursor: 'pointer', fontWeight: 600,
                     backdropFilter: 'blur(10px)',
                     transition: 'all 0.2s'

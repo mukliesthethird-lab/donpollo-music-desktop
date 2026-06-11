@@ -267,3 +267,31 @@
   background: var(--accent-primary);
   color: var(--accent-text, #000);
 }
+
+/* =========================================
+   2. THEME: CUSTOM & DYNAMIC BACKGROUND
+   ========================================= */
+
+/* When custom theme is active, variables are injected inline via React into the root, 
+   but we can define defaults or specific behavior here. */
+.theme-custom {
+  /* Inherit injected variables from style attribute */
+}
+
+/* We want the background to smoothly transition when dynamic color changes */
+html, body, #root, .app-layout {
+  transition: background-color 0.8s ease, background-image 0.8s ease;
+}
+
+/* Optional overlay to make text readable over dynamic backgrounds */
+.dynamic-bg-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background: linear-gradient(to bottom, rgba(0,0,0,0.4), rgba(0,0,0,0.85));
+  z-index: -1;
+  pointer-events: none;
+  transition: opacity 0.8s ease;
+}
