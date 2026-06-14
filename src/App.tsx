@@ -831,10 +831,14 @@ function App() {
   }, [currentIndex, queue]);
 
   // ─── Listen Along & Presence Sync ───
+  const isSyncingRef = useRef(false);
   useEffect(() => {
     if (!discordUser) return;
 
     const syncPresence = async () => {
+      if (isSyncingRef.current) return;
+      isSyncingRef.current = true;
+      
       if ((window as any).electronAPI) {
         try {
           const avatar = discordUser.avatar ? `https://cdn.discordapp.com/avatars/${discordUser.id}/${discordUser.avatar}.png` : null;
@@ -894,14 +898,18 @@ function App() {
 
               for (const req of queueReqs) {
                 showToast(`${req.guestName} menambahkan lagu ke antrean!`, 'success');
-                (window as any).electronAPI.respondQueueRequest(req.id, 'consumed');
+                await (window as any).electronAPI.respondQueueRequest(req.id, 'consumed');
               }
             }
           }
 
         } catch (e) {
           console.error('Failed to sync presence', e);
+        } finally {
+          isSyncingRef.current = false;
         }
+      } else {
+        isSyncingRef.current = false;
       }
     };
 

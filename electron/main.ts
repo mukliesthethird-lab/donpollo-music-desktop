@@ -107,7 +107,9 @@ async function initDB() {
       database: process.env.DB_NAME || 's9206_database',
       port: Number(process.env.DB_PORT) || 3306,
       waitForConnections: true,
-      connectionLimit: 10,
+      connectionLimit: 1,
+      maxIdle: 1,
+      idleTimeout: 60000,
       queueLimit: 0
     });
 
@@ -441,8 +443,10 @@ ipcMain.handle('update-presence', async (event, data) => {
 ipcMain.handle('get-online-users', async (event, currentUserId) => {
   if (!db) return [];
   try {
-    // Delete users older than 30 seconds to clean up
-    await db.execute('DELETE FROM online_users WHERE last_seen < DATE_SUB(NOW(), INTERVAL 30 SECOND)');
+    // Delete users older than 30 seconds to clean up (5% chance per request to reduce load)
+    if (Math.random() < 0.05) {
+      await db.execute('DELETE FROM online_users WHERE last_seen < DATE_SUB(NOW(), INTERVAL 30 SECOND)');
+    }
 
     const [rows] = await db.execute('SELECT * FROM online_users WHERE discord_id != ?', [currentUserId || '']);
     return (rows as any[]).map(row => ({
@@ -479,8 +483,10 @@ ipcMain.handle('send-queue-request', async (event, hostId, guestId, guestName, s
 ipcMain.handle('poll-queue-requests', async (event, hostId) => {
   if (!db) return [];
   try {
-    // Auto-clean old queue requests
-    await db.execute('DELETE FROM queue_requests WHERE created_at < DATE_SUB(NOW(), INTERVAL 5 MINUTE)');
+    // Auto-clean old queue requests (5% chance per request to reduce load)
+    if (Math.random() < 0.05) {
+      await db.execute('DELETE FROM queue_requests WHERE created_at < DATE_SUB(NOW(), INTERVAL 5 MINUTE)');
+    }
 
     const [rows] = await db.execute('SELECT * FROM queue_requests WHERE host_id = ? AND status = "pending"', [hostId]);
     return (rows as any[]).map(row => ({
@@ -530,8 +536,10 @@ ipcMain.handle('send-join-request', async (event, hostId, guestId, guestName) =>
 ipcMain.handle('poll-join-requests', async (event, userId) => {
   if (!db) return { incoming: [], outgoing: [] };
   try {
-    // Clean up old requests (older than 2 minutes)
-    await db.execute('DELETE FROM join_requests WHERE created_at < DATE_SUB(NOW(), INTERVAL 2 MINUTE)');
+    // Clean up old requests (older than 2 minutes, 5% chance per request to reduce load)
+    if (Math.random() < 0.05) {
+      await db.execute('DELETE FROM join_requests WHERE created_at < DATE_SUB(NOW(), INTERVAL 2 MINUTE)');
+    }
 
     const [incomingRows] = await db.execute('SELECT * FROM join_requests WHERE host_id = ? AND status = "pending"', [userId]);
     const [outgoingRows] = await db.execute('SELECT * FROM join_requests WHERE guest_id = ?', [userId]);
