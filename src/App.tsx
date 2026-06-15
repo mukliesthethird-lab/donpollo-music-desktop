@@ -1,6 +1,6 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { FastAverageColor } from 'fast-average-color';
-import { Home, Library, Plus, Mic2, Settings, Play, Pause, SkipBack, SkipForward, Repeat, Shuffle, Volume2, VolumeX, ListMusic, UserCircle, ChevronRight, Search, AlertCircle, Headset, Loader2, Maximize2, X, ChevronLeft, ChevronUp, ChevronDown, Music, PanelRight, Trash2, Heart, LogIn, LogOut, Check, FolderPlus, Globe, Headphones, Download, DownloadCloud, Database, WifiOff, CheckCircle2, Paintbrush, Clock, Trophy, Zap, Radio, Timer, Repeat1 } from 'lucide-react';
+import { Home, Library, Plus, Mic2, Settings, Play, Pause, SkipBack, SkipForward, Repeat, Shuffle, Volume2, VolumeX, ListMusic, UserCircle, ChevronRight, Search, AlertCircle, Headset, Loader2, Maximize2, X, ChevronLeft, ChevronUp, ChevronDown, Music, PanelRight, Trash2, Heart, LogIn, LogOut, Check, FolderPlus, Globe, Headphones, Download, DownloadCloud, Database, WifiOff, CheckCircle2, Paintbrush, Clock, Trophy, Zap, Radio, Timer, Repeat1, MinusCircle, PlusCircle, Edit3, Share2, Copy } from 'lucide-react';
 import './index.css';
 import './themes.css';
 import { createTranslator } from './translations';
@@ -14,7 +14,7 @@ const DISCORD_REDIRECT_URI = window.location.hostname === 'localhost'
   ? 'http://localhost:5173/callback.html'
   : 'https://donpollo-music-desktop.vercel.app/callback';
 
-type Page = 'home' | 'library' | 'playlist' | 'playlist-detail' | 'settings' | 'downloads' | 'artist';
+type Page = 'home' | 'library' | 'playlist' | 'playlist-detail' | 'settings' | 'downloads' | 'artist' | 'profile';
 
 interface Playlist {
   id: string;
@@ -23,6 +23,7 @@ interface Playlist {
   songs: any[];
   createdAt: number;
   discordId?: string;
+  privacy?: string;
 }
 
 interface DiscordUser {
@@ -203,7 +204,21 @@ function App() {
   const [onlineUsers, setOnlineUsers] = useState<any[]>([]);
   const [activePartyId, setActivePartyId] = useState<string | null>(null);
   const [cacheSize, setCacheSize] = useState<number>(0);
+  const [cachePath, setCachePath] = useState<string>('');
+  const [showClearCacheConfirm, setShowClearCacheConfirm] = useState(false);
   const [isGuest, setIsGuest] = useState(false);
+
+  // ─── Profile & Social State ────────────────────────────────
+  const [activeProfileId, setActiveProfileId] = useState<string | null>(null);
+  const [profileData, setProfileData] = useState<any>(null);
+  const [isLoadingProfile, setIsLoadingProfile] = useState(false);
+  const [savedPlaylists, setSavedPlaylists] = useState<string[]>([]);
+  const [playlistToRemove, setPlaylistToRemove] = useState<string | null>(null);
+  const [shareCodeResult, setShareCodeResult] = useState<{ code: string; expiresAt: string } | null>(null);
+  const [following, setFollowing] = useState<string[]>([]);
+  const [isEditingBanner, setIsEditingBanner] = useState(false);
+  const [bannerInputUrl, setBannerInputUrl] = useState('');
+  const [listenerPercentile, setListenerPercentile] = useState<number | null>(null);
 
   // ─── Real Data ──────────────────────────────────────────────
   const [playHistory, setPlayHistory] = useState<any[]>(() => {
@@ -227,7 +242,13 @@ function App() {
     try {
       const user = JSON.parse(localStorage.getItem('donpollo_user') || 'null');
       const suffix = user ? `_${user.id}` : '';
-      return JSON.parse(localStorage.getItem(`donpollo_playlists${suffix}`) || '[]');
+      const data = localStorage.getItem(`donpollo_playlists${suffix}`);
+      if (data) return JSON.parse(data);
+      if (user) {
+        const oldData = localStorage.getItem('donpollo_playlists');
+        if (oldData) return JSON.parse(oldData);
+      }
+      return [];
     } catch { return []; }
   });
   const [hitsInternational, setHitsInternational] = useState<any[]>([]);
@@ -499,7 +520,13 @@ function App() {
     try {
       const user = JSON.parse(localStorage.getItem('donpollo_user') || 'null');
       const suffix = user ? `_${user.id}` : '';
-      return JSON.parse(localStorage.getItem(`donpollo_liked${suffix}`) || '[]');
+      const data = localStorage.getItem(`donpollo_liked${suffix}`);
+      if (data) return JSON.parse(data);
+      if (user) {
+        const oldData = localStorage.getItem('donpollo_liked');
+        if (oldData) return JSON.parse(oldData);
+      }
+      return [];
     } catch { return []; }
   });
 
@@ -636,7 +663,16 @@ function App() {
     settings.customTextSecondary,
     currentSong?.thumbnail
   ]);
-  const [isRightSidebarOpen, setIsRightSidebarOpen] = useState(true);
+  const [isRightSidebarOpen, setIsRightSidebarOpen] = useState(() => {
+    try {
+      const s = localStorage.getItem('donpollo_settings');
+      if (s) {
+        const parsed = JSON.parse(s);
+        if (parsed.autoSidebar === false) return false;
+      }
+    } catch (e) { }
+    return true;
+  });
 
   const wasClosedByResize = useRef(false);
 
@@ -682,7 +718,17 @@ function App() {
   const [joinRequests, setJoinRequests] = useState<{ incoming: any[], outgoing: any[] }>({ incoming: [], outgoing: [] });
   const [showProfileStats, setShowProfileStats] = useState(false);
   const [totalListenSeconds, setTotalListenSeconds] = useState<number>(() => {
-    try { return parseInt(localStorage.getItem('donpollo_listen_seconds') || '0', 10); } catch { return 0; }
+    try { 
+      const user = JSON.parse(localStorage.getItem('donpollo_user') || 'null');
+      const suffix = user ? `_${user.id}` : '';
+      const data = localStorage.getItem(`donpollo_listen_seconds${suffix}`);
+      if (data) return parseInt(data, 10);
+      if (user) {
+        const oldData = localStorage.getItem('donpollo_listen_seconds');
+        if (oldData) return parseInt(oldData, 10);
+      }
+      return 0;
+    } catch { return 0; }
   });
 
   const [downloadedSongs, setDownloadedSongs] = useState<any[]>([]);
@@ -819,7 +865,10 @@ function App() {
           const isCached = await (window as any).electronAPI.checkCache(nextSong.id);
           if (!isCached) {
             console.log(`[Prefetch] Memulai download diam-diam untuk lagu berikutnya: ${nextSong.title}`);
-            const streamUrl = `${API_BASE_URL}/api/stream?id=${nextSong.id}`;
+            let streamUrl = `${API_BASE_URL}/api/stream?id=${nextSong.id}`;
+            if (settings.audioQuality && settings.audioQuality !== 'auto') {
+              streamUrl += `&quality=${settings.audioQuality}`;
+            }
             (window as any).electronAPI.cacheAudio(nextSong, streamUrl, true);
           }
         }
@@ -832,16 +881,29 @@ function App() {
 
   // ─── Listen Along & Presence Sync ───
   const isSyncingRef = useRef(false);
+  const lastActivityRef = useRef<string>('');
   useEffect(() => {
     if (!discordUser) return;
 
     const syncPresence = async () => {
       if (isSyncingRef.current) return;
       isSyncingRef.current = true;
-      
+
       if ((window as any).electronAPI) {
         try {
           const avatar = discordUser.avatar ? `https://cdn.discordapp.com/avatars/${discordUser.id}/${discordUser.avatar}.png` : null;
+          const isPlayingNow = audioRef.current ? !audioRef.current.paused : false;
+
+          const currentActivityState = isPlayingNow && currentSong ? currentSong.id : 'idle';
+          if (lastActivityRef.current !== currentActivityState) {
+            lastActivityRef.current = currentActivityState;
+            if (isPlayingNow && currentSong) {
+              (window as any).electronAPI.setActivity(currentSong);
+            } else {
+              (window as any).electronAPI.setActivity(null);
+            }
+          }
+
           await (window as any).electronAPI.updatePresence({
             discordId: discordUser.id,
             username: discordUser.global_name || discordUser.username,
@@ -849,11 +911,11 @@ function App() {
             currentSong: currentSong ? {
               ...currentSong,
               currentTime: audioRef.current?.currentTime || 0,
-              isPlaying: audioRef.current ? !audioRef.current.paused : false,
+              isPlaying: isPlayingNow,
               timestamp: Date.now()
             } : null,
             partyId: activePartyId,
-            status: userStatus,
+            status: (document.hidden && userStatus === 'online') ? 'idle' : userStatus,
             queue: queue
           });
           const users = await (window as any).electronAPI.getOnlineUsers(discordUser.id);
@@ -1052,6 +1114,75 @@ function App() {
     localStorage.setItem(`donpollo_liked${suffix}`, JSON.stringify(likedSongs));
   }, [likedSongs]);
 
+  // --- Profile Syncing ---
+  const syncPayloadRef = useRef({ likedSongs, playHistory, totalListenSeconds, settings, savedPlaylists, following });
+  useEffect(() => {
+    syncPayloadRef.current = { likedSongs, playHistory, totalListenSeconds, settings, savedPlaylists, following };
+  }, [likedSongs, playHistory, totalListenSeconds, settings, savedPlaylists, following]);
+
+  useEffect(() => {
+    if (!discordUser || !(window as any).electronAPI?.updateProfile) return;
+    let hasLoaded = false;
+
+    // Fetch own profile on mount to get saved playlists and following
+    if ((window as any).electronAPI?.getProfile) {
+      (window as any).electronAPI.getProfile(discordUser.id).then((p: any) => {
+        if (p) {
+          if (p.savedPlaylists) setSavedPlaylists(p.savedPlaylists);
+          if (p.following) setFollowing(p.following);
+          if (p.stats && typeof p.stats.totalListenSeconds === 'number') {
+            setTotalListenSeconds(prev => Math.max(prev, p.stats.totalListenSeconds));
+          }
+        }
+        hasLoaded = true;
+      });
+    } else {
+      hasLoaded = true;
+    }
+
+    const syncProfile = async () => {
+      if (!hasLoaded) return;
+      const payload = syncPayloadRef.current;
+      const stats = { playHistory: payload.playHistory.slice(0, 100), totalListenSeconds: payload.totalListenSeconds };
+      await (window as any).electronAPI.updateProfile({
+        discordId: discordUser.id,
+        username: discordUser.global_name || discordUser.username,
+        avatarUrl: discordUser.avatar ? `https://cdn.discordapp.com/avatars/${discordUser.id}/${discordUser.avatar}.png` : '',
+        likedSongs: payload.likedSongs,
+        stats,
+        privacySettings: payload.settings.privacySettings || { publicLikedSongs: true, publicStats: true },
+        savedPlaylists: payload.savedPlaylists,
+        following: payload.following
+      });
+    };
+
+    const interval = setInterval(syncProfile, 30000); // Sync every 30 seconds
+    return () => clearInterval(interval);
+  }, [discordUser]);
+
+  useEffect(() => {
+    if (activePage !== 'profile' || !activeProfileId) return;
+    setIsLoadingProfile(true);
+    if ((window as any).electronAPI?.getProfile) {
+      (window as any).electronAPI.getProfile(activeProfileId).then((data: any) => {
+        setProfileData(data);
+        if ((window as any).electronAPI.getUserPercentile) {
+          (window as any).electronAPI.getUserPercentile(activeProfileId).then((perc: number) => {
+            setListenerPercentile(perc);
+            setIsLoadingProfile(false);
+          }).catch(() => setIsLoadingProfile(false));
+        } else {
+          setIsLoadingProfile(false);
+        }
+      }).catch(() => {
+        setProfileData(null);
+        setIsLoadingProfile(false);
+      });
+    } else {
+      setIsLoadingProfile(false);
+    }
+  }, [activePage, activeProfileId]);
+
   useEffect(() => {
     localStorage.setItem('donpollo_settings', JSON.stringify({ ...settings, volume }));
   }, [settings, volume]);
@@ -1062,7 +1193,9 @@ function App() {
     const interval = setInterval(() => {
       setTotalListenSeconds(prev => {
         const next = prev + 1;
-        localStorage.setItem('donpollo_listen_seconds', String(next));
+        const user = JSON.parse(localStorage.getItem('donpollo_user') || 'null');
+        const suffix = user ? `_${user.id}` : '';
+        localStorage.setItem(`donpollo_listen_seconds${suffix}`, String(next));
         return next;
       });
     }, 1000);
@@ -1142,10 +1275,10 @@ function App() {
     const handleError = () => {
       if (audioRef.current !== audio) return;
       if (audio.error && currentSongRef.current && executePlayRef.current) {
-         console.warn("Audio error, attempting auto-recovery...", audio.error);
-         executePlayRef.current(currentSongRef.current, audio.currentTime);
+        console.warn("Audio error, attempting auto-recovery...", audio.error);
+        executePlayRef.current(currentSongRef.current, audio.currentTime);
       } else {
-         setIsPlaying(false);
+        setIsPlaying(false);
       }
     };
     audio.addEventListener('timeupdate', handleTimeUpdate);
@@ -1262,6 +1395,9 @@ function App() {
   useEffect(() => {
     if (activePage === 'settings' && (window as any).electronAPI?.getCacheSize) {
       (window as any).electronAPI.getCacheSize().then(setCacheSize);
+      if ((window as any).electronAPI.getCachePath) {
+        (window as any).electronAPI.getCachePath().then(setCachePath);
+      }
     }
   }, [activePage]);
 
@@ -1352,6 +1488,12 @@ function App() {
   const isLiked = (songId: string) => likedSongs.some(s => s.id === songId);
 
   const toggleLike = (song: any) => {
+    const isCurrentlyLiked = likedSongs.some(s => s.id === song.id);
+    if (isCurrentlyLiked) {
+      showToast(t('toastUnliked') || 'Dihapus dari Disukai');
+    } else {
+      showToast(t('toastLiked') || 'Ditambahkan ke Disukai');
+    }
     setLikedSongs(prev =>
       prev.some(s => s.id === song.id)
         ? prev.filter(s => s.id !== song.id)
@@ -1420,6 +1562,7 @@ function App() {
     if ((window as any).electronAPI) await (window as any).electronAPI.savePlaylist(updated);
 
     setPlaylists(prev => prev.map(p => p.id === playlistId ? updated : p));
+    showToast(t('toastRemovedFromPlaylist') || 'Lagu dihapus dari playlist!', 'playlist');
   };
 
   const deletePlaylist = async (playlistId: string) => {
@@ -1431,16 +1574,61 @@ function App() {
   };
 
   const handleClearCache = async () => {
+    setShowClearCacheConfirm(true);
+  };
+
+  const confirmClearCacheAction = async () => {
     if ((window as any).electronAPI?.clearCache) {
       await (window as any).electronAPI.clearCache();
       setCacheSize(0);
       showToast(t('toastCacheCleared'));
     }
+    setShowClearCacheConfirm(false);
   };
 
   const handleImportPlaylist = async () => {
     if (!importPlaylistUrl.trim()) return;
     setIsImporting(true);
+    const input = importPlaylistUrl.trim();
+    // Check if it's a DP share code (format: DP-XXXXXX)
+    const isShareCode = /^DP-[A-Z0-9]{6}$/i.test(input);
+    if (isShareCode && (window as any).electronAPI?.resolveShareCode) {
+      try {
+        const shared = await (window as any).electronAPI.resolveShareCode(input);
+        if (!shared) {
+          showToast('Kode share tidak valid atau sudah kadaluarsa.', 'error');
+          setIsImporting(false);
+          return;
+        }
+        // Keep the original playlist data intact (original id and discordId)
+        // so it opens in view mode (read-only), just like saving from a profile
+        const sharedPlaylist = { ...shared };
+
+        // Save the original playlist to the DB so it's accessible locally
+        if ((window as any).electronAPI) await (window as any).electronAPI.savePlaylist(sharedPlaylist);
+
+        // Add to local playlists state if not already there
+        setPlaylists((prev: any) => prev.some((p: any) => p.id === sharedPlaylist.id) ? prev : [...prev, sharedPlaylist]);
+
+        // Add playlist ID to savedPlaylists (like "Save to Library")
+        if (discordUser && (window as any).electronAPI?.toggleSavePlaylist && !savedPlaylists.includes(sharedPlaylist.id)) {
+          const newSaved = await (window as any).electronAPI.toggleSavePlaylist(discordUser.id, sharedPlaylist.id);
+          if (newSaved) setSavedPlaylists(newSaved);
+        }
+
+        showToast(`"${sharedPlaylist.name}" ditambahkan ke library! 🎉`, 'success');
+        setShowImportPlaylist(false);
+        setImportPlaylistUrl('');
+        // Open in playlist-detail (view mode because discordId !== current user)
+        setActivePlaylistId(sharedPlaylist.id);
+        setActivePage('playlist-detail');
+      } catch (e: any) {
+        showToast(e.message || 'Import gagal', 'error');
+      } finally {
+        setIsImporting(false);
+      }
+      return;
+    }
     showToast(t('importing'));
     try {
       const res = await fetch(`${API_BASE_URL}/api/playlist?url=${encodeURIComponent(importPlaylistUrl)}`);
@@ -1803,6 +1991,10 @@ function App() {
       setCurrentSong(song);
       setDuration(song.duration || 0);
       setIsPlaying(true);
+      if (settings.autoLyrics) {
+        setIsRightSidebarOpen(true);
+        setShowLyrics(true);
+      }
 
       // 2. Fetch lyrics berjalan di background
       fetchLyrics(song.title, song.artist, song.duration || 0);
@@ -1820,6 +2012,9 @@ function App() {
         }
 
         let streamUrl = `${API_BASE_URL}/api/stream?id=${song.id}`;
+        if (settings.audioQuality && settings.audioQuality !== 'auto') {
+          streamUrl += `&quality=${settings.audioQuality}`;
+        }
         let isCached = false;
 
         if ((window as any).electronAPI?.checkCache) {
@@ -2029,21 +2224,21 @@ function App() {
       } else {
         const timeSincePause = Date.now() - (lastPausedAtRef.current || Date.now());
         if (lastPausedAtRef.current > 0 && timeSincePause > 120000) {
-            console.log("Paused for too long, forcing fresh stream connection...");
-            const currentSrc = audioRef.current.src;
-            const currentTime = audioRef.current.currentTime;
-            
-            // Clean up old cache busters so URL doesn't grow infinitely
-            const cleanSrc = currentSrc.split('&cb=')[0].split('?cb=')[0];
-            const separator = cleanSrc.includes('?') ? '&' : '?';
-            audioRef.current.src = `${cleanSrc}${separator}cb=${Date.now()}`;
-            
-            audioRef.current.load();
-            audioRef.current.currentTime = currentTime;
-            audioRef.current.play().catch(e => console.error("Recovery play failed", e));
-            lastPausedAtRef.current = 0;
-            setIsPlaying(true);
-            return;
+          console.log("Paused for too long, forcing fresh stream connection...");
+          const currentSrc = audioRef.current.src;
+          const currentTime = audioRef.current.currentTime;
+
+          // Clean up old cache busters so URL doesn't grow infinitely
+          const cleanSrc = currentSrc.split('&cb=')[0].split('?cb=')[0];
+          const separator = cleanSrc.includes('?') ? '&' : '?';
+          audioRef.current.src = `${cleanSrc}${separator}cb=${Date.now()}`;
+
+          audioRef.current.load();
+          audioRef.current.currentTime = currentTime;
+          audioRef.current.play().catch(e => console.error("Recovery play failed", e));
+          lastPausedAtRef.current = 0;
+          setIsPlaying(true);
+          return;
         }
 
         const playPromise = audioRef.current.play();
@@ -2387,7 +2582,7 @@ function App() {
               <Heart size={20} fill="currentColor" />
               <h3 style={{ fontSize: '12px', fontWeight: '700', letterSpacing: '1px', textTransform: 'uppercase' }}>{t('likedSongs')}</h3>
             </div>
-            <div style={{ fontSize: '36px', fontWeight: '800' }}>{likedSongs.length} <span style={{ fontSize: '16px', color: 'var(--text-secondary)', fontWeight: '600' }}>Lagu</span></div>
+            <div style={{ fontSize: '36px', fontWeight: '800' }}>{likedSongs.length} <span style={{ fontSize: '16px', color: 'var(--text-secondary)', fontWeight: '600' }}>{t('songs')}</span></div>
             <div style={{ fontSize: '12px', color: 'var(--text-secondary)' }}>{t('favoriteCollectionDesc')}</div>
           </div>
 
@@ -2396,7 +2591,7 @@ function App() {
               <ListMusic size={20} />
               <h3 style={{ fontSize: '12px', fontWeight: '700', letterSpacing: '1px', textTransform: 'uppercase' }}>{t('recentlyPlayed')}</h3>
             </div>
-            <div style={{ fontSize: '36px', fontWeight: '800' }}>{playHistory.length} <span style={{ fontSize: '16px', color: 'var(--text-secondary)', fontWeight: '600' }}>Lagu</span></div>
+            <div style={{ fontSize: '36px', fontWeight: '800' }}>{playHistory.length} <span style={{ fontSize: '16px', color: 'var(--text-secondary)', fontWeight: '600' }}>{t('songs')}</span></div>
             <div style={{ fontSize: '12px', color: 'var(--text-secondary)' }}>{t('recentPlaybackDesc')}</div>
           </div>
 
@@ -2538,14 +2733,15 @@ function App() {
     if (activePage === 'playlist-detail' && activePlaylistId) {
       const pl = playlists.find(p => p.id === activePlaylistId);
       if (!pl) return null;
+      const isMyPlaylist = !pl.discordId || pl.discordId === discordUser?.id;
       return (
         <div className="page-content">
           <div className="page-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
             <div style={{ display: 'flex', gap: '20px', alignItems: 'center' }}>
               <div
                 className="playlist-avatar-large"
-                style={{ width: '120px', height: '120px', borderRadius: '8px', backgroundColor: 'var(--surface-color)', display: 'flex', alignItems: 'center', justifyContent: 'center', overflow: 'hidden', cursor: 'pointer', position: 'relative' }}
-                onClick={() => { setAvatarUrlInput(pl.avatar || ''); setShowAvatarPrompt(true); }}
+                style={{ width: '120px', height: '120px', borderRadius: '8px', backgroundColor: 'var(--surface-color)', display: 'flex', alignItems: 'center', justifyContent: 'center', overflow: 'hidden', cursor: isMyPlaylist ? 'pointer' : 'default', position: 'relative' }}
+                onClick={() => { if (isMyPlaylist) { setAvatarUrlInput(pl.avatar || ''); setShowAvatarPrompt(true); } }}
               >
                 {pl.avatar ? (
                   <img
@@ -2563,12 +2759,14 @@ function App() {
                 ) : (
                   <ListMusic size={48} color="var(--text-muted)" />
                 )}
-                <div className="avatar-overlay" style={{ position: 'absolute', inset: 0, backgroundColor: 'rgba(0,0,0,0.6)', display: 'flex', alignItems: 'center', justifyContent: 'center', opacity: 0, transition: 'opacity 0.2s' }}>
-                  <span style={{ fontSize: '12px', fontWeight: 'bold' }}>{t('changeImage')}</span>
-                </div>
+                {isMyPlaylist && (
+                  <div className="avatar-overlay" style={{ position: 'absolute', inset: 0, backgroundColor: 'rgba(0,0,0,0.6)', display: 'flex', alignItems: 'center', justifyContent: 'center', opacity: 0, transition: 'opacity 0.2s' }}>
+                    <span style={{ fontSize: '12px', fontWeight: 'bold' }}>{t('changeImage')}</span>
+                  </div>
+                )}
               </div>
 
-              <div>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
                 {isEditingPlaylistName ? (
                   <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                     <input
@@ -2584,14 +2782,46 @@ function App() {
                     <button className="btn-secondary" onClick={() => setIsEditingPlaylistName(false)}>{t('cancel')}</button>
                   </div>
                 ) : (
-                  <h1 style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                  <h1 style={{ display: 'flex', alignItems: 'center', gap: '12px', margin: 0, fontSize: '32px' }}>
                     {pl.name}
-                    <button className="btn-icon" onClick={() => { setEditPlaylistNameValue(pl.name); setIsEditingPlaylistName(true); }}>
-                      <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M17 3a2.828 2.828 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5L17 3z"></path></svg>
-                    </button>
+                    {isMyPlaylist && (
+                      <button className="btn-icon" onClick={() => { setEditPlaylistNameValue(pl.name); setIsEditingPlaylistName(true); }}>
+                        <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M17 3a2.828 2.828 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5L17 3z"></path></svg>
+                      </button>
+                    )}
                   </h1>
                 )}
-                <p className="page-subtitle">{pl.songs.length} {t('songs')}</p>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '16px', marginTop: '4px' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer' }} onClick={() => { if (pl.discordId) { setActiveProfileId(pl.discordId); setActivePage('profile'); } }}>
+                    {(pl as any).authorAvatar ? (
+                      <img src={(pl as any).authorAvatar} alt="avatar" style={{ width: '24px', height: '24px', borderRadius: '50%', objectFit: 'cover' }} />
+                    ) : (
+                      <div className="user-avatar" style={{ width: '24px', height: '24px', fontSize: '10px' }}>
+                        {((pl as any).authorName || discordUser?.global_name || discordUser?.username || 'U').charAt(0).toUpperCase()}
+                      </div>
+                    )}
+                    <span style={{ fontSize: '14px', fontWeight: '600', color: 'white', transition: 'text-decoration 0.2s' }} onMouseOver={e => e.currentTarget.style.textDecoration = 'underline'} onMouseOut={e => e.currentTarget.style.textDecoration = 'none'}>
+                      {isMyPlaylist ? (discordUser?.global_name || discordUser?.username) : ((pl as any).authorName || 'User')}
+                    </span>
+                  </div>
+                  <span style={{ color: 'var(--text-muted)' }}>•</span>
+                  <p className="page-subtitle" style={{ margin: 0 }}>{pl.songs.length} {t('songs')}</p>
+
+                  {discordUser && discordUser.id === pl.discordId && (
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer', background: 'rgba(255,255,255,0.05)', padding: '4px 12px', borderRadius: '20px' }} onClick={async () => {
+                      const updated = { ...pl, privacy: pl.privacy === 'private' ? 'public' : 'private' };
+                      if ((window as any).electronAPI) {
+                        await (window as any).electronAPI.savePlaylist(updated);
+                        setPlaylists(prev => prev.map(p => p.id === pl.id ? updated : p));
+                      }
+                    }}>
+                      <div style={{ width: '30px', height: '16px', background: pl.privacy !== 'private' ? 'var(--accent-primary)' : 'rgba(255,255,255,0.2)', borderRadius: '10px', position: 'relative', transition: 'all 0.2s' }}>
+                        <div style={{ width: '12px', height: '12px', background: pl.privacy !== 'private' ? '#000' : '#fff', borderRadius: '50%', position: 'absolute', top: '2px', left: pl.privacy !== 'private' ? '16px' : '2px', transition: 'all 0.2s' }} />
+                      </div>
+                      <span style={{ fontSize: '12px', color: 'var(--text-secondary)', fontWeight: 600 }}>{pl.privacy !== 'private' ? t('isPublic') : t('isPrivate')}</span>
+                    </div>
+                  )}
+                </div>
               </div>
             </div>
             <div style={{ display: 'flex', gap: '12px', marginTop: 'auto' }}>
@@ -2600,15 +2830,32 @@ function App() {
                   <Play size={16} fill="currentColor" /> {t('playAll')}
                 </button>
               )}
-              <button className="btn-secondary" onClick={() => setPlaylistToDelete(pl.id)} style={{ color: '#ff5555' }}>
-                <Trash2 size={16} /> {t('deletePlaylist')}
-              </button>
+              {isMyPlaylist && (
+                <button className="btn-secondary" onClick={async () => {
+                  if ((window as any).electronAPI?.createShareCode) {
+                    const result = await (window as any).electronAPI.createShareCode(pl);
+                    if (result) setShareCodeResult(result);
+                    else showToast('Gagal membuat kode share', 'error');
+                  }
+                }}>
+                  <Share2 size={16} /> Share
+                </button>
+              )}
+              {isMyPlaylist ? (
+                <button className="btn-secondary" onClick={() => setPlaylistToDelete(pl.id)} style={{ color: '#ff5555' }}>
+                  <Trash2 size={16} /> {t('deletePlaylist')}
+                </button>
+              ) : discordUser && savedPlaylists.includes(pl.id) && (
+                <button className="btn-secondary" onClick={() => setPlaylistToRemove(pl.id)} style={{ color: '#ff5555' }}>
+                  <Trash2 size={16} /> {t('removeFromLibrary')}
+                </button>
+              )}
             </div>
           </div>
           {pl.songs.length > 0 ? (
             <div className="library-list">
               {pl.songs.map((song, i) => (
-                <div key={i} className={`library-item ${currentSong?.id === song.id ? 'playing' : ''}`}>
+                <div key={i} className={`library-item ${currentSong?.id === song.id ? 'playing' : ''}`} onContextMenu={(e) => handleContextMenu(e, song)}>
                   <div className="library-item-art" onClick={() => startPlayingFromList(pl.songs, i)}>
                     <img src={getCleanThumbnail(song.thumbnail)} alt={song.title} />
                     <div className="library-item-play"><Play size={16} fill="currentColor" /></div>
@@ -2627,13 +2874,15 @@ function App() {
                     >
                       <Heart size={16} fill={isLiked(song.id) ? 'currentColor' : 'none'} />
                     </button>
-                    <button
-                      className="library-item-action"
-                      onClick={(e) => { e.stopPropagation(); removeSongFromPlaylist(pl.id, song.id); }}
-                      title="Hapus dari playlist"
-                    >
-                      <Trash2 size={16} />
-                    </button>
+                    {isMyPlaylist && (
+                      <button
+                        className="library-item-action"
+                        onClick={(e) => { e.stopPropagation(); removeSongFromPlaylist(pl.id, song.id); }}
+                        title="Hapus dari playlist"
+                      >
+                        <Trash2 size={16} />
+                      </button>
+                    )}
                   </div>
                 </div>
               ))}
@@ -2647,46 +2896,48 @@ function App() {
           )}
 
           {/* Search bar inside playlist */}
-          <div className="playlist-search-section" style={{ marginTop: '40px', paddingTop: '20px', borderTop: '1px solid var(--border-color)' }}>
-            <h2 style={{ fontSize: '18px', marginBottom: '16px' }}>{t('addSongToPlaylistLabel')}</h2>
-            <form onSubmit={handlePlaylistSearch} style={{ display: 'flex', gap: '12px', marginBottom: '20px' }}>
-              <input
-                type="text"
-                placeholder={t('searchPlaceholder')}
-                value={playlistSearchQuery}
-                onChange={(e) => setPlaylistSearchQuery(e.target.value)}
-                className="search-input"
-                style={{ flex: 1, padding: '12px 16px', borderRadius: '8px', border: '1px solid var(--border-color)', backgroundColor: 'var(--surface-color)', color: 'var(--text-primary)' }}
-              />
-              <button type="submit" className="btn-primary" disabled={isPlaylistSearching}>
-                {isPlaylistSearching ? '...' : t('addSongs')}
-              </button>
-            </form>
+          {isMyPlaylist && (
+            <div className="playlist-search-section" style={{ marginTop: '40px', paddingTop: '20px', borderTop: '1px solid var(--border-color)' }}>
+              <h2 style={{ fontSize: '18px', marginBottom: '16px' }}>{t('addSongToPlaylistLabel')}</h2>
+              <form onSubmit={handlePlaylistSearch} style={{ display: 'flex', gap: '12px', marginBottom: '20px' }}>
+                <input
+                  type="text"
+                  placeholder={t('searchPlaceholder')}
+                  value={playlistSearchQuery}
+                  onChange={(e) => setPlaylistSearchQuery(e.target.value)}
+                  className="search-input"
+                  style={{ flex: 1, padding: '12px 16px', borderRadius: '8px', border: '1px solid var(--border-color)', backgroundColor: 'var(--surface-color)', color: 'var(--text-primary)' }}
+                />
+                <button type="submit" className="btn-primary" disabled={isPlaylistSearching}>
+                  {isPlaylistSearching ? '...' : t('addSongs')}
+                </button>
+              </form>
 
-            {playlistSearchResults.length > 0 && (
-              <div className="library-list">
-                {playlistSearchResults.map((song, i) => (
-                  <div key={i} className="library-item">
-                    <div className="library-item-art">
-                      <img src={getCleanThumbnail(song.thumbnail)} alt={song.title} />
+              {playlistSearchResults.length > 0 && (
+                <div className="library-list">
+                  {playlistSearchResults.map((song, i) => (
+                    <div key={i} className="library-item">
+                      <div className="library-item-art">
+                        <img src={getCleanThumbnail(song.thumbnail)} alt={song.title} />
+                      </div>
+                      <div className="library-item-info">
+                        <div className="library-item-title" title={song.title}>{song.title}</div>
+                        <div className="library-item-artist">{song.artist}</div>
+                      </div>
+                      <div className="library-item-duration">{formatTime(song.duration)}</div>
+                      <button
+                        className="btn-secondary"
+                        onClick={() => addSongToPlaylist(pl.id, song)}
+                        disabled={pl.songs.some(s => s.id === song.id)}
+                      >
+                        {pl.songs.some(s => s.id === song.id) ? t('toastAddedToPlaylist') : t('addSongs')}
+                      </button>
                     </div>
-                    <div className="library-item-info">
-                      <div className="library-item-title" title={song.title}>{song.title}</div>
-                      <div className="library-item-artist">{song.artist}</div>
-                    </div>
-                    <div className="library-item-duration">{formatTime(song.duration)}</div>
-                    <button
-                      className="btn-secondary"
-                      onClick={() => addSongToPlaylist(pl.id, song)}
-                      disabled={pl.songs.some(s => s.id === song.id)}
-                    >
-                      {pl.songs.some(s => s.id === song.id) ? t('toastAddedToPlaylist') : t('addSongs')}
-                    </button>
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
 
         </div>
       );
@@ -2729,6 +2980,270 @@ function App() {
             <p>{t('noPlaylistsDesc')}</p>
           </div>
         )}
+      </div>
+    );
+  };
+
+  const renderProfilePage = () => {
+    if (isLoadingProfile) return <div className="loading-state" style={{ marginTop: '50px' }}><Loader2 className="spin" size={40} color="var(--accent-primary)" /></div>;
+    if (!profileData && activeProfileId !== discordUser?.id) return <div className="empty-state" style={{ marginTop: '50px' }}><UserCircle size={64} color="var(--text-secondary)" /><p>Profil tidak ditemukan.</p></div>;
+
+    const isMe = activeProfileId === discordUser?.id;
+    const onlineFriend = onlineUsers.find(u => u.discordId === activeProfileId);
+
+    const displayUsername = profileData?.username ||
+      (isMe && discordUser ? (discordUser.global_name || discordUser.username) :
+        (onlineFriend ? onlineFriend.username : 'Unknown User'));
+
+    const displayAvatar = profileData?.avatarUrl ||
+      (isMe && discordUser ? (discordUser.avatar ? `https://cdn.discordapp.com/avatars/${discordUser.id}/${discordUser.avatar}.png` : `https://ui-avatars.com/api/?name=${discordUser.username}`) :
+        (onlineFriend ? (onlineFriend.avatarUrl || `https://ui-avatars.com/api/?name=${onlineFriend.username}`) : `https://ui-avatars.com/api/?name=${displayUsername}`));
+
+    const isPrivateStats = !isMe && !profileData?.privacySettings?.publicStats;
+    const isPrivateLikes = !isMe && !profileData?.privacySettings?.publicLikedSongs;
+    const displayBanner = profileData?.bannerUrl || null;
+
+    return (
+      <div className="profile-container" style={{ width: '100%', height: '100%', display: 'flex', flexDirection: 'column' }}>
+        <div className="profile-header" style={{
+          position: 'relative',
+          display: 'flex',
+          alignItems: 'flex-end',
+          gap: '24px',
+          padding: '80px 40px 40px 40px',
+          background: displayBanner ? `url(${displayBanner}) center/cover no-repeat` : 'linear-gradient(to bottom, rgba(80,80,80,0.6), rgba(18,18,18,1))',
+          boxShadow: '0 4px 60px rgba(0,0,0,0.5)'
+        }}>
+          {displayBanner && <div style={{ position: 'absolute', inset: 0, background: 'linear-gradient(to bottom, transparent, rgba(18,18,18,1))' }} />}
+          
+          {isMe && (
+            <div style={{ position: 'absolute', top: '20px', right: '20px', zIndex: 2 }}>
+              {isEditingBanner ? (
+                <div style={{ display: 'flex', gap: '8px', background: 'rgba(0,0,0,0.8)', padding: '8px', borderRadius: '8px', backdropFilter: 'blur(10px)' }}>
+                  <input
+                    type="text"
+                    value={bannerInputUrl}
+                    onChange={(e) => setBannerInputUrl(e.target.value)}
+                    placeholder={t('enterBannerUrl') || 'Banner URL'}
+                    style={{ background: 'rgba(255,255,255,0.1)', border: '1px solid rgba(255,255,255,0.2)', color: 'white', padding: '6px 12px', borderRadius: '4px', fontSize: '12px', width: '250px' }}
+                    autoFocus
+                  />
+                  <input type="file" accept="image/*" style={{ display: 'none' }} id="banner-upload" onChange={(e) => {
+                    if (e.target.files && e.target.files[0]) {
+                      const p = (e.target.files[0] as any).path;
+                      if (p) setBannerInputUrl(`file:///${p.replace(/\\/g, '/')}`);
+                      else setBannerInputUrl(URL.createObjectURL(e.target.files[0]));
+                    }
+                  }} />
+                  <label htmlFor="banner-upload" style={{ cursor: 'pointer', padding: '6px', margin: 0, display: 'flex', alignItems: 'center', background: 'rgba(255,255,255,0.1)', color: 'white', border: '1px solid rgba(255,255,255,0.2)', borderRadius: '4px', transition: 'background 0.2s' }} 
+                    onMouseOver={e => e.currentTarget.style.background = 'rgba(255,255,255,0.25)'}
+                    onMouseOut={e => e.currentTarget.style.background = 'rgba(255,255,255,0.1)'}
+                    title="Upload Image">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="17 8 12 3 7 8"></polyline><line x1="12" y1="3" x2="12" y2="15"></line></svg>
+                  </label>
+                  <button style={{ padding: '6px 16px', fontSize: '12px', background: 'rgba(255,255,255,0.1)', color: 'white', border: '1px solid rgba(255,255,255,0.2)', borderRadius: '4px', cursor: 'pointer', fontWeight: 600, transition: 'background 0.2s' }} 
+                    onMouseOver={e => e.currentTarget.style.background = 'rgba(255,255,255,0.25)'}
+                    onMouseOut={e => e.currentTarget.style.background = 'rgba(255,255,255,0.1)'}
+                    onClick={() => {
+                      const newBannerUrl = bannerInputUrl;
+                      setProfileData((prev: any) => ({ ...prev, bannerUrl: newBannerUrl }));
+                      if ((window as any).electronAPI && discordUser) {
+                        (window as any).electronAPI.updateBanner(discordUser.id, newBannerUrl)
+                          .then((ok: boolean) => { if (!ok) showToast('Gagal menyimpan banner', 'error'); });
+                      }
+                      setIsEditingBanner(false);
+                    }}>{t('save') || 'Save'}
+                  </button>
+                  <button style={{ padding: '6px', background: 'transparent', color: 'white', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', opacity: 0.7, transition: 'opacity 0.2s' }} 
+                    onMouseOver={e => e.currentTarget.style.opacity = '1'}
+                    onMouseOut={e => e.currentTarget.style.opacity = '0.7'}
+                    onClick={() => setIsEditingBanner(false)}>
+                    <X size={16} />
+                  </button>
+                </div>
+              ) : (
+                <button 
+                  className="btn-icon" 
+                  style={{ background: 'rgba(0,0,0,0.5)', padding: '8px', borderRadius: '50%' }}
+                  onClick={() => {
+                    setBannerInputUrl(displayBanner || '');
+                    setIsEditingBanner(true);
+                  }}
+                  title={t('editBanner') || "Edit Banner"}
+                >
+                  <Edit3 size={18} color="white" />
+                </button>
+              )}
+            </div>
+          )}
+
+          <div style={{ position: 'relative', zIndex: 1, display: 'flex', gap: '24px', width: '100%', alignItems: 'flex-end' }}>
+            <img src={displayAvatar} alt={displayUsername} style={{ width: '160px', height: '160px', borderRadius: '50%', objectFit: 'cover', boxShadow: '0 8px 32px rgba(0,0,0,0.6)' }} />
+            <div style={{ flex: 1 }}>
+              <div style={{ fontSize: '12px', fontWeight: '700', textTransform: 'uppercase', letterSpacing: '1px', marginBottom: '8px', color: 'var(--text-secondary)' }}>{t('profile') || 'Profil'}</div>
+              <h1 style={{ fontSize: '56px', fontWeight: '900', margin: '0 0 16px 0', letterSpacing: '-2px', lineHeight: '1', color: 'var(--text-primary)' }}>{displayUsername}</h1>
+              <div style={{ display: 'flex', gap: '20px', color: 'var(--text-secondary)', fontSize: '14px', fontWeight: '500', alignItems: 'center' }}>
+                <span><strong style={{ color: 'var(--text-primary)' }}>{profileData?.followers?.length || 0}</strong> {t('followers')}</span>
+                {profileData?.playlists?.length > 0 && <span><strong style={{ color: 'var(--text-primary)' }}>{profileData.playlists.length}</strong> {t('publicPlaylists')}</span>}
+              </div>
+
+            <div style={{ marginTop: '24px', display: 'flex', alignItems: 'center', gap: '16px' }}>
+              {!isMe && discordUser && activeProfileId && (
+                <button
+                  className="primary-btn"
+                  style={{
+                    background: following.includes(activeProfileId) ? 'transparent' : 'var(--accent-primary)',
+                    color: following.includes(activeProfileId) ? 'var(--text-primary)' : '#000',
+                    border: following.includes(activeProfileId) ? '1px solid var(--text-secondary)' : 'none',
+                    display: 'flex', alignItems: 'center', gap: '8px', padding: '8px 24px', borderRadius: '30px', fontWeight: '800', cursor: 'pointer', transition: 'all 0.2s'
+                  }}
+                  onClick={async () => {
+                    if ((window as any).electronAPI) {
+                      const newFollowing = await (window as any).electronAPI.toggleFollow(discordUser.id, activeProfileId);
+                      if (newFollowing) {
+                        setFollowing(newFollowing);
+                        setProfileData((prev: any) => {
+                          if (!prev) return prev;
+                          const newFollowers = newFollowing.includes(activeProfileId)
+                            ? [...(prev.followers || []), discordUser.id]
+                            : (prev.followers || []).filter((id: string) => id !== discordUser.id);
+                          return { ...prev, followers: newFollowers };
+                        });
+                      }
+                    }
+                  }}
+                >
+                  {following.includes(activeProfileId) ? <MinusCircle size={18} /> : <PlusCircle size={18} />}
+                  {following.includes(activeProfileId) ? '-Rep' : '+Rep'}
+                </button>
+              )}
+
+              {isMe && (
+                <div style={{ display: 'flex', gap: '24px', alignItems: 'center' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '10px', cursor: 'pointer' }} onClick={() => setSettings((p: any) => ({ ...p, privacySettings: { ...(p.privacySettings || {}), publicStats: !(settings.privacySettings?.publicStats !== false) } }))}>
+                    <div style={{ width: '36px', height: '20px', background: settings.privacySettings?.publicStats !== false ? 'var(--accent-primary)' : 'rgba(255,255,255,0.2)', borderRadius: '10px', position: 'relative', transition: 'all 0.2s' }}>
+                      <div style={{ width: '16px', height: '16px', background: settings.privacySettings?.publicStats !== false ? '#000' : '#fff', borderRadius: '50%', position: 'absolute', top: '2px', left: settings.privacySettings?.publicStats !== false ? '18px' : '2px', transition: 'all 0.2s' }} />
+                    </div>
+                    <span style={{ fontSize: '13px', color: 'var(--text-secondary)', fontWeight: 600 }}>{t('isPublic')} {t('listeningTime')}</span>
+                  </div>
+
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '10px', cursor: 'pointer' }} onClick={() => setSettings((p: any) => ({ ...p, privacySettings: { ...(p.privacySettings || {}), publicLikedSongs: !(settings.privacySettings?.publicLikedSongs !== false) } }))}>
+                    <div style={{ width: '36px', height: '20px', background: settings.privacySettings?.publicLikedSongs !== false ? 'var(--accent-primary)' : 'rgba(255,255,255,0.2)', borderRadius: '10px', position: 'relative', transition: 'all 0.2s' }}>
+                      <div style={{ width: '16px', height: '16px', background: settings.privacySettings?.publicLikedSongs !== false ? '#000' : '#fff', borderRadius: '50%', position: 'absolute', top: '2px', left: settings.privacySettings?.publicLikedSongs !== false ? '18px' : '2px', transition: 'all 0.2s' }} />
+                    </div>
+                    <span style={{ fontSize: '13px', color: 'var(--text-secondary)', fontWeight: 600 }}>{t('isPublic')} {t('likedSongs')}</span>
+                  </div>
+                </div>
+              )}
+            </div>
+            </div>
+          </div>
+        </div>
+
+        <div className="profile-content" style={{ padding: '32px 40px', display: 'flex', flexDirection: 'column', gap: '40px', flex: 1 }}>
+          <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1fr) minmax(0, 1.5fr)', gap: '40px', alignItems: 'start' }}>
+            {/* Kiri: Stats & Liked Songs */}
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '40px' }}>
+              {!isPrivateStats && (
+                <div className="profile-section">
+                  <h2 style={{ fontSize: '20px', fontWeight: '700', marginBottom: '16px', display: 'flex', alignItems: 'center', gap: '10px' }}><Clock size={20} color="var(--accent-primary)" /> {t('listeningTime')}</h2>
+                  <div style={{ background: 'rgba(255,255,255,0.02)', padding: '24px', borderRadius: '16px', display: 'flex', alignItems: 'center', gap: '20px', border: '1px solid rgba(255,255,255,0.05)' }}>
+                    <div style={{ fontSize: '32px', fontWeight: '800', color: 'var(--accent-primary)' }}>
+                      {Math.floor((profileData?.stats?.totalListenSeconds || 0) / 3600)}<span style={{ fontSize: '14px', color: 'var(--text-secondary)' }}>h</span> {Math.floor(((profileData?.stats?.totalListenSeconds || 0) % 3600) / 60)}<span style={{ fontSize: '14px', color: 'var(--text-secondary)' }}>m</span>
+                    </div>
+                    {(() => {
+                      if (listenerPercentile !== null && listenerPercentile <= 50) return (
+                        <div style={{ padding: '4px 10px', background: 'rgba(0,0,0,0.2)', border: 'none', borderRadius: '6px', color: 'var(--text-secondary)', fontSize: '12px', fontWeight: '600', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                          <Trophy size={14} /> {t('topListener').replace('{percent}', listenerPercentile.toString())}
+                        </div>
+                      );
+                      return null;
+                    })()}
+                  </div>
+                </div>
+              )}
+
+              <div className="profile-section">
+                <h2 style={{ fontSize: '20px', fontWeight: '700', marginBottom: '16px', display: 'flex', alignItems: 'center', gap: '10px' }}><Heart size={20} color="#ff4081" /> {t('likedSongs')}</h2>
+                {isPrivateLikes ? (
+                  <div style={{ fontSize: '14px', color: 'var(--text-muted)' }}>{t('isPrivate')}</div>
+                ) : profileData?.likedSongs?.length > 0 ? (
+                  <div className="song-list" style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                    {profileData.likedSongs.slice(0, 5).map((song: any, i: number) => (
+                      <div key={song.id} className="song-item" style={{ display: 'flex', alignItems: 'center', gap: '12px', padding: '10px', background: 'rgba(255,255,255,0.02)', borderRadius: '10px', cursor: 'pointer' }} onClick={() => startPlayingFromList(profileData.likedSongs, i)} onContextMenu={(e) => handleContextMenu(e, song)}>
+                        <img src={song.thumbnail || 'https://images.unsplash.com/photo-1614680376573-df3480f0c6ff?auto=format&fit=crop&w=500&q=80'} alt={song.title} style={{ width: '40px', height: '40px', borderRadius: '6px', objectFit: 'cover' }} />
+                        <div style={{ overflow: 'hidden', flex: 1 }}>
+                          <div style={{ fontSize: '14px', fontWeight: '600', color: 'var(--text-primary)', whiteSpace: 'nowrap', textOverflow: 'ellipsis', overflow: 'hidden' }}>{song.title}</div>
+                          <div style={{ fontSize: '12px', color: 'var(--text-secondary)', whiteSpace: 'nowrap', textOverflow: 'ellipsis', overflow: 'hidden' }}>{song.artist}</div>
+                        </div>
+                        <div style={{ color: 'var(--text-secondary)', fontSize: '12px' }}>{formatTime(song.duration)}</div>
+                      </div>
+                    ))}
+                    {profileData.likedSongs.length > 5 && (
+                      <div style={{ fontSize: '12px', color: 'var(--text-secondary)', padding: '10px', textAlign: 'center', background: 'rgba(255,255,255,0.02)', borderRadius: '10px', cursor: 'pointer' }} onClick={() => startPlayingFromList(profileData.likedSongs, 0)}>
+                        + {profileData.likedSongs.length - 5} {t('songs')}
+                      </div>
+                    )}
+                  </div>
+                ) : (
+                  <div style={{ fontSize: '14px', color: 'var(--text-muted)' }}>{t('noLikedSongsYet')}</div>
+                )}
+              </div>
+            </div>
+
+            {/* Kanan: Playlists */}
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '40px' }}>
+              <div className="profile-section">
+                <h2 style={{ fontSize: '20px', fontWeight: '700', marginBottom: '16px', display: 'flex', alignItems: 'center', gap: '10px' }}><ListMusic size={20} color="var(--accent-primary)" /> {t('publicPlaylists')}</h2>
+                {profileData?.playlists?.length > 0 ? (
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(180px, 1fr))', gap: '20px' }}>
+                    {profileData.playlists.map((pl: any) => (
+                      <div key={pl.id} className="playlist-card" style={{ background: 'var(--bg-card)', padding: '16px', borderRadius: '12px', cursor: 'pointer', transition: 'all 0.2s', border: '1px solid var(--border-color)' }} onClick={() => { setActivePlaylistId(pl.id); setActivePage('playlist-detail'); }}>
+                        <div style={{ width: '100%', aspectRatio: '1', borderRadius: '8px', overflow: 'hidden', marginBottom: '12px', background: 'var(--bg-card-hover)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                          {pl.avatar ? (
+                            <img src={pl.avatar} alt={pl.name} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                          ) : (
+                            <ListMusic size={40} color="var(--text-muted)" />
+                          )}
+                        </div>
+                        <div style={{ fontSize: '15px', fontWeight: '700', color: 'var(--text-primary)', marginBottom: '4px', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{pl.name}</div>
+                        <div style={{ fontSize: '13px', color: 'var(--text-secondary)', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                          <span>{pl.songs?.length || 0} {t('songs')}</span>
+                          {(pl as any).saveCount > 0 && (
+                            <span style={{ fontSize: '12px', background: 'rgba(255,255,255,0.1)', padding: '2px 8px', borderRadius: '12px', color: 'var(--text-primary)' }}>
+                              {(pl as any).saveCount} Saves
+                            </span>
+                          )}
+                        </div>
+
+                        {!isMe && discordUser && (
+                          <button className="btn-secondary" style={{ width: '100%', marginTop: '12px', padding: '6px 0', fontSize: '12px', justifyContent: 'center', background: savedPlaylists.includes(pl.id) ? '#ff5555' : '#5865f2', color: 'white', border: 'none' }} onClick={async (e) => {
+                            e.stopPropagation();
+                            if ((window as any).electronAPI) {
+                              const newSaved = await (window as any).electronAPI.toggleSavePlaylist(discordUser.id, pl.id);
+                              if (newSaved) {
+                                setSavedPlaylists(newSaved);
+                                if (newSaved.includes(pl.id)) {
+                                  showToast(t('toastPlaylistSaved'), 'success');
+                                } else {
+                                  showToast(t('toastPlaylistRemoved'), 'success');
+                                }
+                              }
+                            }
+                          }}>
+                            {savedPlaylists.includes(pl.id) ? t('removeFromLibrary') : t('saveToLibrary')}
+                          </button>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <div style={{ fontSize: '14px', color: 'var(--text-muted)' }}>Tidak ada playlist publik.</div>
+                )}
+              </div>
+            </div>
+          </div>
+        </div>
       </div>
     );
   };
@@ -3334,10 +3849,15 @@ function App() {
             <div className="settings-desc">{t('audioCacheDesc')}</div>
           </div>
           <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-            <span style={{ color: 'var(--text-muted)', fontSize: '13px' }}>
+            {cachePath && (
+              <div style={{ fontSize: '11px', color: 'var(--text-muted)', textAlign: 'right' }}>
+                <span style={{ fontFamily: 'var(--font-mono)' }}>{cachePath}</span>
+              </div>
+            )}
+            <span style={{ color: 'var(--text-muted)', fontSize: '13px', whiteSpace: 'nowrap' }}>
               {(cacheSize / (1024 * 1024)).toFixed(1)} MB
             </span>
-            <button className="btn-secondary" onClick={handleClearCache}>
+            <button className="btn-secondary" style={{ whiteSpace: 'nowrap' }} onClick={handleClearCache}>
               <Trash2 size={14} /> {t('delete')}
             </button>
           </div>
@@ -3395,14 +3915,14 @@ function App() {
         {downloadedSongs.length === 0 ? (
           <div className="empty-state" style={{ marginTop: '24px', color: 'var(--text-muted)' }}>
             <FolderPlus size={64} style={{ marginBottom: '16px', opacity: 0.3 }} />
-            <h3 style={{ color: 'var(--text-secondary)' }}>Belum ada unduhan</h3>
-            <p style={{ fontSize: '13px' }}>Lagu yang selesai diputar akan ter-cache dan muncul di sini.</p>
+            <h3 style={{ color: 'var(--text-secondary)' }}>{t('noDownloads')}</h3>
+            <p style={{ fontSize: '13px' }}>{t('noDownloadsDesc')}</p>
           </div>
         ) : (
           <div style={{ display: 'flex', flexDirection: 'column', gap: '32px' }}>
             <section>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
-                <h2 style={{ fontSize: '18px', fontWeight: '700', color: 'var(--text-primary)', display: 'flex', alignItems: 'center', gap: '8px' }}><FolderPlus size={20} color="#00c6ff" /> Unduhan Offline</h2>
+                <h2 style={{ fontSize: '18px', fontWeight: '700', color: 'var(--text-primary)', display: 'flex', alignItems: 'center', gap: '8px' }}><FolderPlus size={20} color="#00c6ff" /> {t('offlineDownloads')}</h2>
                 <span style={{ fontSize: '12px', color: 'var(--accent-primary)', cursor: 'pointer', fontWeight: '600' }} onClick={() => startPlayingFromList(downloadedSongs, 0)}>{t('playAll')}</span>
               </div>
 
@@ -3439,6 +3959,14 @@ function App() {
                         <span style={{ fontSize: '13px', color: 'var(--text-secondary)' }}>{formatTime(song.duration)}</span>
                       </div>
                       <div style={{ display: 'flex', gap: '8px', justifyContent: 'flex-end' }}>
+                        <button
+                          className="btn-icon"
+                          onClick={(e) => { e.stopPropagation(); toggleLike(song); }}
+                          style={{ color: isLiked(song.id) ? '#ff6b9d' : 'var(--text-secondary)' }}
+                          title={isLiked(song.id) ? t('btnUnlike') : t('btnLike')}
+                        >
+                          <Heart size={16} fill={isLiked(song.id) ? 'currentColor' : 'none'} />
+                        </button>
                         <button
                           className="btn-icon delete-btn"
                           onClick={(e) => {
@@ -3579,7 +4107,7 @@ function App() {
           <div className="home-greeting">
             <span className="greeting-text">{getGreeting()}</span>
             <span className="greeting-date">
-              {new Date().toLocaleDateString(language === 'en' ? 'en-US' : language === 'ja' ? 'ja-JP' : 'id-ID', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })}
+              {new Date().toLocaleDateString(language === 'en' ? 'en-US' : language === 'ja' ? 'ja-JP' : language === 'ko' ? 'ko-KR' : 'id-ID', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })}
             </span>
           </div>
 
@@ -4198,6 +4726,45 @@ function App() {
         </div>
       )}
 
+      {/* Modal: Hapus Cache */}
+      {showClearCacheConfirm && (
+        <div className="modal-overlay" onClick={() => setShowClearCacheConfirm(false)}>
+          <div className="modal" onClick={e => e.stopPropagation()}>
+            <h3 className="modal-title">{t('clearAudioCache')}</h3>
+            <p style={{ color: 'var(--text-secondary)', marginBottom: '24px' }}>{t('confirmClearCache')}</p>
+            <div className="modal-actions">
+              <button className="btn-secondary" onClick={() => setShowClearCacheConfirm(false)}>{t('cancel')}</button>
+              <button className="btn-primary" style={{ backgroundColor: '#ff5555', color: 'white' }} onClick={confirmClearCacheAction}>{t('delete')}</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal: Remove Playlist Confirm */}
+      {playlistToRemove && (
+        <div className="modal-overlay" onClick={() => setPlaylistToRemove(null)}>
+          <div className="modal" onClick={e => e.stopPropagation()}>
+            <h3 className="modal-title">{t('removeFromLibrary')}</h3>
+            <p style={{ color: 'var(--text-secondary)', marginBottom: '24px' }}>{t('confirmRemovePlaylist')}</p>
+            <div className="modal-actions">
+              <button className="btn-secondary" onClick={() => setPlaylistToRemove(null)}>{t('cancel')}</button>
+              <button className="btn-primary" style={{ backgroundColor: '#ff5555', color: 'white' }} onClick={() => {
+                if ((window as any).electronAPI && discordUser) {
+                  (window as any).electronAPI.toggleSavePlaylist(discordUser.id, playlistToRemove).then((newSaved: string[]) => {
+                    if (newSaved) {
+                      setSavedPlaylists(newSaved);
+                      showToast(t('toastPlaylistRemoved'), 'success');
+                      if (activePlaylistId === playlistToRemove) setActivePage('home');
+                    }
+                    setPlaylistToRemove(null);
+                  });
+                }
+              }}>{t('removeFromLibrary')}</button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Modal: Ubah Avatar Playlist */}
       {showAvatarPrompt && (
         <div className="modal-overlay" onClick={() => setShowAvatarPrompt(false)}>
@@ -4311,15 +4878,50 @@ function App() {
         </div>
       )}
 
+      {/* Modal: Share Code */}
+      {shareCodeResult && (
+        <div className="modal-overlay" onClick={() => setShareCodeResult(null)}>
+          <div className="modal" onClick={e => e.stopPropagation()} style={{ textAlign: 'center' }}>
+            <div style={{ fontSize: '40px', marginBottom: '8px' }}>🔗</div>
+            <h3 className="modal-title">Share Playlist</h3>
+            <p style={{ color: 'var(--text-secondary)', fontSize: '13px', marginBottom: '20px' }}>
+              Bagikan kode ini ke teman. Kode aktif selama 7 hari.
+            </p>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '10px', background: 'var(--bg-card)', border: '1px solid var(--border-color)', borderRadius: '10px', padding: '14px 18px', marginBottom: '20px', justifyContent: 'center' }}>
+              <span style={{ fontSize: '28px', fontWeight: 800, letterSpacing: '4px', color: 'var(--accent-primary)', fontFamily: 'monospace' }}>{shareCodeResult.code}</span>
+              <button style={{ background: 'transparent', border: 'none', cursor: 'pointer', color: 'var(--text-secondary)', padding: '4px', display: 'flex', alignItems: 'center' }}
+                onMouseOver={e => e.currentTarget.style.color = 'var(--accent-primary)'}
+                onMouseOut={e => e.currentTarget.style.color = 'var(--text-secondary)'}
+                title="Copy kode"
+                onClick={() => {
+                  navigator.clipboard.writeText(shareCodeResult.code);
+                  showToast('Kode disalin ke clipboard! 📋', 'success');
+                }}>
+                <Copy size={20} />
+              </button>
+            </div>
+            <p style={{ color: 'var(--text-muted)', fontSize: '11px', marginBottom: '20px' }}>
+              Teman cukup tempel kode ini di tombol Import Playlist
+            </p>
+            <div className="modal-actions" style={{ justifyContent: 'center' }}>
+              <button className="btn-secondary" onClick={() => setShareCodeResult(null)}>Tutup</button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Modal: Impor Playlist YouTube */}
       {showImportPlaylist && (
         <div className="modal-overlay" onClick={() => !isImporting && setShowImportPlaylist(false)}>
           <div className="modal" onClick={e => e.stopPropagation()}>
             <h3 className="modal-title">{t('importPlaylist')}</h3>
+            <p style={{ color: 'var(--text-muted)', fontSize: '12px', marginBottom: '12px' }}>
+              💡 Masukkan link playlist YouTube <em>atau</em> kode share (contoh: <span style={{ fontFamily: 'monospace', color: 'var(--accent-primary)' }}>DP-XXXXXX</span>)
+            </p>
             <input
               className="modal-input"
               type="text"
-              placeholder={t('importPlaylistPlaceholder')}
+              placeholder="Link YouTube atau kode DP-XXXXXX..."
               value={importPlaylistUrl}
               onChange={e => setImportPlaylistUrl(e.target.value)}
               onKeyDown={e => e.key === 'Enter' && !isImporting && handleImportPlaylist()}
@@ -4387,14 +4989,14 @@ function App() {
             <p style={{ color: 'var(--text-secondary)', fontSize: '13px', marginBottom: '16px' }}>"{addToPlaylistSong.title}"</p>
             {playlists.length === 0 ? (
               <div style={{ textAlign: 'center', padding: '20px 0' }}>
-                <p style={{ color: 'var(--text-muted)' }}>Belum ada playlist.</p>
+                <p style={{ color: 'var(--text-muted)' }}>{t('noPlaylists')}</p>
                 <button className="btn-primary" style={{ marginTop: '12px' }} onClick={() => { setAddToPlaylistSong(null); setShowCreatePlaylist(true); }}>
                   <Plus size={16} /> {t('createPlaylist')}
                 </button>
               </div>
             ) : (
               <div className="modal-playlist-list">
-                {playlists.map(pl => (
+                {playlists.filter(pl => pl.discordId === discordUser?.id).map(pl => (
                   <div key={pl.id} className="modal-playlist-item" onClick={() => addSongToPlaylist(pl.id, addToPlaylistSong)}>
                     <div className="modal-playlist-art">
                       {pl.avatar ? (
@@ -4440,6 +5042,7 @@ function App() {
               <div className={`nav-item ${activePage === 'settings' ? 'active' : ''}`} onClick={() => setActivePage('settings')}>
                 <Settings size={24} /> <span className="nav-label">{t('settings')}</span>
               </div>
+
             </div>
           </div>
 
@@ -4486,7 +5089,7 @@ function App() {
               </button>
 
               {/* Playlists */}
-              {playlists.map(pl => (
+              {playlists.filter(pl => pl.discordId === discordUser?.id || savedPlaylists.includes(pl.id)).map(pl => (
                 <button key={pl.id} className={`sidebar-list-item ${(activePage === 'playlist-detail' && activePlaylistId === pl.id) ? 'active' : ''}`} onClick={() => {
                   setActivePlaylistId(pl.id);
                   setActivePage('playlist-detail');
@@ -4515,8 +5118,18 @@ function App() {
                   </div>
                   <div className="sidebar-item-info">
                     <div className="sidebar-item-title">{pl.name}</div>
-                    <div className="sidebar-item-subtitle">{t('playlist')} • {discordUser ? (discordUser.global_name || discordUser.username) : t('guest')}</div>
+                    <div className="sidebar-item-subtitle">{t('playlist')} • {pl.discordId === discordUser?.id ? (discordUser?.global_name || discordUser?.username || t('myProfile')) : (pl as any).authorName || 'Saved'}</div>
                   </div>
+                  {pl.discordId !== discordUser?.id && (
+                    <div className="sidebar-item-actions" style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center' }}>
+                      <button style={{ background: 'transparent', border: 'none', padding: '0 4px', cursor: 'pointer', color: 'var(--text-secondary)' }} onMouseOver={e => e.currentTarget.style.color = '#ff5555'} onMouseOut={e => e.currentTarget.style.color = 'var(--text-secondary)'} title={t('removeFromLibrary')} onClick={(e) => {
+                        e.stopPropagation();
+                        setPlaylistToRemove(pl.id);
+                      }}>
+                        <X size={14} />
+                      </button>
+                    </div>
+                  )}
                 </button>
               ))}
             </div>
@@ -4604,16 +5217,16 @@ function App() {
                               <span style={{ fontSize: '10px', color: 'var(--accent-primary)', fontWeight: 600, marginBottom: '2px', letterSpacing: '0.5px' }}>
                                 {t('listenAlong')}
                               </span>
-                              {currentPartyMembers.length > 0 && currentPartyMembers[0].currentSong ? (
-                                <div className="friend-song" style={{ fontSize: '12px', color: 'var(--text-primary)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', width: '100%' }} title={currentPartyMembers[0].currentSong.title}>
-                                  ♫ {currentPartyMembers[0].currentSong.title}
+                              {currentPartyMembers.length > 0 && currentPartyMembers[0].currentSong && currentPartyMembers[0].currentSong.isPlaying ? (
+                                <div className="friend-song" style={{ fontSize: '12px', color: 'var(--text-primary)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', width: '100%', display: 'flex', alignItems: 'center' }} title={currentPartyMembers[0].currentSong.title}>
+                                  <Music size={10} style={{ marginRight: '4px', flexShrink: 0, opacity: 0.7 }} /> {currentPartyMembers[0].currentSong.title}
                                 </div>
-                              ) : currentSong ? (
-                                <div className="friend-song" style={{ fontSize: '12px', color: 'var(--text-primary)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', width: '100%' }} title={currentSong.title}>
-                                  ♫ {currentSong.title}
+                              ) : currentSong && isPlaying ? (
+                                <div className="friend-song" style={{ fontSize: '12px', color: 'var(--text-primary)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', width: '100%', display: 'flex', alignItems: 'center' }} title={currentSong.title}>
+                                  <Music size={10} style={{ marginRight: '4px', flexShrink: 0, opacity: 0.7 }} /> {currentSong.title}
                                 </div>
                               ) : (
-                                <div className="friend-song" style={{ fontSize: '12px', color: 'var(--text-muted)' }}>Browsing...</div>
+                                <div className="friend-song" style={{ fontSize: '12px', color: 'var(--text-muted)' }}>{t('browsing') || 'Browsing...'}</div>
                               )}
                             </div>
                             {isGuest && (
@@ -4638,16 +5251,16 @@ function App() {
                           <div style={{ color: 'var(--text-muted)', fontSize: '11px', textAlign: 'center', marginTop: '12px' }}>{t('noFriendsOnline')}</div>
                         ) : (
                           otherFriends.map(user => (
-                            <div key={user.discordId} className="friend-item">
+                            <div key={user.discordId} className="friend-item" onClick={() => { setActiveProfileId(user.discordId); setActivePage('profile'); }} style={{ cursor: 'pointer' }}>
                               <div className="friend-avatar-container" style={{ position: 'relative' }}>
                                 <img src={user.avatarUrl || `https://ui-avatars.com/api/?name=${user.username}`} alt={user.username} className="friend-avatar" />
                                 <div className={`status-dot-avatar status-dot ${user.status || 'online'}`}></div>
                               </div>
                               <div className="friend-info">
                                 <div className="friend-name">{user.username}</div>
-                                {user.currentSong ? (
+                                {user.currentSong && user.currentSong.isPlaying ? (
                                   <>
-                                    <div className="friend-song" title={user.currentSong.title}>♫ {user.currentSong.title}</div>
+                                    <div className="friend-song" title={user.currentSong.title} style={{ display: 'flex', alignItems: 'center' }}><Music size={10} style={{ marginRight: '4px', flexShrink: 0, opacity: 0.7 }} /> {user.currentSong.title}</div>
                                     {user.status !== 'dnd' && (
                                       <button className="listen-along-btn" onClick={async () => {
                                         if (user.status === 'idle') {
@@ -4669,7 +5282,7 @@ function App() {
                                     )}
                                   </>
                                 ) : (
-                                  <div className="friend-song" style={{ color: 'var(--text-muted)' }}>Browsing...</div>
+                                  <div className="friend-song" style={{ color: 'var(--text-muted)' }}>{t('browsing') || 'Browsing...'}</div>
                                 )}
                               </div>
                             </div>
@@ -4709,7 +5322,7 @@ function App() {
                 )}
               </div>
             )}
-            <button className="user-profile-btn" onClick={() => { if (discordUser) { setShowProfileStats(true); setShowLogoutDropdown(false); } else { setShowLogoutDropdown(!showLogoutDropdown); } }} onContextMenu={(e) => { e.preventDefault(); setShowLogoutDropdown(!showLogoutDropdown); setShowProfileStats(false); }} title={discordUser ? `` : 'Login'}>
+            <button className="user-profile-btn" onClick={() => { if (discordUser) { setActiveProfileId(discordUser.id); setActivePage('profile'); setShowLogoutDropdown(false); } else { setShowLogoutDropdown(!showLogoutDropdown); } }} onContextMenu={(e) => { e.preventDefault(); setShowLogoutDropdown(!showLogoutDropdown); setShowProfileStats(false); }} title={discordUser ? `` : 'Login'}>
               <div className="user-avatar" style={{ position: 'relative' }}>
                 {discordUser && getDiscordAvatar(discordUser) ? (
                   <img src={getDiscordAvatar(discordUser)!} alt="avatar" style={{ width: '100%', height: '100%', borderRadius: '50%', objectFit: 'cover' }} />
@@ -4890,13 +5503,16 @@ function App() {
                             {homeMode !== 'podcast' && (
                               <button
                                 className="suggestion-btn"
-                                title="Unduh Lagu"
+                                title={t('downloadSong')}
                                 onClick={(e) => {
                                   e.stopPropagation();
                                   if ((window as any).electronAPI) {
-                                    const streamUrl = `${API_BASE_URL}/api/stream?id=${song.id}`;
+                                    let streamUrl = `${API_BASE_URL}/api/stream?id=${song.id}`;
+                                    if (settings.audioQuality && settings.audioQuality !== 'auto') {
+                                      streamUrl += `&quality=${settings.audioQuality}`;
+                                    }
                                     (window as any).electronAPI.cacheAudio(song, streamUrl);
-                                    showToast(`Mulai mengunduh "${song.title}"...`, 'success');
+                                    showToast(`${t('toastDownloadStarted')} "${song.title}"...`, 'success');
                                   }
                                   setShowSuggestions(false);
                                 }}
@@ -4913,7 +5529,23 @@ function App() {
                 </div>
               )}
             </div>
-            <div className="topbar-right-actions" style={{ display: 'flex', alignItems: 'center', gap: '12px', minWidth: '60px', justifyContent: 'flex-end' }}>
+            <div className="topbar-right-actions" style={{ display: 'flex', alignItems: 'center', gap: '16px', minWidth: '60px', justifyContent: 'flex-end' }}>
+              {discordUser && (
+                <div 
+                  style={{ 
+                    display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', 
+                    borderRadius: '50%', border: activePage === 'profile' && activeProfileId === discordUser.id ? '2px solid var(--accent-primary)' : '2px solid transparent',
+                    transition: 'all 0.2s'
+                  }}
+                  onClick={() => {
+                    setActiveProfileId(discordUser.id);
+                    setActivePage('profile');
+                  }}
+                  title={t('myProfile')}
+                >
+                  <img src={discordUser.avatar ? `https://cdn.discordapp.com/avatars/${discordUser.id}/${discordUser.avatar}.png` : `https://ui-avatars.com/api/?name=${discordUser.username}`} alt="Profile" style={{ width: '36px', height: '36px', borderRadius: '50%', objectFit: 'cover' }} />
+                </div>
+              )}
               {updateStatus !== 'none' && (
                 <button
                   className={`update-badge ${updateStatus === 'downloaded' ? 'ready' : ''}`}
@@ -4942,6 +5574,7 @@ function App() {
           {/* Page Router */}
           {activePage === 'home' && renderHomePage()}
           {activePage === 'artist' && renderArtistPage()}
+          {activePage === 'profile' && renderProfilePage()}
           {activePage === 'library' && (
             <div className="main-scroll">{renderLibraryPage()}</div>
           )}
@@ -5118,16 +5751,16 @@ function App() {
                             <span style={{ fontSize: '10px', color: 'var(--accent-primary)', fontWeight: 600, marginBottom: '2px', letterSpacing: '0.5px' }}>
                               {t('listenAlong')}
                             </span>
-                            {currentPartyMembers.length > 0 && currentPartyMembers[0].currentSong ? (
-                              <div className="friend-song" style={{ fontSize: '12px', color: 'var(--text-primary)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', width: '100%' }} title={currentPartyMembers[0].currentSong.title}>
-                                ♫ {currentPartyMembers[0].currentSong.title}
+                            {currentPartyMembers.length > 0 && currentPartyMembers[0].currentSong && currentPartyMembers[0].currentSong.isPlaying ? (
+                              <div className="friend-song" style={{ fontSize: '12px', color: 'var(--text-primary)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', width: '100%', display: 'flex', alignItems: 'center' }} title={currentPartyMembers[0].currentSong.title}>
+                                <Music size={10} style={{ marginRight: '4px', flexShrink: 0, opacity: 0.7 }} /> {currentPartyMembers[0].currentSong.title}
                               </div>
-                            ) : currentSong ? (
-                              <div className="friend-song" style={{ fontSize: '12px', color: 'var(--text-primary)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', width: '100%' }} title={currentSong.title}>
-                                ♫ {currentSong.title}
+                            ) : currentSong && isPlaying ? (
+                              <div className="friend-song" style={{ fontSize: '12px', color: 'var(--text-primary)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', width: '100%', display: 'flex', alignItems: 'center' }} title={currentSong.title}>
+                                <Music size={10} style={{ marginRight: '4px', flexShrink: 0, opacity: 0.7 }} /> {currentSong.title}
                               </div>
                             ) : (
-                              <div className="friend-song" style={{ fontSize: '12px', color: 'var(--text-muted)' }}>Browsing...</div>
+                              <div className="friend-song" style={{ fontSize: '12px', color: 'var(--text-muted)' }}>{t('browsing') || 'Browsing...'}</div>
                             )}
                           </div>
                           {isGuest && (
@@ -5159,9 +5792,9 @@ function App() {
                             </div>
                             <div className="friend-info">
                               <div className="friend-name">{user.username}</div>
-                              {user.currentSong ? (
+                              {user.currentSong && user.currentSong.isPlaying ? (
                                 <>
-                                  <div className="friend-song" title={user.currentSong.title}>♫ {user.currentSong.title}</div>
+                                  <div className="friend-song" title={user.currentSong.title} style={{ display: 'flex', alignItems: 'center' }}><Music size={10} style={{ marginRight: '4px', flexShrink: 0, opacity: 0.7 }} /> {user.currentSong.title}</div>
                                   {user.status !== 'dnd' && (
                                     <button className="listen-along-btn" onClick={async () => {
                                       if (user.status === 'idle') {
@@ -5183,7 +5816,7 @@ function App() {
                                   )}
                                 </>
                               ) : (
-                                <div className="friend-song" style={{ color: 'var(--text-muted)' }}>Browsing...</div>
+                                <div className="friend-song" style={{ color: 'var(--text-muted)' }}>{t('browsing') || 'Browsing...'}</div>
                               )}
                             </div>
                           </div>
@@ -5519,8 +6152,12 @@ function App() {
           {!contextMenu.song.isPodcast && (
             <div className="context-menu-item" onClick={() => {
               if ((window as any).electronAPI?.cacheAudio) {
-                const streamUrl = `${API_BASE_URL}/api/stream?id=${contextMenu.song.id}`;
+                let streamUrl = `${API_BASE_URL}/api/stream?id=${contextMenu.song.id}`;
+                if (settings.audioQuality && settings.audioQuality !== 'auto') {
+                  streamUrl += `&quality=${settings.audioQuality}`;
+                }
                 (window as any).electronAPI.cacheAudio(contextMenu.song, streamUrl);
+                showToast(`${t('toastDownloadStarted')} "${contextMenu.song.title}"...`, 'success');
               } else {
                 showToast(t('downloadDesktopOnly'), 'error');
               }

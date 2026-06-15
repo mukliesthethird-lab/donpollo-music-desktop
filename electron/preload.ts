@@ -58,6 +58,16 @@ contextBridge.exposeInMainWorld('electronAPI', {
   clearCache: () => ipcRenderer.invoke('clear-cache'),
   clearTempCache: (currentSongId?: string) => ipcRenderer.invoke('clear-temp-cache', currentSongId),
   getCacheSize: () => ipcRenderer.invoke('get-cache-size'),
+  getCacheLocation: () => ipcRenderer.invoke('get-cache-location'),
+  getProfile: (discordId: string) => ipcRenderer.invoke('get-profile', discordId),
+  getUserPercentile: (discordId: string) => ipcRenderer.invoke('get-user-percentile', discordId),
+  updateProfile: (profileData: any) => ipcRenderer.invoke('update-profile', profileData),
+  toggleFollow: (discordId: string, targetId: string) => ipcRenderer.invoke('toggle-follow', discordId, targetId),
+  toggleSavePlaylist: (discordId: string, playlistId: string) => ipcRenderer.invoke('toggle-save-playlist', discordId, playlistId),
+  updateBanner: (discordId: string, bannerUrl: string) => ipcRenderer.invoke('update-banner', discordId, bannerUrl),
+  createShareCode: (playlist: any) => ipcRenderer.invoke('create-share-code', playlist),
+  resolveShareCode: (code: string) => ipcRenderer.invoke('resolve-share-code', code),
+  getCachePath: () => ipcRenderer.invoke('get-cache-path'),
   onDownloadCacheProgress: (callback: (event: any, data: any) => void) => {
     ipcRenderer.on('download-cache-progress', callback);
     return () => ipcRenderer.off('download-cache-progress', callback);

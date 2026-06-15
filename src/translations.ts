@@ -195,6 +195,7 @@ type TranslationKeys = {
   deleteAllPlaylists: string;
   appVersion: string;
   clearAudioCache: string;
+  confirmClearCache: string;
   audioCacheDesc: string;
   manualUpdateCheck: string;
   manualUpdateDesc: string;
@@ -247,6 +248,22 @@ type TranslationKeys = {
   btnExitFullscreen: string;
   btnSidebar: string;
   btnHideSidebar: string;
+  myProfile: string;
+  followers: string;
+  following: string;
+  publicPlaylists: string;
+  privacySettings: string;
+  isPrivate: string;
+  isPublic: string;
+  saveToLibrary: string;
+  removeFromLibrary: string;
+  toastPlaylistSaved: string;
+  toastPlaylistRemoved: string;
+  topTracks: string;
+  savedToLibrary: string;
+  noLikedSongsYet: string;
+  topListener: string;
+  confirmRemovePlaylist: string;
 
   // Update section (available)
   updateSectionTitle: string;
@@ -291,6 +308,7 @@ type TranslationKeys = {
   toastPlaylistCreated: string;
   toastImportSuccess: string;
   toastAddedToPlaylist: string;
+  toastRemovedFromPlaylist: string;
   toastAlreadyInPlaylist: string;
   toastLiked: string;
   toastUnliked: string;
@@ -322,6 +340,10 @@ type TranslationKeys = {
   podcastLinking: string;
   searchPodcastPlaceholder: string;
   podcastNotFoundYt: string;
+  profile: string;
+  editBanner: string;
+  browsing: string;
+  enterBannerUrl: string;
 
 };
 
@@ -519,6 +541,7 @@ const translations: Record<Language, TranslationKeys> = {
     deleteAllPlaylists: 'Hapus Semua Playlist',
     appVersion: 'Versi Aplikasi',
     clearAudioCache: 'Hapus Cache Lagu Lokal',
+    confirmClearCache: 'Apakah Anda yakin ingin menghapus semua cache lagu? Ini tidak bisa dikembalikan.',
     audioCacheDesc: 'Cache menyimpan lagu untuk memutar lebih cepat dan hemat kuota',
     manualUpdateCheck: 'Cek Pembaruan Manual',
     manualUpdateDesc: 'Periksa apakah ada versi baru Don Pollo Music yang tersedia.',
@@ -571,6 +594,22 @@ const translations: Record<Language, TranslationKeys> = {
     btnExitFullscreen: 'Keluar Layar Penuh',
     btnSidebar: 'Tampilkan Sidebar',
     btnHideSidebar: 'Sembunyikan Sidebar',
+    myProfile: 'Profil Saya',
+    followers: 'Rep',
+    following: 'Reputasi Diberikan',
+    publicPlaylists: 'Playlist Publik',
+    privacySettings: 'Pengaturan Privasi',
+    isPrivate: 'Privat',
+    isPublic: 'Publik',
+    saveToLibrary: 'Simpan ke Pustaka',
+    removeFromLibrary: 'Hapus dari Pustaka',
+    toastPlaylistSaved: 'Mantap! Playlist berhasil diamankan ke Pustakamu.',
+    toastPlaylistRemoved: 'Playlist telah dihapus dari Pustaka.',
+    topTracks: 'Lagu Teratas',
+    savedToLibrary: 'Disimpan ke Pustaka',
+    noLikedSongsYet: 'Belum ada lagu yang disukai.',
+    topListener: 'Pendengar Top {percent}%',
+    confirmRemovePlaylist: 'Apakah Anda yakin ingin menghapus playlist ini dari pustaka Anda?',
 
     // Update section (available)
     updateSectionTitle: 'Pembaruan Tersedia',
@@ -615,6 +654,7 @@ const translations: Record<Language, TranslationKeys> = {
     toastPlaylistCreated: 'berhasil dibuat!',
     toastImportSuccess: 'berhasil diimpor!',
     toastAddedToPlaylist: 'Lagu ditambahkan ke playlist!',
+    toastRemovedFromPlaylist: 'Lagu dihapus dari playlist!',
     toastAlreadyInPlaylist: 'Lagu sudah ada di playlist ini.',
     toastLiked: 'Ditambahkan ke Disukai',
     toastUnliked: 'Dihapus dari Disukai',
@@ -646,7 +686,10 @@ const translations: Record<Language, TranslationKeys> = {
     podcastLinking: 'Mencari episode di YouTube...',
     searchPodcastPlaceholder: 'Cari podcast, host, topik...',
     podcastNotFoundYt: 'Tidak ditemukan di YouTube',
-
+    profile: 'Profil',
+    editBanner: 'Edit Banner',
+    browsing: 'Mencari Lagu...',
+    enterBannerUrl: 'Masukkan URL Banner (biarkan kosong untuk menghapus):'
 
   },
 
@@ -843,6 +886,7 @@ const translations: Record<Language, TranslationKeys> = {
     deleteAllPlaylists: 'Delete All Playlists',
     appVersion: 'App Version',
     clearAudioCache: 'Clear Local Audio Cache',
+    confirmClearCache: 'Are you sure you want to clear the audio cache? This cannot be undone.',
     audioCacheDesc: 'Cache saves songs for faster playback and data saving',
     manualUpdateCheck: 'Manual Update Check',
     manualUpdateDesc: 'Check if a new version of Don Pollo Music is available.',
@@ -895,6 +939,22 @@ const translations: Record<Language, TranslationKeys> = {
     btnExitFullscreen: 'Exit Full Screen',
     btnSidebar: 'Show Sidebar',
     btnHideSidebar: 'Hide Sidebar',
+    myProfile: 'My Profile',
+    followers: 'Rep',
+    following: 'Given Rep',
+    publicPlaylists: 'Public Playlists',
+    privacySettings: 'Privacy Settings',
+    isPrivate: 'Private',
+    isPublic: 'Public',
+    saveToLibrary: 'Save to Library',
+    removeFromLibrary: 'Remove from Library',
+    toastPlaylistSaved: 'Awesome! Playlist saved to your Library.',
+    toastPlaylistRemoved: 'Playlist removed from your Library.',
+    topTracks: 'Top Tracks',
+    savedToLibrary: 'Saved to Library',
+    noLikedSongsYet: 'No liked songs yet.',
+    topListener: 'Top {percent}% Listener',
+    confirmRemovePlaylist: 'Are you sure you want to remove this playlist from your library?',
 
     // Update section (available)
     updateSectionTitle: 'Update Available',
@@ -939,6 +999,7 @@ const translations: Record<Language, TranslationKeys> = {
     toastPlaylistCreated: 'created successfully!',
     toastImportSuccess: 'imported successfully!',
     toastAddedToPlaylist: 'Song added to playlist!',
+    toastRemovedFromPlaylist: 'Song removed from playlist!',
     toastAlreadyInPlaylist: 'Song is already in this playlist.',
     toastLiked: 'Added to Liked Songs',
     toastUnliked: 'Removed from Liked Songs',
@@ -970,7 +1031,10 @@ const translations: Record<Language, TranslationKeys> = {
     podcastLinking: 'Finding episode on YouTube...',
     searchPodcastPlaceholder: 'Search podcasts, hosts, topics...',
     podcastNotFoundYt: 'Not found on YouTube',
-
+    profile: 'Profile',
+    editBanner: 'Edit Banner',
+    browsing: 'Browsing...',
+    enterBannerUrl: 'Enter Banner URL (leave empty to remove):'
 
   },
 
@@ -1167,6 +1231,7 @@ const translations: Record<Language, TranslationKeys> = {
     deleteAllPlaylists: 'すべてのプレイリストを削除',
     appVersion: 'アプリバージョン',
     clearAudioCache: 'ローカルオーディオキャッシュをクリア',
+    confirmClearCache: '本当にオーディオキャッシュをクリアしますか？この操作は元に戻せません。',
     audioCacheDesc: 'キャッシュは曲を保存して、より高速に再生し、データを節約します',
     manualUpdateCheck: '手動アップデート確認',
     manualUpdateDesc: '新しいバージョンのDon Pollo Musicが利用可能か確認します。',
@@ -1219,6 +1284,22 @@ const translations: Record<Language, TranslationKeys> = {
     btnExitFullscreen: '全画面表示を終了',
     btnSidebar: 'サイドバーを表示',
     btnHideSidebar: 'サイドバーを非表示',
+    myProfile: 'マイプロフィール',
+    followers: 'フォロワー',
+    following: 'フォロー中',
+    publicPlaylists: '公開プレイリスト',
+    privacySettings: 'プライバシー設定',
+    isPrivate: '非公開',
+    isPublic: '公開',
+    saveToLibrary: 'ライブラリに保存',
+    removeFromLibrary: 'ライブラリから削除',
+    toastPlaylistSaved: '素晴らしい！プレイリストがライブラリに保存されました。',
+    toastPlaylistRemoved: 'プレイリストがライブラリから削除されました。',
+    topTracks: 'トップトラック',
+    savedToLibrary: 'ライブラリに保存しました',
+    noLikedSongsYet: 'お気に入りの曲はまだありません。',
+    topListener: '上位 {percent}% リスナー',
+    confirmRemovePlaylist: 'このプレイリストをライブラリから削除してもよろしいですか？',
 
     // Update section (available)
     updateSectionTitle: 'アップデートが利用可能',
@@ -1263,6 +1344,7 @@ const translations: Record<Language, TranslationKeys> = {
     toastPlaylistCreated: 'を作成しました！',
     toastImportSuccess: 'を正常にインポートしました！',
     toastAddedToPlaylist: 'プレイリストに追加しました！',
+    toastRemovedFromPlaylist: 'プレイリストから削除しました！',
     toastAlreadyInPlaylist: 'この曲はすでにプレイリストに含まれています。',
     toastLiked: 'お気に入りに追加しました',
     toastUnliked: 'お気に入りから削除しました',
@@ -1294,7 +1376,10 @@ const translations: Record<Language, TranslationKeys> = {
     podcastLinking: 'YouTubeでエピソードを検索中...',
     searchPodcastPlaceholder: 'ポッドキャスト・ホスト・トピックを検索...',
     podcastNotFoundYt: 'YouTubeで見つかりません',
-
+    profile: 'プロフィール',
+    editBanner: 'バナーを編集',
+    browsing: '閲覧中...',
+    enterBannerUrl: 'バナーのURLを入力（空にすると削除）:'
 
   },
 
@@ -1492,6 +1577,7 @@ const translations: Record<Language, TranslationKeys> = {
     deleteAllPlaylists: '모든 플레이리스트 삭제',
     appVersion: '앱 버전',
     clearAudioCache: '로컬 오디오 캐시 삭제',
+    confirmClearCache: '오디오 캐시를 지우시겠습니까? 이 작업은 되돌릴 수 없습니다.',
     audioCacheDesc: '캐시는 더 빠른 재생과 데이터 절약을 위해 곡을 저장합니다',
     manualUpdateCheck: '수동 업데이트 확인',
     manualUpdateDesc: '새로운 버전의 Don Pollo Music이 있는지 확인합니다.',
@@ -1544,6 +1630,22 @@ const translations: Record<Language, TranslationKeys> = {
     btnExitFullscreen: '전체 화면 종료',
     btnSidebar: '사이드바 표시',
     btnHideSidebar: '사이드바 숨기기',
+    myProfile: '내 프로필',
+    followers: '팔로워',
+    following: '팔로잉',
+    publicPlaylists: '공개 플레이리스트',
+    privacySettings: '개인정보 설정',
+    isPrivate: '비공개',
+    isPublic: '공개',
+    saveToLibrary: '라이브러리에 저장',
+    removeFromLibrary: '라이브러리에서 제거',
+    toastPlaylistSaved: '멋져요! 플레이리스트가 라이브러리에 저장되었습니다.',
+    toastPlaylistRemoved: '플레이리스트가 라이브러리에서 제거되었습니다.',
+    topTracks: '인기 트랙',
+    savedToLibrary: '라이브러리에 저장됨',
+    noLikedSongsYet: '아직 좋아하는 곡이 없습니다.',
+    topListener: '상위 {percent}% 리스너',
+    confirmRemovePlaylist: '라이브러리에서 이 플레이리스트를 제거하시겠습니까?',
 
     // Update section (available)
     updateSectionTitle: '업데이트 가능',
@@ -1588,6 +1690,7 @@ const translations: Record<Language, TranslationKeys> = {
     toastPlaylistCreated: '이(가) 생성되었습니다!',
     toastImportSuccess: '을(를) 성공적으로 가져왔습니다!',
     toastAddedToPlaylist: '플레이리스트에 곡을 추가했습니다!',
+    toastRemovedFromPlaylist: '플레이리스트에서 곡을 제거했습니다!',
     toastAlreadyInPlaylist: '이 곡은 이미 플레이리스트에 있습니다.',
     toastLiked: '좋아요한 곡에 추가됨',
     toastUnliked: '좋아요한 곡에서 제거됨',
@@ -1619,7 +1722,10 @@ const translations: Record<Language, TranslationKeys> = {
     podcastLinking: 'YouTube에서 에피소드 검색 중...',
     searchPodcastPlaceholder: '팟캐스트, 진행자, 주제 검색...',
     podcastNotFoundYt: 'YouTube에서 찾을 수 없음',
-
+    profile: '프로필',
+    editBanner: '배너 편집',
+    browsing: '둘러보는 중...',
+    enterBannerUrl: '배너 URL 입력 (비워두면 삭제):'
 
   }
 };

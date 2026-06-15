@@ -144,6 +144,29 @@ async function initDB() {
     } catch (e: any) { }
 
     await db.execute(`
+      CREATE TABLE IF NOT EXISTS user_profiles (
+        discord_id VARCHAR(255) PRIMARY KEY,
+        username VARCHAR(255),
+        avatar_url VARCHAR(255),
+        liked_songs LONGTEXT,
+        stats LONGTEXT,
+        privacy_settings LONGTEXT,
+        saved_playlists LONGTEXT,
+        following LONGTEXT,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+      )
+    `);
+
+    try {
+      await db.execute("ALTER TABLE playlists ADD COLUMN is_private BOOLEAN DEFAULT FALSE");
+    } catch (e: any) { }
+
+    try {
+      await db.execute("ALTER TABLE user_profiles ADD COLUMN banner_url VARCHAR(1000)");
+    } catch (e: any) { }
+
+    await db.execute(`
       CREATE TABLE IF NOT EXISTS queue_requests (
         id INT AUTO_INCREMENT PRIMARY KEY,
         host_id VARCHAR(255),
@@ -174,6 +197,16 @@ async function initDB() {
         playback_time FLOAT,
         is_playing BOOLEAN,
         updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+      )
+    `);
+    await db.execute(`
+      CREATE TABLE IF NOT EXISTS playlist_shares (
+        code VARCHAR(12) PRIMARY KEY,
+        playlist_id VARCHAR(255) NOT NULL,
+        discord_id VARCHAR(255),
+        playlist_data LONGTEXT NOT NULL,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        expires_at TIMESTAMP NOT NULL
       )
     `);
     console.log('MySQL connected and table initialized');
@@ -372,14 +405,27 @@ ipcMain.on('set-close-to-tray', (event, enabled) => {
 ipcMain.handle('get-playlists', async (event, discordId) => {
   if (!db) return [];
   try {
-    const [rows] = await db.execute('SELECT * FROM playlists WHERE discord_id = ? OR discord_id IS NULL OR discord_id = ""', [discordId || '']);
-    return (rows as any[]).map(row => ({
-      id: row.id,
-      name: row.name,
-      avatar: row.avatar,
-      songs: JSON.parse(row.songs || '[]'),
-      discordId: row.discord_id
+    const [rows] = await db.execute(`
+      SELECT p.*, u.username as author_name, u.avatar_url as author_avatar
+      FROM playlists p 
+      LEFT JOIN user_profiles u ON p.discord_id = u.discord_id 
+      WHERE p.discord_id = ? OR p.discord_id IS NULL OR p.discord_id = "" OR p.is_private = 0
+    `, [discordId || '']);
+    const playlists = await Promise.all((rows as any[]).map(async row => {
+      const [saveRows] = await db!.execute('SELECT COUNT(*) as count FROM user_profiles WHERE saved_playlists LIKE ?', [`%"${row.id}"%`]);
+      return {
+        id: row.id,
+        name: row.name,
+        avatar: row.avatar,
+        songs: JSON.parse(row.songs || '[]'),
+        discordId: row.discord_id,
+        authorName: row.author_name,
+        authorAvatar: row.author_avatar,
+        saveCount: (saveRows as any[])[0].count,
+        isPrivate: row.is_private === 1
+      };
     }));
+    return playlists;
   } catch (error) {
     console.error(error);
     return [];
@@ -389,9 +435,10 @@ ipcMain.handle('get-playlists', async (event, discordId) => {
 ipcMain.handle('save-playlist', async (event, pl) => {
   if (!db) return false;
   try {
+    const isPrivate = pl.isPrivate ? 1 : 0;
     await db.execute(
-      'INSERT INTO playlists (id, name, avatar, songs, discord_id) VALUES (?, ?, ?, ?, ?) ON DUPLICATE KEY UPDATE name = ?, avatar = ?, songs = ?, discord_id = ?',
-      [pl.id, pl.name, pl.avatar || '', JSON.stringify(pl.songs), pl.discordId || '', pl.name, pl.avatar || '', JSON.stringify(pl.songs), pl.discordId || '']
+      'INSERT INTO playlists (id, name, avatar, songs, discord_id, is_private) VALUES (?, ?, ?, ?, ?, ?) ON DUPLICATE KEY UPDATE name = ?, avatar = ?, songs = ?, discord_id = ?, is_private = ?',
+      [pl.id, pl.name, pl.avatar || '', JSON.stringify(pl.songs), pl.discordId || '', isPrivate, pl.name, pl.avatar || '', JSON.stringify(pl.songs), pl.discordId || '', isPrivate]
     );
     return true;
   } catch (error) {
@@ -399,6 +446,227 @@ ipcMain.handle('save-playlist', async (event, pl) => {
     return false;
   }
 });
+
+// ─── USER PROFILE IPC ──────────────────────────────────────────────────────
+ipcMain.handle('get-profile', async (event, discordId) => {
+  if (!db) return null;
+  try {
+    // Run all queries in parallel for performance
+    const [[rows], [playlistRows], [followerRows], [allSavedRows]] = await Promise.all([
+      db.execute('SELECT * FROM user_profiles WHERE discord_id = ?', [discordId]),
+      db.execute('SELECT id, name, avatar, songs, discord_id FROM playlists WHERE discord_id = ? AND (is_private = 0 OR is_private IS NULL)', [discordId]),
+      db.execute('SELECT discord_id FROM user_profiles WHERE following LIKE ?', [`%"${discordId}"%`]),
+      db.execute('SELECT saved_playlists FROM user_profiles WHERE saved_playlists IS NOT NULL AND saved_playlists != ?', ['[]'])
+    ]);
+
+    const username = (rows as any[]).length > 0 ? (rows as any[])[0].username : '';
+    const avatarUrl = (rows as any[]).length > 0 ? (rows as any[])[0].avatar_url : '';
+    const followers = (followerRows as any[]).map(r => r.discord_id);
+
+    // Build saveCount map in memory (much faster than N queries)
+    const saveCountMap: Record<string, number> = {};
+    for (const row of (allSavedRows as any[])) {
+      try {
+        const saved: string[] = JSON.parse(row.saved_playlists || '[]');
+        for (const pid of saved) saveCountMap[pid] = (saveCountMap[pid] || 0) + 1;
+      } catch {}
+    }
+
+    const playlists = (playlistRows as any[]).map(r => ({
+      id: r.id,
+      name: r.name,
+      avatar: r.avatar,
+      songs: JSON.parse(r.songs || '[]'),
+      discordId: r.discord_id,
+      authorName: username,
+      authorAvatar: avatarUrl,
+      saveCount: saveCountMap[r.id] || 0,
+      isPrivate: false
+    }));
+
+    if ((rows as any[]).length > 0) {
+      const p = (rows as any[])[0];
+      return {
+        discordId: p.discord_id,
+        username: p.username,
+        avatarUrl: p.avatar_url,
+        likedSongs: p.liked_songs ? JSON.parse(p.liked_songs) : [],
+        stats: p.stats ? JSON.parse(p.stats) : { playHistory: [] },
+        privacySettings: p.privacy_settings ? JSON.parse(p.privacy_settings) : { publicLikedSongs: true, publicStats: true },
+        savedPlaylists: p.saved_playlists ? JSON.parse(p.saved_playlists) : [],
+        following: p.following ? JSON.parse(p.following) : [],
+        followers,
+        bannerUrl: p.banner_url,
+        playlists
+      };
+    } else {
+      return { discordId, playlists, followers };
+    }
+  } catch (error) {
+    console.error('get-profile error:', error);
+    return null;
+  }
+});
+
+ipcMain.handle('update-banner', async (event, discordId, bannerUrl) => {
+  if (!db) return false;
+  try {
+    await db.execute('UPDATE user_profiles SET banner_url = ? WHERE discord_id = ?', [bannerUrl || null, discordId]);
+    return true;
+  } catch (error) {
+    console.error('update-banner error:', error);
+    return false;
+  }
+});
+
+// Playlist Share Code
+function generateShareCode(): string {
+  const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'; // No ambiguous chars (0,O,1,I)
+  let code = 'DP-';
+  for (let i = 0; i < 6; i++) code += chars[Math.floor(Math.random() * chars.length)];
+  return code;
+}
+
+ipcMain.handle('create-share-code', async (event, playlist) => {
+  if (!db) return null;
+  try {
+    // Cleanup expired codes first
+    await db.execute('DELETE FROM playlist_shares WHERE expires_at < NOW()');
+    // Check if this playlist already has a valid code
+    const [existing] = await db.execute('SELECT code, expires_at FROM playlist_shares WHERE playlist_id = ? AND expires_at > NOW()', [playlist.id]);
+    if ((existing as any[]).length > 0) {
+      return { code: (existing as any[])[0].code, expiresAt: (existing as any[])[0].expires_at };
+    }
+    // Generate a unique code
+    let code = generateShareCode();
+    let attempts = 0;
+    while (attempts < 5) {
+      const [exists] = await db.execute('SELECT code FROM playlist_shares WHERE code = ?', [code]);
+      if ((exists as any[]).length === 0) break;
+      code = generateShareCode();
+      attempts++;
+    }
+    const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000); // 7 days
+    await db.execute(
+      'INSERT INTO playlist_shares (code, playlist_id, discord_id, playlist_data, expires_at) VALUES (?, ?, ?, ?, ?)',
+      [code, playlist.id, playlist.discordId || null, JSON.stringify(playlist), expiresAt]
+    );
+    return { code, expiresAt };
+  } catch (error) {
+    console.error('create-share-code error:', error);
+    return null;
+  }
+});
+
+ipcMain.handle('resolve-share-code', async (event, code) => {
+  if (!db) return null;
+  try {
+    const cleanCode = (code || '').trim().toUpperCase();
+    const [rows] = await db.execute('SELECT playlist_data, expires_at FROM playlist_shares WHERE code = ? AND expires_at > NOW()', [cleanCode]);
+    if ((rows as any[]).length === 0) return null;
+    return JSON.parse((rows as any[])[0].playlist_data);
+  } catch (error) {
+    console.error('resolve-share-code error:', error);
+    return null;
+  }
+});
+
+ipcMain.handle('get-user-percentile', async (event, discordId) => {
+  if (!db) return 50;
+  try {
+    const [rows] = await db.execute('SELECT discord_id, stats FROM user_profiles');
+    const users = (rows as any[]).map(r => {
+      let time = 0;
+      try {
+        const statsObj = JSON.parse(r.stats || '{}');
+        time = statsObj.totalListenSeconds || 0;
+      } catch (e) {}
+      return { id: r.discord_id, time };
+    }).sort((a, b) => b.time - a.time);
+
+    const totalUsers = users.length;
+    if (totalUsers === 0) return 50;
+
+    const userIndex = users.findIndex(u => u.id === discordId);
+    if (userIndex === -1) return 50;
+
+    // Percentile = (rank - 1) / totalUsers * 100
+    // To make it fun: if you are rank 1 out of 1, you are 1%.
+    let percentile = Math.floor((userIndex / totalUsers) * 100);
+    if (percentile === 0 && totalUsers > 0) percentile = 1; // Top 1%
+    
+    // Normalize to standard badges
+    if (percentile <= 1) return 1;
+    if (percentile <= 2) return 2;
+    if (percentile <= 5) return 5;
+    if (percentile <= 10) return 10;
+    if (percentile <= 20) return 20;
+    if (percentile <= 50) return 50;
+    return 100;
+  } catch (error) {
+    console.error('get-user-percentile error:', error);
+    return 50;
+  }
+});
+
+ipcMain.handle('update-profile', async (event, profileData) => {
+  if (!db) return false;
+  try {
+    const { discordId, username, avatarUrl, likedSongs, stats, privacySettings, savedPlaylists, following, bannerUrl } = profileData;
+    await db.execute(
+      `INSERT INTO user_profiles (discord_id, username, avatar_url, liked_songs, stats, privacy_settings, saved_playlists, following, banner_url) 
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+       ON DUPLICATE KEY UPDATE 
+       username = VALUES(username), avatar_url = VALUES(avatar_url), liked_songs = VALUES(liked_songs), 
+       stats = VALUES(stats), privacy_settings = VALUES(privacy_settings), saved_playlists = VALUES(saved_playlists), following = VALUES(following), banner_url = COALESCE(VALUES(banner_url), banner_url)`,
+      [
+        discordId, username, avatarUrl, 
+        JSON.stringify(likedSongs || []), 
+        JSON.stringify(stats || {}), 
+        JSON.stringify(privacySettings || {}),
+        JSON.stringify(savedPlaylists || []),
+        JSON.stringify(following || []),
+        bannerUrl || null
+      ]
+    );
+    return true;
+  } catch (error) {
+    console.error('update-profile error:', error);
+    return false;
+  }
+});
+
+// Helper for toggle functions
+ipcMain.handle('toggle-follow', async (event, discordId, targetId) => {
+  if (!db) return false;
+  try {
+    const [rows] = await db.execute('SELECT following FROM user_profiles WHERE discord_id = ?', [discordId]);
+    if ((rows as any[]).length > 0) {
+      let following = JSON.parse((rows as any[])[0].following || '[]');
+      if (following.includes(targetId)) following = following.filter((id: string) => id !== targetId);
+      else following.push(targetId);
+      await db.execute('UPDATE user_profiles SET following = ? WHERE discord_id = ?', [JSON.stringify(following), discordId]);
+      return following;
+    }
+  } catch(e) {}
+  return null;
+});
+
+ipcMain.handle('toggle-save-playlist', async (event, discordId, playlistId) => {
+  if (!db) return false;
+  try {
+    const [rows] = await db.execute('SELECT saved_playlists FROM user_profiles WHERE discord_id = ?', [discordId]);
+    if ((rows as any[]).length > 0) {
+      let saved = JSON.parse((rows as any[])[0].saved_playlists || '[]');
+      if (saved.includes(playlistId)) saved = saved.filter((id: string) => id !== playlistId);
+      else saved.push(playlistId);
+      await db.execute('UPDATE user_profiles SET saved_playlists = ? WHERE discord_id = ?', [JSON.stringify(saved), discordId]);
+      return saved;
+    }
+  } catch(e) {}
+  return null;
+});
+
 
 ipcMain.handle('delete-playlist', async (event, id) => {
   if (!db) return false;
@@ -767,8 +1035,19 @@ function downloadToCache(songData: any, urlStr: string, sender: any, isTemp: boo
   const filePath = path.join(cacheDir, `${songId}.m4a`);
   const tempPath = path.join(cacheDir, `${songId}.tmp`);
 
-  // If already cached or currently downloading, skip
-  if (fs.existsSync(filePath) || fs.existsSync(tempPath)) return;
+  // If already fully cached, send completion event and ensure metadata is saved
+  if (fs.existsSync(filePath)) {
+    const metadata = getCachedMetadata();
+    if (!metadata.find((s: any) => s.id === songId)) {
+      metadata.push(songData);
+      saveCachedMetadata(metadata);
+    }
+    if (sender) sender.send('download-cache-complete', songData);
+    return;
+  }
+
+  // If currently downloading, just skip and let the active download finish
+  if (fs.existsSync(tempPath)) return;
 
   const url = new URL(urlStr);
   const client = url.protocol === 'https:' ? https : http;
@@ -880,12 +1159,20 @@ ipcMain.handle('get-cache-size', async () => {
     const files = fs.readdirSync(cacheDir);
     let totalSize = 0;
     for (const file of files) {
-      totalSize += fs.statSync(path.join(cacheDir, file)).size;
+      try {
+        totalSize += fs.statSync(path.join(cacheDir, file)).size;
+      } catch (err) {
+        // Ignore files that no longer exist
+      }
     }
     return totalSize;
   } catch (e) {
     return 0;
   }
+});
+
+ipcMain.handle('get-cache-path', () => {
+  return cacheDir;
 });
 
 // APP LIFECYCLE
