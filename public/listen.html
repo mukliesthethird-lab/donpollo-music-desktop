@@ -1,0 +1,143 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Don Pollo – Listen Along</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;800&display=swap" rel="stylesheet">
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      background: #0B0B10;
+      color: #fff;
+      font-family: 'Inter', sans-serif;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      min-height: 100vh;
+      flex-direction: column;
+      gap: 20px;
+      padding: 24px;
+    }
+    .logo { font-size: 36px; font-weight: 800; letter-spacing: -1px; }
+    .logo span { color: #5865F2; }
+    .card {
+      background: rgba(255,255,255,0.05);
+      border: 1px solid rgba(255,255,255,0.08);
+      border-radius: 16px;
+      padding: 32px;
+      max-width: 420px;
+      width: 100%;
+      text-align: center;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 16px;
+    }
+    .icon { font-size: 48px; }
+    h2 { font-size: 20px; font-weight: 700; }
+    .desc { color: rgba(255,255,255,0.55); font-size: 14px; line-height: 1.6; }
+    .user-info {
+      background: rgba(88,101,242,0.12);
+      border: 1px solid rgba(88,101,242,0.3);
+      border-radius: 10px;
+      padding: 12px 20px;
+      font-size: 14px;
+      font-weight: 600;
+      color: #7289da;
+      display: none;
+    }
+    .btn {
+      background: #5865F2;
+      color: white;
+      border: none;
+      border-radius: 10px;
+      padding: 14px 28px;
+      font-size: 15px;
+      font-weight: 700;
+      cursor: pointer;
+      width: 100%;
+      transition: background 0.2s, transform 0.1s;
+      text-decoration: none;
+      display: block;
+    }
+    .btn:hover { background: #4752c4; transform: translateY(-1px); }
+    .btn:active { transform: translateY(0); }
+    .btn-secondary {
+      background: transparent;
+      border: 1px solid rgba(255,255,255,0.15);
+      color: rgba(255,255,255,0.7);
+      font-size: 13px;
+      padding: 10px 20px;
+    }
+    .btn-secondary:hover { background: rgba(255,255,255,0.05); transform: none; }
+    .spinner {
+      width: 32px; height: 32px;
+      border: 3px solid rgba(255,255,255,0.1);
+      border-top-color: #5865F2;
+      border-radius: 50%;
+      animation: spin 0.8s linear infinite;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    .status { color: rgba(255,255,255,0.5); font-size: 13px; }
+    .error-msg { color: #ff6b6b; font-size: 13px; display: none; }
+    .note { color: rgba(255,255,255,0.3); font-size: 12px; line-height: 1.5; }
+  </style>
+</head>
+<body>
+  <div class="logo">Don<span>Pollo</span></div>
+
+  <div class="card">
+    <div class="icon">
+      <svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 18v-6a9 9 0 0 1 18 0v6"></path><path d="M21 19a2 2 0 0 1-2 2h-1a2 2 0 0 1-2-2v-3a2 2 0 0 1 2-2h3zM3 19a2 2 0 0 0 2 2h1a2 2 0 0 0 2-2v-3a2 2 0 0 0-2-2H3z"></path></svg>
+    </div>
+    <h2>Listen Along Invite</h2>
+    <p class="desc">Someone invited you to listen along with them on <strong>Don Pollo Music</strong>. Open the app to join their session!</p>
+
+    <div class="user-info" id="userInfo"></div>
+
+    <div class="spinner" id="spinner"></div>
+    <p class="status" id="status">Opening Don Pollo Music...</p>
+    <p class="error-msg" id="errMsg"></p>
+
+    <a href="#" class="btn" id="openBtn" style="display:none">Open Don Pollo Music</a>
+    <a href="https://github.com/mukliesthethird-lab/donpollo-music-desktop/releases" class="btn btn-secondary" id="downloadBtn" style="display:none">Download Don Pollo Music</a>
+    <p class="note" id="note" style="display:none">Don Pollo Music must be installed on your device to join the session.</p>
+  </div>
+
+  <script>
+    const params = new URLSearchParams(window.location.search);
+    const userId = params.get('u');
+    const username = params.get('name');
+
+    if (username) {
+      const info = document.getElementById('userInfo');
+      info.textContent = `Listening with ${decodeURIComponent(username)}`;
+      info.style.display = 'block';
+    }
+
+    // Build deep link
+    const deepLink = userId
+      ? `donpollo://listen?u=${userId}${username ? '&name=' + username : ''}`
+      : 'donpollo://listen';
+
+    const openBtn = document.getElementById('openBtn');
+    openBtn.href = deepLink;
+
+    // Auto-redirect
+    setTimeout(() => {
+      window.location.href = deepLink;
+    }, 800);
+
+    // After 3s, show fallback UI
+    setTimeout(() => {
+      document.getElementById('spinner').style.display = 'none';
+      document.getElementById('status').style.display = 'none';
+      document.getElementById('openBtn').style.display = 'block';
+      document.getElementById('downloadBtn').style.display = 'block';
+      document.getElementById('note').style.display = 'block';
+    }, 3000);
+  </script>
+</body>
+</html>

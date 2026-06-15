@@ -87,8 +87,40 @@ if (process.defaultApp) {
 }
 
 function handleDeepLink(url: string) {
-  // url = donpollo://callback#access_token=xxx&token_type=Bearer&...
   if (!mainWindow) return;
+
+  // donpollo://callback#access_token=... (OAuth)
+  if (url.startsWith('donpollo://callback')) {
+    const hash = url.split('#')[1] || '';
+    const params = new URLSearchParams(hash);
+    const token = params.get('access_token');
+    if (token) {
+      mainWindow.webContents.send('discord-oauth-token', token);
+      mainWindow.focus();
+    }
+    return;
+  }
+
+  // donpollo://listen?u=[userId]&name=[username] (Listen Along invite)
+  if (url.startsWith('donpollo://listen')) {
+    try {
+      const queryStr = url.split('?')[1] || '';
+      const params = new URLSearchParams(queryStr);
+      const userId = params.get('u');
+      const username = params.get('name');
+      if (userId) {
+        mainWindow.webContents.send('listen-along-invite', { userId, username });
+        mainWindow.focus();
+        if (mainWindow.isMinimized()) mainWindow.restore();
+        mainWindow.show();
+      }
+    } catch (e) {
+      console.error('listen deep link error:', e);
+    }
+    return;
+  }
+
+  // Legacy: fallback for old-format donpollo:// links
   const hash = url.split('#')[1] || '';
   const params = new URLSearchParams(hash);
   const token = params.get('access_token');
@@ -909,31 +941,60 @@ rpc.login({ clientId }).catch(console.error);
 
 function cleanSongTitle(title: string): string {
   if (!title) return '';
-  let cleaned = title.replace(/\\s*\\(.*?\\b(official|music video|mv|lyric|audio|live|performance|vizualizer|visualizer)\\b.*?\\)/ig, '');
-  cleaned = cleaned.replace(/\\s*\\[.*?\\b(official|music video|mv|lyric|audio|live|performance|vizualizer|visualizer)\\b.*?\\]/ig, '');
-  cleaned = cleaned.replace(/\\s*(official|music video|mv|lyric video|lyric|audio|live|performance|vizualizer|visualizer)\\s*/ig, '');
+  let cleaned = title.replace(/\s*\(.*?\b(official|music video|mv|lyric|audio|live|performance|vizualizer|visualizer)\b.*?\)/ig, '');
+  cleaned = cleaned.replace(/\s*\[.*?\b(official|music video|mv|lyric|audio|live|performance|vizualizer|visualizer)\b.*?\]/ig, '');
+  cleaned = cleaned.replace(/\s*(official|music video|mv|lyric video|lyric|audio|live|performance|vizualizer|visualizer)\s*/ig, '');
   cleaned = cleaned.replace(/【.*?】/g, '');
   return cleaned.trim();
 }
 
-ipcMain.on('set-activity', (event, song, progressStr) => {
+ipcMain.on('set-activity', (event, song, extraData) => {
+  // extraData: { discordId, username, partyId, isGuest, hostUsername, progress, duration }
+  const d = extraData || {};
+  const VERCEL_URL = 'https://donpollo-music-desktop.vercel.app';
+  const now = Date.now();
+
   if (!song) {
+    // Idle / browsing state
     currentActivity = {
-      details: 'Browsing DonPollo Music',
-      state: 'Looking for a song',
+      type: 2, // Listening
+      details: 'Don Pollo Music',
+      state: 'Browsing...',
       startTimestamp: new Date(),
       largeImageKey: 'logo',
-      largeImageText: 'DonPollo Music',
+      largeImageText: 'Don Pollo Music',
       instance: false,
     };
   } else {
     const cleanTitle = cleanSongTitle(song.title);
+    const progressMs = Math.floor((d.progress || 0) * 1000);
+    const durationMs = Math.floor((d.duration || 0) * 1000);
+
+    // Progress bar: Discord derives it from start/end timestamps automatically
+    const startTimestamp = durationMs > 0 ? new Date(now - progressMs) : undefined;
+    const VERCEL_URL = 'https://donpollo-music-desktop.vercel.app';
+    const listenUrl = d.discordId
+      ? `${VERCEL_URL}/listen?u=${d.discordId}${d.username ? '&name=' + encodeURIComponent(d.username) : ''}`
+      : null;
+
+    const isInParty = d.isGuest || (d.partyId && d.partyId === d.discordId);
+
     currentActivity = {
-      details: `Listening to ${cleanTitle}`,
-      state: `by ${song.artist || 'Unknown'}`,
-      largeImageKey: 'logo',
+      details: cleanTitle,
+      state: isInParty
+        ? `🎧 with ${d.hostUsername || 'a friend'}`
+        : (song.artist || 'Unknown Artist'),
+      largeImageKey: song.thumbnail || 'logo',
       largeImageText: cleanTitle,
+      smallImageKey: 'logo',
+      smallImageText: 'Don Pollo Music',
+      ...(startTimestamp ? { startTimestamp } : {}),
       instance: false,
+      ...(listenUrl && !d.isGuest ? {
+        buttons: [
+          { label: 'Listen Along', url: listenUrl },
+        ]
+      } : {}),
     };
   }
 

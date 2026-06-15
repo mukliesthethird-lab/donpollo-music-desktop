@@ -44,12 +44,17 @@ contextBridge.exposeInMainWorld('electronAPI', {
   pollQueueRequests: (hostId: string) => ipcRenderer.invoke('poll-queue-requests', hostId),
   respondQueueRequest: (requestId: number, status: string) => ipcRenderer.invoke('respond-queue-request', requestId, status),
   romanizeLyrics: (text: string, lang: 'ko' | 'ja') => ipcRenderer.invoke('romanize-lyrics', text, lang),
-  setActivity: (song: any, progressStr?: string) => ipcRenderer.send('set-activity', song, progressStr),
+  setActivity: (song: any, extraData?: any) => ipcRenderer.send('set-activity', song, extraData),
   clearActivity: () => ipcRenderer.send('clear-activity'),
   onDiscordOAuthToken: (callback: (token: string) => void) => {
     const wrapped = (_event: any, token: string) => callback(token);
     ipcRenderer.on('discord-oauth-token', wrapped);
     return () => ipcRenderer.off('discord-oauth-token', wrapped);
+  },
+  onListenAlongInvite: (callback: (data: { userId: string; username: string | null }) => void) => {
+    const wrapped = (_event: any, data: any) => callback(data);
+    ipcRenderer.on('listen-along-invite', wrapped);
+    return () => ipcRenderer.off('listen-along-invite', wrapped);
   },
   checkCache: (songId: string) => ipcRenderer.invoke('check-cache', songId),
   cacheAudio: (songData: any, url: string, isSilent?: boolean, isTemp?: boolean) => ipcRenderer.send('cache-audio', songData, url, isSilent, isTemp),

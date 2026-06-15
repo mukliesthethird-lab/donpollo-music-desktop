@@ -30,3 +30,7 @@ release
 win-unpacked
 *.exe
 *.blockmap
+
+# Environment variables (credentials)
+.env
+.env.*

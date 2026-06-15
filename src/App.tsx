@@ -63,6 +63,44 @@ function App() {
   const [activePage, setActivePage] = useState<Page>('home');
   const [activePlaylistId, setActivePlaylistId] = useState<string | null>(null);
 
+  // Navigation history stack (browser-like back/forward)
+  type NavEntry = { page: Page; playlistId?: string | null; profileId?: string | null; artistName?: string | null; };
+  const [navHistory, setNavHistory] = useState<NavEntry[]>([{ page: 'home' }]);
+  const [navIndex, setNavIndex] = useState(0);
+
+  const canGoBack = navIndex > 0;
+  const canGoForward = navIndex < navHistory.length - 1;
+
+  const navigate = (page: Page, opts?: { playlistId?: string | null; profileId?: string | null; artistName?: string | null }) => {
+    const entry: NavEntry = { page, playlistId: opts?.playlistId ?? null, profileId: opts?.profileId ?? null, artistName: opts?.artistName ?? null };
+    setNavHistory(prev => {
+      const trimmed = prev.slice(0, navIndex + 1);
+      return [...trimmed, entry];
+    });
+    setNavIndex(prev => prev + 1);
+    setActivePage(page);
+    if (opts?.playlistId !== undefined) setActivePlaylistId(opts.playlistId ?? null);
+    if (opts?.profileId !== undefined) setActiveProfileId(opts.profileId ?? null);
+  };
+
+  const goBack = () => {
+    if (!canGoBack) return;
+    const prev = navHistory[navIndex - 1];
+    setNavIndex(i => i - 1);
+    setActivePage(prev.page);
+    if (prev.playlistId !== undefined) setActivePlaylistId(prev.playlistId ?? null);
+    if (prev.profileId !== undefined) setActiveProfileId(prev.profileId ?? null);
+  };
+
+  const goForward = () => {
+    if (!canGoForward) return;
+    const next = navHistory[navIndex + 1];
+    setNavIndex(i => i + 1);
+    setActivePage(next.page);
+    if (next.playlistId !== undefined) setActivePlaylistId(next.playlistId ?? null);
+    if (next.profileId !== undefined) setActiveProfileId(next.profileId ?? null);
+  };
+
   const [isOffline, setIsOffline] = useState(!navigator.onLine);
 
   useEffect(() => {
@@ -472,6 +510,19 @@ function App() {
     return () => {
       if (unsub) unsub();
     };
+  }, []);
+
+  // Handle Listen Along invite from deep link (donpollo://listen?u=xxx)
+  useEffect(() => {
+    const api = (window as any).electronAPI;
+    if (!api?.onListenAlongInvite) return;
+    const unsub = api.onListenAlongInvite(({ userId, username }: { userId: string; username: string | null }) => {
+      if (!userId) return;
+      setActivePartyId(userId);
+      setIsGuest(true);
+      showToast(`Joining ${username ? username + "'s" : ''} session...`, 'success');
+    });
+    return () => { if (unsub) unsub(); };
   }, []);
 
   // Close suggestions when clicking outside
@@ -894,13 +945,29 @@ function App() {
           const avatar = discordUser.avatar ? `https://cdn.discordapp.com/avatars/${discordUser.id}/${discordUser.avatar}.png` : null;
           const isPlayingNow = audioRef.current ? !audioRef.current.paused : false;
 
-          const currentActivityState = isPlayingNow && currentSong ? currentSong.id : 'idle';
-          if (lastActivityRef.current !== currentActivityState) {
-            lastActivityRef.current = currentActivityState;
+          const progress = audioRef.current?.currentTime || 0;
+          const duration = audioRef.current?.duration || 0;
+
+          // Bucket to ~5s to avoid flooding IPC, but still keep progress bar accurate
+          const bucket = isPlayingNow && currentSong
+            ? `${currentSong.id}-${Math.floor(progress / 5)}`
+            : 'idle';
+
+          const extraData = {
+            discordId: discordUser.id,
+            username: discordUser.global_name || discordUser.username,
+            partyId: activePartyId,
+            isGuest: isGuest,
+            progress,
+            duration,
+          };
+
+          if (lastActivityRef.current !== bucket) {
+            lastActivityRef.current = bucket;
             if (isPlayingNow && currentSong) {
-              (window as any).electronAPI.setActivity(currentSong);
+              (window as any).electronAPI.setActivity(currentSong, extraData);
             } else {
-              (window as any).electronAPI.setActivity(null);
+              (window as any).electronAPI.setActivity(null, extraData);
             }
           }
 
@@ -1568,7 +1635,7 @@ function App() {
   const deletePlaylist = async (playlistId: string) => {
     if ((window as any).electronAPI) await (window as any).electronAPI.deletePlaylist(playlistId);
     setPlaylists(prev => prev.filter(pl => pl.id !== playlistId));
-    setActivePage('playlist');
+    navigate('playlist');
     setPlaylistToDelete(null);
     showToast(t('toastPlaylistDeleted'));
   };
@@ -1619,9 +1686,7 @@ function App() {
         showToast(`"${sharedPlaylist.name}" ditambahkan ke library! 🎉`, 'success');
         setShowImportPlaylist(false);
         setImportPlaylistUrl('');
-        // Open in playlist-detail (view mode because discordId !== current user)
-        setActivePlaylistId(sharedPlaylist.id);
-        setActivePage('playlist-detail');
+        navigate('playlist-detail', { playlistId: sharedPlaylist.id });
       } catch (e: any) {
         showToast(e.message || 'Import gagal', 'error');
       } finally {
@@ -1650,8 +1715,7 @@ function App() {
       showToast(`"${newPlaylist.name}" ${t('toastImportSuccess')}`);
       setShowImportPlaylist(false);
       setImportPlaylistUrl('');
-      setActivePlaylistId(newPlaylist.id);
-      setActivePage('playlist');
+      navigate('playlist', { playlistId: newPlaylist.id });
     } catch (e: any) {
       showToast(e.message || 'Import failed', 'error');
     } finally {
@@ -2291,7 +2355,7 @@ function App() {
     if (audioRef.current) audioRef.current.currentTime = time + lyricsOffset;
   };
 
-  const goHome = () => { setActivePage('home'); setSearchQuery(''); setSearchResults([]); };
+  const goHome = () => { navigate('home'); setSearchQuery(''); setSearchResults([]); };
 
   const fetchArtistSongs = async (artist: string, filter: 'popular' | 'newest', isPodcast: boolean = false) => {
     setIsArtistLoading(true);
@@ -2559,7 +2623,7 @@ function App() {
     const cleanName = isPodcastMode ? artistName.slice(0, -11).trim() : artistName;
     setIsArtistPodcast(isPodcastMode);
     setActiveArtist(cleanName);
-    setActivePage('artist');
+    navigate('artist', { artistName: cleanName });
     setArtistFilter('popular');
     setShowSuggestions(false);
     fetchArtistSongs(cleanName, 'popular', isPodcastMode);
@@ -2948,16 +3012,21 @@ function App() {
         <div className="page-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
           <div>
             <h1>{t('myLibrary')}</h1>
-            <p className="page-subtitle">{playlists.length} {t('playlist')}</p>
+            <p className="page-subtitle">{playlists.filter(pl => pl.discordId === discordUser?.id || savedPlaylists.includes(pl.id)).length} {t('playlist')}</p>
           </div>
-          <button className="btn-primary" onClick={() => setShowCreatePlaylist(true)}>
-            <Plus size={16} /> {t('createPlaylist')}
-          </button>
+          <div style={{ display: 'flex', gap: '8px' }}>
+            <button className="btn-secondary" onClick={() => setShowImportPlaylist(true)}>
+              <Download size={16} /> {t('importPlaylist')}
+            </button>
+            <button className="btn-primary" onClick={() => setShowCreatePlaylist(true)}>
+              <Plus size={16} /> {t('createPlaylist')}
+            </button>
+          </div>
         </div>
-        {playlists.length > 0 ? (
+        {playlists.filter(pl => pl.discordId === discordUser?.id || savedPlaylists.includes(pl.id)).length > 0 ? (
           <div className="playlist-grid">
-            {playlists.map(pl => (
-              <div key={pl.id} className="playlist-card" onClick={() => { setActivePlaylistId(pl.id); setActivePage('playlist-detail'); }}>
+            {playlists.filter(pl => pl.discordId === discordUser?.id || savedPlaylists.includes(pl.id)).map(pl => (
+              <div key={pl.id} className="playlist-card" onClick={() => { navigate('playlist-detail', { playlistId: pl.id }); }}>
                 <div className="playlist-card-art">
                   {pl.avatar ? (
                     <img src={pl.avatar} alt={pl.name} />
@@ -5039,7 +5108,7 @@ function App() {
               <div className={`nav-item ${activePage === 'home' ? 'active' : ''}`} onClick={goHome}>
                 <Home size={24} /> <span className="nav-label">{t('home')}</span>
               </div>
-              <div className={`nav-item ${activePage === 'settings' ? 'active' : ''}`} onClick={() => setActivePage('settings')}>
+              <div className={`nav-item ${activePage === 'settings' ? 'active' : ''}`} onClick={() => navigate('settings')}>
                 <Settings size={24} /> <span className="nav-label">{t('settings')}</span>
               </div>
 
@@ -5068,7 +5137,7 @@ function App() {
 
             <div className="library-list-container">
               {/* Liked Songs Fixed Item */}
-              <button className={`sidebar-list-item ${activePage === 'library' ? 'active' : ''}`} onClick={() => setActivePage('library')}>
+              <button className={`sidebar-list-item ${activePage === 'library' ? 'active' : ''}`} onClick={() => navigate('library')}>
                 <div className="sidebar-item-img" style={{ background: 'linear-gradient(135deg, var(--accent-primary), #2a2a2a)' }}>
                   <Heart size={20} color="white" fill="white" />
                 </div>
@@ -5078,7 +5147,7 @@ function App() {
                 </div>
               </button>
 
-              <button className={`sidebar-list-item ${activePage === 'downloads' ? 'active' : ''}`} onClick={() => setActivePage('downloads')}>
+              <button className={`sidebar-list-item ${activePage === 'downloads' ? 'active' : ''}`} onClick={() => navigate('downloads')}>
                 <div className="sidebar-item-img" style={{ background: 'linear-gradient(135deg, #00c6ff, #0072ff)' }}>
                   <FolderPlus size={20} color="white" />
                 </div>
@@ -5092,7 +5161,7 @@ function App() {
               {playlists.filter(pl => pl.discordId === discordUser?.id || savedPlaylists.includes(pl.id)).map(pl => (
                 <button key={pl.id} className={`sidebar-list-item ${(activePage === 'playlist-detail' && activePlaylistId === pl.id) ? 'active' : ''}`} onClick={() => {
                   setActivePlaylistId(pl.id);
-                  setActivePage('playlist-detail');
+                  navigate('playlist-detail', { playlistId: pl.id });
                 }}>
                   <div className="sidebar-item-img">
                     {pl.avatar ? (
@@ -5251,7 +5320,7 @@ function App() {
                           <div style={{ color: 'var(--text-muted)', fontSize: '11px', textAlign: 'center', marginTop: '12px' }}>{t('noFriendsOnline')}</div>
                         ) : (
                           otherFriends.map(user => (
-                            <div key={user.discordId} className="friend-item" onClick={() => { setActiveProfileId(user.discordId); setActivePage('profile'); }} style={{ cursor: 'pointer' }}>
+                            <div key={user.discordId} className="friend-item" onClick={() => { navigate('profile', { profileId: user.discordId }); }} style={{ cursor: 'pointer' }}>
                               <div className="friend-avatar-container" style={{ position: 'relative' }}>
                                 <img src={user.avatarUrl || `https://ui-avatars.com/api/?name=${user.username}`} alt={user.username} className="friend-avatar" />
                                 <div className={`status-dot-avatar status-dot ${user.status || 'online'}`}></div>
@@ -5316,13 +5385,13 @@ function App() {
                     </div>
                   </>
                 ) : (
-                  <div className="logout-item" onClick={() => { setShowLogoutDropdown(false); setActivePage('settings'); }} style={{ color: 'var(--text-primary)' }}>
+                  <div className="logout-item" onClick={() => { setShowLogoutDropdown(false); navigate('settings'); }} style={{ color: 'var(--text-primary)' }}>
                     <Settings size={16} /> {t('goToSettings')}
                   </div>
                 )}
               </div>
             )}
-            <button className="user-profile-btn" onClick={() => { if (discordUser) { setActiveProfileId(discordUser.id); setActivePage('profile'); setShowLogoutDropdown(false); } else { setShowLogoutDropdown(!showLogoutDropdown); } }} onContextMenu={(e) => { e.preventDefault(); setShowLogoutDropdown(!showLogoutDropdown); setShowProfileStats(false); }} title={discordUser ? `` : 'Login'}>
+            <button className="user-profile-btn" onClick={() => { if (discordUser) { navigate('profile', { profileId: discordUser.id }); setShowLogoutDropdown(false); } else { setShowLogoutDropdown(!showLogoutDropdown); } }} onContextMenu={(e) => { e.preventDefault(); setShowLogoutDropdown(!showLogoutDropdown); setShowProfileStats(false); }} title={discordUser ? `` : 'Login'}>
               <div className="user-avatar" style={{ position: 'relative' }}>
                 {discordUser && getDiscordAvatar(discordUser) ? (
                   <img src={getDiscordAvatar(discordUser)!} alt="avatar" style={{ width: '100%', height: '100%', borderRadius: '50%', objectFit: 'cover' }} />
@@ -5357,15 +5426,19 @@ function App() {
                     background: activePage === 'home' && settings.theme === 'minimalist' ? 'var(--accent-primary)' : '',
                     opacity: isOffline ? 0.5 : 1
                   }} title="Home"><Home size={20} /></button>
-                  <button className="btn-icon" onClick={() => setActivePage('library')} style={{
+                  <button className="btn-icon" onClick={() => navigate('library')} style={{
                     color: activePage === 'library' ? (settings.theme === 'minimalist' ? 'var(--accent-text, black)' : 'var(--accent-primary)') : 'var(--text-primary)',
                     background: activePage === 'library' && settings.theme === 'minimalist' ? 'var(--accent-primary)' : ''
                   }} title={t('likedSongs') || 'Liked Songs'}><Heart size={20} /></button>
-                  <button className="btn-icon" onClick={() => setActivePage('playlist')} style={{
+                  <button className="btn-icon" onClick={() => navigate('playlist')} style={{
                     color: (activePage === 'playlist' || activePage === 'playlist-detail') ? (settings.theme === 'minimalist' ? 'var(--accent-text, black)' : 'var(--accent-primary)') : 'var(--text-primary)',
                     background: (activePage === 'playlist' || activePage === 'playlist-detail') && settings.theme === 'minimalist' ? 'var(--accent-primary)' : ''
                   }} title={t('playlist') || 'Playlists'}><ListMusic size={20} /></button>
-                  <button className="btn-icon" onClick={() => setActivePage('settings')} style={{
+                  <button className="btn-icon" onClick={() => navigate('downloads')} style={{
+                    color: activePage === 'downloads' ? (settings.theme === 'minimalist' ? 'var(--accent-text, black)' : 'var(--accent-primary)') : 'var(--text-primary)',
+                    background: activePage === 'downloads' && settings.theme === 'minimalist' ? 'var(--accent-primary)' : ''
+                  }} title={t('offlineVault') || 'Offline Vault'}><FolderPlus size={20} /></button>
+                  <button className="btn-icon" onClick={() => navigate('settings')} style={{
                     color: activePage === 'settings' ? (settings.theme === 'minimalist' ? 'var(--accent-text, black)' : 'var(--accent-primary)') : 'var(--text-primary)',
                     background: activePage === 'settings' && settings.theme === 'minimalist' ? 'var(--accent-primary)' : ''
                   }} title="Pengaturan"><Settings size={20} /></button>
@@ -5373,8 +5446,8 @@ function App() {
                 </div>
               )}
               <div className="nav-arrows" style={settings.theme === 'minimalist' ? { margin: 0 } : {}}>
-                <button className="arrow-btn" onClick={goHome}><ChevronLeft size={20} /></button>
-                <button className="arrow-btn"><ChevronRight size={20} /></button>
+                <button className="arrow-btn" onClick={goBack} disabled={!canGoBack} style={{ opacity: canGoBack ? 1 : 0.3, cursor: canGoBack ? 'pointer' : 'default', transition: 'opacity 0.2s' }} title="Back"><ChevronLeft size={20} /></button>
+                <button className="arrow-btn" onClick={goForward} disabled={!canGoForward} style={{ opacity: canGoForward ? 1 : 0.3, cursor: canGoForward ? 'pointer' : 'default', transition: 'opacity 0.2s' }} title="Forward"><ChevronRight size={20} /></button>
               </div>
             </div>
 
@@ -5538,8 +5611,7 @@ function App() {
                     transition: 'all 0.2s'
                   }}
                   onClick={() => {
-                    setActiveProfileId(discordUser.id);
-                    setActivePage('profile');
+                    navigate('profile', { profileId: discordUser.id });
                   }}
                   title={t('myProfile')}
                 >
@@ -5785,7 +5857,7 @@ function App() {
                         <div style={{ color: 'var(--text-muted)', fontSize: '11px', textAlign: 'center', marginTop: '12px' }}>{t('noFriendsOnline')}</div>
                       ) : (
                         otherFriends.map(user => (
-                          <div key={user.discordId} className="friend-item">
+                          <div key={user.discordId} className="friend-item" onClick={() => { navigate('profile', { profileId: user.discordId }); }} style={{ cursor: 'pointer' }}>
                             <div className="friend-avatar-container" style={{ position: 'relative' }}>
                               <img src={user.avatarUrl || `https://ui-avatars.com/api/?name=${user.username}`} alt={user.username} className="friend-avatar" />
                               <div className={`status-dot-avatar status-dot ${user.status || 'online'}`}></div>
