@@ -9,7 +9,6 @@ DonPollo Music Desktop is a modern, premium, and lightning-fast music streaming 
   - Login with Discord to securely save and sync your custom playlists across devices.
   - **Custom Rich Presence (RPC)**: Automatically showcase the song you're currently jamming to directly on your Discord profile, complete with live timestamps!
 - **Synced Lyrics & Romanization**: Sing along with real-time synchronized lyrics. Features built-in romanization for K-Pop (Korean) and J-Pop (Japanese) tracks!
-- **Mini Player Mode**: A sleek, compact "Always-on-Top" mini-player that stays out of your way while keeping controls accessible.
 - **Multi-language Support**: Fully localized in English, Indonesian (Bahasa Indonesia), and Japanese (日本語).
 - **Silent Auto-Updates**: Never worry about downloading new patches manually. The app updates itself automatically in the background.
 
