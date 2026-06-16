@@ -38,6 +38,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
   getPartyState: (partyId: string) => ipcRenderer.invoke('get-party-state', partyId),
   deleteParty: (partyId: string) => ipcRenderer.invoke('delete-party', partyId),
   sendJoinRequest: (hostId: string, guestId: string, guestName: string) => ipcRenderer.invoke('send-join-request', hostId, guestId, guestName),
+  kickUser: (hostId: string, guestId: string) => ipcRenderer.invoke('kick-user', hostId, guestId),
   pollJoinRequests: (userId: string) => ipcRenderer.invoke('poll-join-requests', userId),
   respondJoinRequest: (requestId: number, status: string) => ipcRenderer.invoke('respond-join-request', requestId, status),
   sendQueueRequest: (hostId: string, guestId: string, guestName: string, songData: any) => ipcRenderer.invoke('send-queue-request', hostId, guestId, guestName, songData),

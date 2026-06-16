@@ -331,6 +331,14 @@ type TranslationKeys = {
   trayPrev: string;
   trayShow: string;
   trayQuit: string;
+  kickedFromParty: string;
+  partyMembers: string;
+  kickUser: string;
+  confirmKick: string;
+  hasBeenKicked: string;
+  addedByUser: string;
+  partyHost: string;
+  nowListeningWith: string;
 
   // Podcast
   podcast: string;
@@ -677,6 +685,14 @@ const translations: Record<Language, TranslationKeys> = {
     trayPrev: 'Lagu Sebelumnya',
     trayShow: 'Tampilkan Aplikasi',
     trayQuit: 'Keluar',
+    kickedFromParty: 'Dikeluarkan dari Party',
+    partyMembers: 'Anggota Party',
+    kickUser: 'Keluarkan Pengguna',
+    confirmKick: 'Apakah Anda yakin ingin mengeluarkan',
+    hasBeenKicked: 'telah dikeluarkan dari party',
+    addedByUser: 'Ditambahkan oleh',
+    partyHost: 'Host',
+    nowListeningWith: 'Sedang mendengarkan bersama',
 
     // Podcast
     podcast: 'Podcast',
@@ -1022,6 +1038,14 @@ const translations: Record<Language, TranslationKeys> = {
     trayPrev: 'Previous Track',
     trayShow: 'Show App',
     trayQuit: 'Quit',
+    kickedFromParty: 'Kicked from Party',
+    partyMembers: 'Party Members',
+    kickUser: 'Kick User',
+    confirmKick: 'Are you sure you want to kick',
+    hasBeenKicked: 'has been kicked from the party',
+    addedByUser: 'Added by',
+    partyHost: 'Host',
+    nowListeningWith: 'Now listening along with',
 
     // Podcast
     podcast: 'Podcast',
@@ -1367,6 +1391,14 @@ const translations: Record<Language, TranslationKeys> = {
     trayPrev: '前の曲',
     trayShow: 'アプリを表示',
     trayQuit: '終了',
+    kickedFromParty: 'パーティーから退出されました',
+    partyMembers: 'パーティーメンバー',
+    kickUser: 'ユーザーをキック',
+    confirmKick: '本当にキックしますか:',
+    hasBeenKicked: 'がパーティーからキックされました',
+    addedByUser: '追加者',
+    partyHost: 'ホスト',
+    nowListeningWith: '一緒に聴いています',
 
     // Podcast
     podcast: 'ポッドキャスト',
@@ -1713,6 +1745,14 @@ const translations: Record<Language, TranslationKeys> = {
     trayPrev: '이전 트랙',
     trayShow: '앱 표시',
     trayQuit: '종료',
+    kickedFromParty: '파티에서 추방됨',
+    partyMembers: '파티 멤버',
+    kickUser: '유저 추방',
+    confirmKick: '정말 추방하시겠습니까:',
+    hasBeenKicked: '이 파티에서 추방되었습니다',
+    addedByUser: '추가한 사람',
+    partyHost: '호스트',
+    nowListeningWith: '함께 듣는 중',
 
     // Podcast
     podcast: '팟캐스트',

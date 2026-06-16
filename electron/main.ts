@@ -833,6 +833,26 @@ ipcMain.handle('send-join-request', async (event, hostId, guestId, guestName) =>
   }
 });
 
+ipcMain.handle('kick-user', async (event, hostId, guestId) => {
+  if (!db) return false;
+  try {
+    // Insert a kick event that the guest will poll and handle
+    await db.execute(
+      `INSERT INTO join_requests (host_id, guest_id, guest_name, status) VALUES (?, ?, ?, 'kicked')`,
+      [hostId, guestId, '']
+    );
+    // Actively remove them from the party in online_users table immediately
+    await db.execute(
+      `UPDATE online_users SET party_id = NULL WHERE discord_id = ?`,
+      [guestId]
+    );
+    return true;
+  } catch (error) {
+    console.error(error);
+    return false;
+  }
+});
+
 ipcMain.handle('poll-join-requests', async (event, userId) => {
   if (!db) return { incoming: [], outgoing: [] };
   try {
