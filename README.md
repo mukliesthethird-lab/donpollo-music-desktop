@@ -1,3 +1,6 @@
+>Licensed under the Apache License, Version 2.0;
+you may not use this file except in compliance with the License.
+
 # DonPollo Music Desktop 🎵
 
 DonPollo Music Desktop is a modern, premium, and lightning-fast music streaming application built specifically for desktop environments. Designed with a sleek glassmorphism UI and packed with community-driven features, it brings your favorite tunes to life.
