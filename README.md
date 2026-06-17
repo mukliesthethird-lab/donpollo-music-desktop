@@ -1,3 +1,6 @@
+>Licensed under the Apache License, Version 2.0;
+you may not use this file except in compliance with the License.
+
 # DonPollo Music Desktop 🎵
 
 DonPollo Music Desktop is a modern, premium, and lightning-fast music streaming application built specifically for desktop environments. Designed with a sleek glassmorphism UI and packed with community-driven features, it brings your favorite tunes to life.
@@ -37,6 +40,27 @@ To run DonPollo Music locally in development mode:
    ```bash
    npm run dev
    ```
+
+## 📋 Dependencies
+
+### Production Dependencies
+
+| Package | Version | Description |
+|---|---|---|
+| [yt-dlp](https://github.com/yt-dlp/yt-dlp) |^2026.03.17| Required to stream and download audio tracks |
+| `@stef-0012/synclyrics` | ^2.5.10 | Real-time synchronized lyrics fetching |
+| `aromanize` | ^0.1.5 | Korean text romanization |
+| `discord-rpc` | ^4.0.1 | Discord Rich Presence integration |
+| `dotenv` | ^17.4.2 | Environment variable loader from `.env` files |
+| `electron-updater` | ^6.8.3 | Silent auto-update support for Electron apps |
+| `fast-average-color` | ^9.5.2 | Extracts dominant color from album art |
+| `kuroshiro` | ^1.2.0 | Japanese text conversion (Kanji → Hiragana / Romaji) |
+| `kuroshiro-analyzer-kuromoji` | ^1.1.0 | Morphological analyzer for kuroshiro |
+| `lucide-react` | ^1.17.0 | Beautiful & consistent icon library for React |
+| `mysql2` | ^3.22.4 | MySQL database client |
+| `react` | ^19.2.7 | Core UI library |
+| `react-dom` | ^19.2.7 | React DOM renderer |
+| `react-router-dom` | ^7.16.0 | Client-side routing for React |
 
 ## 📦 Building for Production
 
