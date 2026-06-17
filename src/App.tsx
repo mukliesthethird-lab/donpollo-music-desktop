@@ -214,7 +214,7 @@ function App() {
           // Filter to only longer content (podcast episodes)
           results = results.filter((r: any) => r.duration >= 120).slice(0, 5);
         } else {
-          results = results.slice(0, 5);
+          results = results.filter((r: any) => r.duration > 0).slice(0, 5);
         }
         setSuggestions(results);
         searchCacheRef.current[searchQuery] = results;
@@ -253,7 +253,13 @@ function App() {
   const [isLoadingProfile, setIsLoadingProfile] = useState(false);
   const [savedPlaylists, setSavedPlaylists] = useState<string[]>([]);
   const [playlistToRemove, setPlaylistToRemove] = useState<string | null>(null);
-  const [userToKick, setUserToKick] = useState<{id: string, name: string} | null>(null);
+  const [userToKick, setUserToKick] = useState<{ id: string, name: string } | null>(null);
+  const [showClearQueueConfirm, setShowClearQueueConfirm] = useState(false);
+  const [showClearHistoryConfirm, setShowClearHistoryConfirm] = useState(false);
+  const [showClearPlaylistsConfirm, setShowClearPlaylistsConfirm] = useState(false);
+  const [isGlobalLoading, setIsGlobalLoading] = useState(false);
+  const [draggedQueueIdx, setDraggedQueueIdx] = useState<number | null>(null);
+  const [dragOverQueueIdx, setDragOverQueueIdx] = useState<number | null>(null);
   const [shareCodeResult, setShareCodeResult] = useState<{ code: string; expiresAt: string } | null>(null);
   const [following, setFollowing] = useState<string[]>([]);
   const [isEditingBanner, setIsEditingBanner] = useState(false);
@@ -771,7 +777,7 @@ function App() {
   const [joinRequests, setJoinRequests] = useState<{ incoming: any[], outgoing: any[] }>({ incoming: [], outgoing: [] });
   const [showProfileStats, setShowProfileStats] = useState(false);
   const [totalListenSeconds, setTotalListenSeconds] = useState<number>(() => {
-    try { 
+    try {
       const user = JSON.parse(localStorage.getItem('donpollo_user') || 'null');
       const suffix = user ? `_${user.id}` : '';
       const data = localStorage.getItem(`donpollo_listen_seconds${suffix}`);
@@ -964,12 +970,19 @@ function App() {
             duration,
           };
 
-          if (lastActivityRef.current !== bucket) {
-            lastActivityRef.current = bucket;
-            if (isPlayingNow && currentSong) {
-              (window as any).electronAPI.setActivity(currentSong, extraData);
-            } else {
-              (window as any).electronAPI.setActivity(null, extraData);
+          if (settings.discordActivityEnabled === false) {
+            if (lastActivityRef.current !== 'disabled') {
+              (window as any).electronAPI.clearActivity();
+              lastActivityRef.current = 'disabled';
+            }
+          } else {
+            if (lastActivityRef.current !== bucket) {
+              lastActivityRef.current = bucket;
+              if (isPlayingNow && currentSong) {
+                (window as any).electronAPI.setActivity(currentSong, extraData);
+              } else {
+                (window as any).electronAPI.setActivity(null, extraData);
+              }
             }
           }
 
@@ -987,6 +1000,20 @@ function App() {
             status: (document.hidden && userStatus === 'online') ? 'idle' : userStatus,
             queue: queue
           });
+
+          if (!isGuest) {
+            if (currentSong) {
+              await (window as any).electronAPI.hostParty(
+                discordUser.id,
+                discordUser.id,
+                currentSong,
+                audioRef.current?.currentTime || 0,
+                isPlayingNow
+              );
+            } else {
+              await (window as any).electronAPI.deleteParty(discordUser.id);
+            }
+          }
           const users = await (window as any).electronAPI.getOnlineUsers(discordUser.id);
           setOnlineUsers(users);
 
@@ -1073,7 +1100,7 @@ function App() {
     const intervalMs = 1000;
     const presenceInterval = setInterval(syncPresence, intervalMs);
     return () => clearInterval(presenceInterval);
-  }, [discordUser, currentSong, activePartyId, userStatus, isGuest, queue]);
+  }, [discordUser, currentSong, activePartyId, userStatus, isGuest, queue, settings.discordActivityEnabled]);
 
   // ─── Lyrics ──────────────────────────────────────────────────
   const [lyricsData, setLyricsData] = useState<{ time: number, text: string, romanizedText?: string, isInstrumental?: boolean }[] | null>(null);
@@ -1097,10 +1124,13 @@ function App() {
   const currentSongRef = useRef<any>(null);
   currentSongRef.current = currentSong;
   const executePlayRef = useRef<any>(null);
+  const recoveryAttemptsRef = useRef<Record<string, number>>({});
   const lastPausedAtRef = useRef<number>(0);
   const audioContextRef = useRef<AudioContext | null>(null);
   const sourceNodeRef = useRef<MediaElementAudioSourceNode | null>(null);
   const filtersRef = useRef<BiquadFilterNode[]>([]);
+  const compressorNodeRef = useRef<DynamicsCompressorNode | null>(null);
+  const autoGainNodeRef = useRef<GainNode | null>(null);
   const toastTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const setupAudioContext = (audio: HTMLAudioElement) => {
@@ -1114,6 +1144,28 @@ function App() {
       const source = ctx.createMediaElementSource(audio);
       (audio as any)._webaudio_connected = true;
       sourceNodeRef.current = source;
+
+      if (!autoGainNodeRef.current) {
+        const gainNode = ctx.createGain();
+        gainNode.gain.value = settings.normalizeAudio ? 4.0 : 1.0;
+        autoGainNodeRef.current = gainNode;
+      }
+
+      if (!compressorNodeRef.current) {
+        const comp = ctx.createDynamicsCompressor();
+        // Setup initial values based on settings
+        if (settings.normalizeAudio) {
+          comp.threshold.value = -12;
+          comp.knee.value = 30;
+          comp.ratio.value = 20;
+          comp.attack.value = 0.001;
+          comp.release.value = 0.25;
+        } else {
+          comp.threshold.value = 0;
+          comp.ratio.value = 1;
+        }
+        compressorNodeRef.current = comp;
+      }
 
       if (!filtersRef.current || filtersRef.current.length === 0) {
         const freqs = [60, 230, 910, 3600, 14000];
@@ -1132,9 +1184,12 @@ function App() {
           prevNode.connect(filter);
           prevNode = filter;
         }
-        prevNode.connect(ctx.destination);
+        prevNode.connect(autoGainNodeRef.current);
+        autoGainNodeRef.current.connect(compressorNodeRef.current);
+        compressorNodeRef.current.connect(ctx.destination);
       } else {
         source.connect(filtersRef.current[0]);
+        // compressor is already connected
       }
 
       const isEqEnabled = settings.eqEnabled;
@@ -1369,8 +1424,17 @@ function App() {
     const handleError = () => {
       if (audioRef.current !== audio) return;
       if (audio.error && currentSongRef.current && executePlayRef.current) {
-        console.warn("Audio error, attempting auto-recovery...", audio.error);
-        executePlayRef.current(currentSongRef.current, audio.currentTime);
+        const songId = currentSongRef.current.id;
+        const attempts = recoveryAttemptsRef.current[songId] || 0;
+        if (attempts < 1) {
+          recoveryAttemptsRef.current[songId] = attempts + 1;
+          console.warn("Audio error, attempting auto-recovery...", audio.error);
+          executePlayRef.current(currentSongRef.current, audio.currentTime);
+        } else {
+          console.error("Auto-recovery failed. Skipping to next song.");
+          setIsPlaying(false);
+          handleNextRef.current();
+        }
       } else {
         setIsPlaying(false);
       }
@@ -1420,6 +1484,25 @@ function App() {
       });
     }
   }, [settings.eqEnabled, settings.eqBands]);
+
+  useEffect(() => {
+    if (compressorNodeRef.current && autoGainNodeRef.current) {
+      const comp = compressorNodeRef.current;
+      const gainNode = autoGainNodeRef.current;
+      if (settings.normalizeAudio) {
+        gainNode.gain.value = 4.0;
+        comp.threshold.value = -12;
+        comp.knee.value = 30;
+        comp.ratio.value = 20;
+        comp.attack.value = 0.001;
+        comp.release.value = 0.25;
+      } else {
+        gainNode.gain.value = 1.0;
+        comp.threshold.value = 0;
+        comp.ratio.value = 1;
+      }
+    }
+  }, [settings.normalizeAudio]);
 
   // ─── Crossfade Monitor ───
   useEffect(() => {
@@ -1680,6 +1763,39 @@ function App() {
     setShowClearCacheConfirm(false);
   };
 
+  const handleChangeCacheDir = async () => {
+    if ((window as any).electronAPI?.selectCacheDir) {
+      const newDir = await (window as any).electronAPI.selectCacheDir();
+      if (newDir) {
+        showToast(t('movingCache') || 'Moving cache files, please wait...', 'music');
+        const success = await (window as any).electronAPI.setCacheDir(newDir);
+        if (success) {
+          setCachePath(newDir);
+          showToast('Cache moved successfully', 'success');
+        } else {
+          showToast('Failed to move cache', 'error');
+        }
+      }
+    }
+  };
+
+  const confirmClearQueueAction = () => {
+    setQueue([]);
+    setOriginalQueue([]);
+    setCurrentIndex(-1);
+    setShowClearQueueConfirm(false);
+  };
+
+  const simulateLoading = async (action: () => Promise<void> | void) => {
+    setIsGlobalLoading(true);
+    await new Promise(resolve => setTimeout(resolve, 600));
+    try {
+      await action();
+    } finally {
+      setIsGlobalLoading(false);
+    }
+  };
+
   const confirmKickAction = async () => {
     if (userToKick && discordUser) {
       await (window as any).electronAPI.kickUser(discordUser.id, userToKick.id);
@@ -1736,11 +1852,62 @@ function App() {
       const data = await res.json();
       if (data.error) throw new Error(data.error);
 
+      let finalSongs = data.songs || [];
+      if ((window as any).electronAPI && (window as any).electronAPI.fetchUrl) {
+        finalSongs = await Promise.all(finalSongs.map(async (s: any) => {
+          let artist = s.artist;
+          let title = s.title;
+          if (!artist || artist === 'Unknown') {
+            if (title && title.includes(' - ')) {
+              const parts = title.split(' - ');
+              artist = parts[0].trim();
+              title = parts.slice(1).join(' - ').trim();
+            } else if (title && title.includes('-')) {
+              const parts = title.split('-');
+              artist = parts[0].trim();
+              title = parts.slice(1).join('-').trim();
+            } else {
+              try {
+                const oembedUrl = `https://www.youtube.com/oembed?url=http://www.youtube.com/watch?v=${s.id}&format=json`;
+                const oembedData = await (window as any).electronAPI.fetchUrl(oembedUrl);
+                if (oembedData && oembedData.author_name) {
+                  artist = oembedData.author_name.replace(/ - Topic$/, '').trim();
+                } else {
+                  artist = 'Unknown';
+                }
+              } catch (e) {
+                artist = 'Unknown';
+              }
+            }
+          }
+          return { ...s, artist, title };
+        }));
+      } else {
+        finalSongs = finalSongs.map((s: any) => {
+          let artist = s.artist;
+          let title = s.title;
+          if (!artist || artist === 'Unknown') {
+            if (title && title.includes(' - ')) {
+              const parts = title.split(' - ');
+              artist = parts[0].trim();
+              title = parts.slice(1).join(' - ').trim();
+            } else if (title && title.includes('-')) {
+              const parts = title.split('-');
+              artist = parts[0].trim();
+              title = parts.slice(1).join('-').trim();
+            } else {
+              artist = 'Unknown';
+            }
+          }
+          return { ...s, artist, title };
+        });
+      }
+
       const newPlaylist: Playlist = {
         id: `playlist-${Date.now()}`,
         name: data.name || 'Imported Playlist',
         avatar: data.cover || '',
-        songs: data.songs || [],
+        songs: finalSongs,
         createdAt: Date.now(),
         discordId: discordUser?.id || '',
       };
@@ -3131,7 +3298,7 @@ function App() {
           boxShadow: '0 4px 60px rgba(0,0,0,0.5)'
         }}>
           {displayBanner && <div style={{ position: 'absolute', inset: 0, background: 'linear-gradient(to bottom, transparent, rgba(18,18,18,1))' }} />}
-          
+
           {isMe && (
             <div style={{ position: 'absolute', top: '20px', right: '20px', zIndex: 2 }}>
               {isEditingBanner ? (
@@ -3151,13 +3318,13 @@ function App() {
                       else setBannerInputUrl(URL.createObjectURL(e.target.files[0]));
                     }
                   }} />
-                  <label htmlFor="banner-upload" style={{ cursor: 'pointer', padding: '6px', margin: 0, display: 'flex', alignItems: 'center', background: 'rgba(255,255,255,0.1)', color: 'white', border: '1px solid rgba(255,255,255,0.2)', borderRadius: '4px', transition: 'background 0.2s' }} 
+                  <label htmlFor="banner-upload" style={{ cursor: 'pointer', padding: '6px', margin: 0, display: 'flex', alignItems: 'center', background: 'rgba(255,255,255,0.1)', color: 'white', border: '1px solid rgba(255,255,255,0.2)', borderRadius: '4px', transition: 'background 0.2s' }}
                     onMouseOver={e => e.currentTarget.style.background = 'rgba(255,255,255,0.25)'}
                     onMouseOut={e => e.currentTarget.style.background = 'rgba(255,255,255,0.1)'}
                     title="Upload Image">
                     <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="17 8 12 3 7 8"></polyline><line x1="12" y1="3" x2="12" y2="15"></line></svg>
                   </label>
-                  <button style={{ padding: '6px 16px', fontSize: '12px', background: 'rgba(255,255,255,0.1)', color: 'white', border: '1px solid rgba(255,255,255,0.2)', borderRadius: '4px', cursor: 'pointer', fontWeight: 600, transition: 'background 0.2s' }} 
+                  <button style={{ padding: '6px 16px', fontSize: '12px', background: 'rgba(255,255,255,0.1)', color: 'white', border: '1px solid rgba(255,255,255,0.2)', borderRadius: '4px', cursor: 'pointer', fontWeight: 600, transition: 'background 0.2s' }}
                     onMouseOver={e => e.currentTarget.style.background = 'rgba(255,255,255,0.25)'}
                     onMouseOut={e => e.currentTarget.style.background = 'rgba(255,255,255,0.1)'}
                     onClick={() => {
@@ -3170,7 +3337,7 @@ function App() {
                       setIsEditingBanner(false);
                     }}>{t('save') || 'Save'}
                   </button>
-                  <button style={{ padding: '6px', background: 'transparent', color: 'white', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', opacity: 0.7, transition: 'opacity 0.2s' }} 
+                  <button style={{ padding: '6px', background: 'transparent', color: 'white', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', opacity: 0.7, transition: 'opacity 0.2s' }}
                     onMouseOver={e => e.currentTarget.style.opacity = '1'}
                     onMouseOut={e => e.currentTarget.style.opacity = '0.7'}
                     onClick={() => setIsEditingBanner(false)}>
@@ -3178,8 +3345,8 @@ function App() {
                   </button>
                 </div>
               ) : (
-                <button 
-                  className="btn-icon" 
+                <button
+                  className="btn-icon"
                   style={{ background: 'rgba(0,0,0,0.5)', padding: '8px', borderRadius: '50%' }}
                   onClick={() => {
                     setBannerInputUrl(displayBanner || '');
@@ -3203,55 +3370,55 @@ function App() {
                 {profileData?.playlists?.length > 0 && <span><strong style={{ color: 'var(--text-primary)' }}>{profileData.playlists.length}</strong> {t('publicPlaylists')}</span>}
               </div>
 
-            <div style={{ marginTop: '24px', display: 'flex', alignItems: 'center', gap: '16px' }}>
-              {!isMe && discordUser && activeProfileId && (
-                <button
-                  className="primary-btn"
-                  style={{
-                    background: following.includes(activeProfileId) ? 'transparent' : 'var(--accent-primary)',
-                    color: following.includes(activeProfileId) ? 'var(--text-primary)' : '#000',
-                    border: following.includes(activeProfileId) ? '1px solid var(--text-secondary)' : 'none',
-                    display: 'flex', alignItems: 'center', gap: '8px', padding: '8px 24px', borderRadius: '30px', fontWeight: '800', cursor: 'pointer', transition: 'all 0.2s'
-                  }}
-                  onClick={async () => {
-                    if ((window as any).electronAPI) {
-                      const newFollowing = await (window as any).electronAPI.toggleFollow(discordUser.id, activeProfileId);
-                      if (newFollowing) {
-                        setFollowing(newFollowing);
-                        setProfileData((prev: any) => {
-                          if (!prev) return prev;
-                          const newFollowers = newFollowing.includes(activeProfileId)
-                            ? [...(prev.followers || []), discordUser.id]
-                            : (prev.followers || []).filter((id: string) => id !== discordUser.id);
-                          return { ...prev, followers: newFollowers };
-                        });
+              <div style={{ marginTop: '24px', display: 'flex', alignItems: 'center', gap: '16px' }}>
+                {!isMe && discordUser && activeProfileId && (
+                  <button
+                    className="primary-btn"
+                    style={{
+                      background: following.includes(activeProfileId) ? 'transparent' : 'var(--accent-primary)',
+                      color: following.includes(activeProfileId) ? 'var(--text-primary)' : '#000',
+                      border: following.includes(activeProfileId) ? '1px solid var(--text-secondary)' : 'none',
+                      display: 'flex', alignItems: 'center', gap: '8px', padding: '8px 24px', borderRadius: '30px', fontWeight: '800', cursor: 'pointer', transition: 'all 0.2s'
+                    }}
+                    onClick={async () => {
+                      if ((window as any).electronAPI) {
+                        const newFollowing = await (window as any).electronAPI.toggleFollow(discordUser.id, activeProfileId);
+                        if (newFollowing) {
+                          setFollowing(newFollowing);
+                          setProfileData((prev: any) => {
+                            if (!prev) return prev;
+                            const newFollowers = newFollowing.includes(activeProfileId)
+                              ? [...(prev.followers || []), discordUser.id]
+                              : (prev.followers || []).filter((id: string) => id !== discordUser.id);
+                            return { ...prev, followers: newFollowers };
+                          });
+                        }
                       }
-                    }
-                  }}
-                >
-                  {following.includes(activeProfileId) ? <MinusCircle size={18} /> : <PlusCircle size={18} />}
-                  {following.includes(activeProfileId) ? '-Rep' : '+Rep'}
-                </button>
-              )}
+                    }}
+                  >
+                    {following.includes(activeProfileId) ? <MinusCircle size={18} /> : <PlusCircle size={18} />}
+                    {following.includes(activeProfileId) ? '-Rep' : '+Rep'}
+                  </button>
+                )}
 
-              {isMe && (
-                <div style={{ display: 'flex', gap: '24px', alignItems: 'center' }}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '10px', cursor: 'pointer' }} onClick={() => setSettings((p: any) => ({ ...p, privacySettings: { ...(p.privacySettings || {}), publicStats: !(settings.privacySettings?.publicStats !== false) } }))}>
-                    <div style={{ width: '36px', height: '20px', background: settings.privacySettings?.publicStats !== false ? 'var(--accent-primary)' : 'rgba(255,255,255,0.2)', borderRadius: '10px', position: 'relative', transition: 'all 0.2s' }}>
-                      <div style={{ width: '16px', height: '16px', background: settings.privacySettings?.publicStats !== false ? '#000' : '#fff', borderRadius: '50%', position: 'absolute', top: '2px', left: settings.privacySettings?.publicStats !== false ? '18px' : '2px', transition: 'all 0.2s' }} />
+                {isMe && (
+                  <div style={{ display: 'flex', gap: '24px', alignItems: 'center' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '10px', cursor: 'pointer' }} onClick={() => setSettings((p: any) => ({ ...p, privacySettings: { ...(p.privacySettings || {}), publicStats: !(settings.privacySettings?.publicStats !== false) } }))}>
+                      <div style={{ width: '36px', height: '20px', background: settings.privacySettings?.publicStats !== false ? 'var(--accent-primary)' : 'rgba(255,255,255,0.2)', borderRadius: '10px', position: 'relative', transition: 'all 0.2s' }}>
+                        <div style={{ width: '16px', height: '16px', background: settings.privacySettings?.publicStats !== false ? '#000' : '#fff', borderRadius: '50%', position: 'absolute', top: '2px', left: settings.privacySettings?.publicStats !== false ? '18px' : '2px', transition: 'all 0.2s' }} />
+                      </div>
+                      <span style={{ fontSize: '13px', color: 'var(--text-secondary)', fontWeight: 600 }}>{t('isPublic')} {t('listeningTime')}</span>
                     </div>
-                    <span style={{ fontSize: '13px', color: 'var(--text-secondary)', fontWeight: 600 }}>{t('isPublic')} {t('listeningTime')}</span>
-                  </div>
 
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '10px', cursor: 'pointer' }} onClick={() => setSettings((p: any) => ({ ...p, privacySettings: { ...(p.privacySettings || {}), publicLikedSongs: !(settings.privacySettings?.publicLikedSongs !== false) } }))}>
-                    <div style={{ width: '36px', height: '20px', background: settings.privacySettings?.publicLikedSongs !== false ? 'var(--accent-primary)' : 'rgba(255,255,255,0.2)', borderRadius: '10px', position: 'relative', transition: 'all 0.2s' }}>
-                      <div style={{ width: '16px', height: '16px', background: settings.privacySettings?.publicLikedSongs !== false ? '#000' : '#fff', borderRadius: '50%', position: 'absolute', top: '2px', left: settings.privacySettings?.publicLikedSongs !== false ? '18px' : '2px', transition: 'all 0.2s' }} />
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '10px', cursor: 'pointer' }} onClick={() => setSettings((p: any) => ({ ...p, privacySettings: { ...(p.privacySettings || {}), publicLikedSongs: !(settings.privacySettings?.publicLikedSongs !== false) } }))}>
+                      <div style={{ width: '36px', height: '20px', background: settings.privacySettings?.publicLikedSongs !== false ? 'var(--accent-primary)' : 'rgba(255,255,255,0.2)', borderRadius: '10px', position: 'relative', transition: 'all 0.2s' }}>
+                        <div style={{ width: '16px', height: '16px', background: settings.privacySettings?.publicLikedSongs !== false ? '#000' : '#fff', borderRadius: '50%', position: 'absolute', top: '2px', left: settings.privacySettings?.publicLikedSongs !== false ? '18px' : '2px', transition: 'all 0.2s' }} />
+                      </div>
+                      <span style={{ fontSize: '13px', color: 'var(--text-secondary)', fontWeight: 600 }}>{t('isPublic')} {t('likedSongs')}</span>
                     </div>
-                    <span style={{ fontSize: '13px', color: 'var(--text-secondary)', fontWeight: 600 }}>{t('isPublic')} {t('likedSongs')}</span>
                   </div>
-                </div>
-              )}
-            </div>
+                )}
+              </div>
             </div>
           </div>
         </div>
@@ -3616,6 +3783,23 @@ function App() {
             </button>
           </div>
         )}
+        <div style={{ height: '1px', backgroundColor: 'var(--border-color)', margin: '16px 0' }}></div>
+        <div className="settings-row">
+          <div>
+            <div className="settings-label">{t('discordActivity')}</div>
+            <div className="settings-desc">{t('discordActivityDesc')}</div>
+          </div>
+          <button className={`settings-toggle ${settings.discordActivityEnabled !== false ? 'on' : ''}`} onClick={() => {
+            const newVal = !(settings.discordActivityEnabled !== false);
+            setSettings((p: any) => ({ ...p, discordActivityEnabled: newVal }));
+            localStorage.setItem('donpollo_settings', JSON.stringify({ ...settings, discordActivityEnabled: newVal }));
+            if (!newVal && (window as any).electronAPI) {
+              (window as any).electronAPI.clearActivity();
+            }
+          }}>
+            {settings.discordActivityEnabled !== false && <Check size={14} />}
+          </button>
+        </div>
       </div>
 
       {/* Bahasa */}
@@ -3673,6 +3857,20 @@ function App() {
             <option value="high">{t('qualityHigh')}</option>
             <option value="medium">{t('qualityMedium')}</option>
           </select>
+        </div>
+        <div className="settings-row">
+          <div>
+            <div className="settings-label">{t('normalizeAudio')}</div>
+            <div className="settings-desc">{t('normalizeAudioDesc')}</div>
+          </div>
+          <button className={`settings-toggle ${settings.normalizeAudio ? 'on' : ''}`}
+            onClick={() => {
+              const newVal = !settings.normalizeAudio;
+              setSettings((p: any) => ({ ...p, normalizeAudio: newVal }));
+              localStorage.setItem('donpollo_settings', JSON.stringify({ ...settings, normalizeAudio: newVal }));
+            }}>
+            {settings.normalizeAudio && <Check size={14} />}
+          </button>
         </div>
         <div className="settings-row">
           <div>
@@ -3893,7 +4091,7 @@ function App() {
             <div className="settings-label">{t('playHistory')}</div>
             <div className="settings-desc">{playHistory.length} {t('savedSongs')}</div>
           </div>
-          <button className="btn-secondary" onClick={() => { setPlayHistory([]); showToast(t('toastHistoryCleared')); }}>
+          <button className="btn-secondary" onClick={() => setShowClearHistoryConfirm(true)}>
             <Trash2 size={14} /> {t('clearHistory')}
           </button>
         </div>
@@ -3902,7 +4100,7 @@ function App() {
             <div className="settings-label">{t('playlist')}</div>
             <div className="settings-desc">{playlists.length} {t('playlistCount')}</div>
           </div>
-          <button className="btn-secondary" onClick={() => { setPlaylists([]); showToast(t('toastHistoryCleared')); }}>
+          <button className="btn-secondary" onClick={() => setShowClearPlaylistsConfirm(true)}>
             <Trash2 size={14} /> {t('deleteAllPlaylists')}
           </button>
         </div>
@@ -3961,8 +4159,8 @@ function App() {
         </div>
         <div className="settings-row">
           <div>
-            <div className="settings-label">{t('clearAudioCache')}</div>
-            <div className="settings-desc">{t('audioCacheDesc')}</div>
+            <div className="settings-label">{t('cacheLocation') || 'Cache Folder Location'}</div>
+            <div className="settings-desc">{t('cacheLocationDesc') || 'Choose a folder to store downloaded songs'}</div>
           </div>
           <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
             {cachePath && (
@@ -3970,6 +4168,17 @@ function App() {
                 <span style={{ fontFamily: 'var(--font-mono)' }}>{cachePath}</span>
               </div>
             )}
+            <button className="btn-secondary" style={{ whiteSpace: 'nowrap' }} onClick={handleChangeCacheDir}>
+               {t('changeLocation') || 'Change Location'}
+            </button>
+          </div>
+        </div>
+        <div className="settings-row">
+          <div>
+            <div className="settings-label">{t('clearAudioCache')}</div>
+            <div className="settings-desc">{t('audioCacheDesc')}</div>
+          </div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
             <span style={{ color: 'var(--text-muted)', fontSize: '13px', whiteSpace: 'nowrap' }}>
               {(cacheSize / (1024 * 1024)).toFixed(1)} MB
             </span>
@@ -4766,6 +4975,9 @@ function App() {
             <button className={`lang-flag ${language === 'ja' ? 'active' : ''}`} onClick={() => setLanguage('ja')} title="日本語">
               <img src="https://flagcdn.com/jp.svg" alt="JA" />
             </button>
+            <button className={`lang-flag ${language === 'ko' ? 'active' : ''}`} onClick={() => setLanguage('ko')} title="한국어">
+              <img src="https://flagcdn.com/kr.svg" alt="KO" />
+            </button>
           </div>
           <div className="login-hero-content">
             <div className="login-hero-title">Don Pollo Music.</div>
@@ -4880,8 +5092,72 @@ function App() {
             </p>
             <div className="modal-actions">
               <button className="btn-secondary" onClick={() => setUserToKick(null)}>{t('cancel')}</button>
-              <button className="btn-primary" style={{ backgroundColor: '#ff5555', color: 'white' }} onClick={confirmKickAction}>{t('delete')}</button>
+              <button className="btn-primary" style={{ backgroundColor: '#ff5555', color: 'white' }} onClick={confirmKickAction}>{t('btnKick') || 'Yes, Kick'}</button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal: Clear Queue Confirm */}
+      {showClearQueueConfirm && (
+        <div className="modal-overlay" onClick={() => setShowClearQueueConfirm(false)}>
+          <div className="modal" onClick={e => e.stopPropagation()}>
+            <h3 className="modal-title">{t('confirmClearQueueTitle')}</h3>
+            <p style={{ color: 'var(--text-secondary)', marginBottom: '24px' }}>{t('confirmClearQueueDesc')}</p>
+            <div className="modal-actions">
+              <button className="btn-secondary" onClick={() => setShowClearQueueConfirm(false)}>{t('cancel')}</button>
+              <button className="btn-primary" style={{ backgroundColor: '#ff5555', color: 'white' }} onClick={confirmClearQueueAction}>{t('delete')}</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal: Clear History Confirm */}
+      {showClearHistoryConfirm && (
+        <div className="modal-overlay" onClick={() => setShowClearHistoryConfirm(false)}>
+          <div className="modal" onClick={e => e.stopPropagation()}>
+            <h3 className="modal-title">{t('clearHistory')}</h3>
+            <p style={{ color: 'var(--text-secondary)', marginBottom: '24px' }}>{t('confirmClearHistory')}</p>
+            <div className="modal-actions">
+              <button className="btn-secondary" onClick={() => setShowClearHistoryConfirm(false)}>{t('cancel')}</button>
+              <button className="btn-primary" style={{ backgroundColor: '#ff5555', color: 'white' }} onClick={() => {
+                setPlayHistory([]);
+                showToast(t('toastHistoryCleared') || 'History cleared!');
+                setShowClearHistoryConfirm(false);
+              }}>{t('delete')}</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal: Clear Playlists Confirm */}
+      {showClearPlaylistsConfirm && (
+        <div className="modal-overlay" onClick={() => setShowClearPlaylistsConfirm(false)}>
+          <div className="modal" onClick={e => e.stopPropagation()}>
+            <h3 className="modal-title">{t('deleteAllPlaylists')}</h3>
+            <p style={{ color: 'var(--text-secondary)', marginBottom: '24px' }}>{t('confirmDeletePlaylists')}</p>
+            <div className="modal-actions">
+              <button className="btn-secondary" onClick={() => setShowClearPlaylistsConfirm(false)}>{t('cancel')}</button>
+              <button className="btn-primary" style={{ backgroundColor: '#ff5555', color: 'white' }} onClick={() => {
+                setPlaylists([]);
+                showToast(t('toastHistoryCleared') || 'Playlists deleted!');
+                setShowClearPlaylistsConfirm(false);
+              }}>{t('delete')}</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Global Fake Loading Overlay */}
+      {isGlobalLoading && (
+        <div style={{
+          position: 'fixed', top: 0, left: 0, right: 0, bottom: 0,
+          backgroundColor: 'rgba(0, 0, 0, 0.5)', zIndex: 9999,
+          display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center'
+        }}>
+          <div className="loading-state" style={{ background: 'var(--bg-card)', padding: '24px 32px', borderRadius: '12px', boxShadow: '0 8px 32px rgba(0,0,0,0.5)' }}>
+            <Loader2 className="spin" size={40} color="var(--accent-primary)" />
+            <div style={{ marginTop: '12px', color: 'var(--text-primary)', fontWeight: 600 }}>{t('loadingPleaseWait')}</div>
           </div>
         </div>
       )}
@@ -5062,7 +5338,7 @@ function App() {
           <div className="modal" onClick={e => e.stopPropagation()}>
             <h3 className="modal-title">{t('importPlaylist')}</h3>
             <p style={{ color: 'var(--text-muted)', fontSize: '12px', marginBottom: '12px' }}>
-              💡 Masukkan link playlist YouTube <em>atau</em> kode share (contoh: <span style={{ fontFamily: 'monospace', color: 'var(--accent-primary)' }}>DP-XXXXXX</span>)
+              Masukkan link playlist YouTube <em>atau</em> kode share (contoh: <span style={{ fontFamily: 'monospace', color: 'var(--accent-primary)' }}>DP-XXXXXX</span>)
             </p>
             <input
               className="modal-input"
@@ -5391,12 +5667,12 @@ function App() {
                                 <LogOut size={16} />
                               </button>
                             )}
-                            
+
                             {popupPartyId === effectivePartyId && (
                               <div className="party-popup-bubble" style={{ position: 'absolute', top: '100%', left: 0, width: '100%', background: 'var(--bg-card)', border: '1px solid var(--border-color)', borderRadius: '8px', padding: '8px', zIndex: 100, boxShadow: '0 4px 12px rgba(0,0,0,0.5)', marginTop: '4px', cursor: 'default' }} onClick={(e) => e.stopPropagation()}>
                                 <div style={{ fontSize: '11px', fontWeight: 600, color: 'var(--text-secondary)', marginBottom: '8px', padding: '0 4px' }}>{t('partyMembers') || 'Party Members'}</div>
                                 {partyAvatars.map(u => (
-                                  <div key={u.id} className="party-popup-member hover-bg" style={{ display: 'flex', alignItems: 'center', padding: '6px 4px', borderRadius: '4px', position: 'relative' }}>
+                                  <div key={u.id} className="party-popup-member hover-bg" style={{ display: 'flex', alignItems: 'center', padding: '6px 4px', borderRadius: '4px', position: 'relative', cursor: 'pointer' }} onClick={() => navigate('profile', { profileId: u.id })}>
                                     <img src={u.url} alt={u.name} style={{ width: '24px', height: '24px', borderRadius: '50%', marginRight: '8px', objectFit: 'cover' }} />
                                     <div style={{ flex: 1, fontSize: '12px', color: 'var(--text-primary)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
                                       {u.name}
@@ -5642,24 +5918,26 @@ function App() {
                             <button
                               className="suggestion-btn"
                               title={t('addToQueue')}
-                              onClick={async (e) => {
+                              onClick={(e) => {
                                 e.stopPropagation();
-                                if (isGuest && activePartyId) {
-                                  await (window as any).electronAPI.sendQueueRequest(activePartyId, discordUser?.id, discordUser?.global_name || discordUser?.username, song);
-                                  showToast(`Berhasil meminta Host untuk menambahkan "${song.title}" ke antrean!`, 'success');
+                                simulateLoading(async () => {
+                                  if (isGuest && activePartyId) {
+                                    await (window as any).electronAPI.sendQueueRequest(activePartyId, discordUser?.id, discordUser?.global_name || discordUser?.username, song);
+                                    showToast(`Berhasil meminta Host untuk menambahkan "${song.title}" ke antrean!`, 'success');
+                                    setShowSuggestions(false);
+                                    return;
+                                  }
+                                  const augSong = augmentSongWithUser(song);
+                                  setQueue(prev => [...prev, augSong]);
+                                  setOriginalQueue(prev => [...prev, augSong]);
+                                  if (currentIndex === -1) {
+                                    setCurrentIndex(0);
+                                    executePlay(song);
+                                  } else {
+                                    showToast(t('toastAddedToQueue'));
+                                  }
                                   setShowSuggestions(false);
-                                  return;
-                                }
-                                const augSong = augmentSongWithUser(song);
-                                setQueue(prev => [...prev, augSong]);
-                                setOriginalQueue(prev => [...prev, augSong]);
-                                if (currentIndex === -1) {
-                                  setCurrentIndex(0);
-                                  executePlay(song);
-                                } else {
-                                  showToast(t('toastAddedToQueue'));
-                                }
-                                setShowSuggestions(false);
+                                });
                               }}
                             >
                               <ListMusic size={16} />
@@ -5706,9 +5984,9 @@ function App() {
             </div>
             <div className="topbar-right-actions" style={{ display: 'flex', alignItems: 'center', gap: '16px', minWidth: '60px', justifyContent: 'flex-end' }}>
               {discordUser && (
-                <div 
-                  style={{ 
-                    display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', 
+                <div
+                  style={{
+                    display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer',
                     borderRadius: '50%', border: activePage === 'profile' && activeProfileId === discordUser.id ? '2px solid var(--accent-primary)' : '2px solid transparent',
                     transition: 'all 0.2s'
                   }}
@@ -5953,24 +6231,24 @@ function App() {
                               <LogOut size={16} />
                             </button>
                           )}
-                          
+
                           {popupPartyId === effectivePartyId && (
                             <div className="party-popup-bubble" style={{ position: 'absolute', top: '100%', left: 0, width: '100%', background: 'var(--bg-card)', border: '1px solid var(--border-color)', borderRadius: '8px', padding: '8px', zIndex: 100, boxShadow: '0 4px 12px rgba(0,0,0,0.5)', marginTop: '4px', cursor: 'default' }} onClick={(e) => e.stopPropagation()}>
                               <div style={{ fontSize: '11px', fontWeight: 600, color: 'var(--text-secondary)', marginBottom: '8px', padding: '0 4px' }}>{t('partyMembers') || 'Party Members'}</div>
                               {partyAvatars.map(u => (
-                                <div key={u.id} className="party-popup-member hover-bg" style={{ display: 'flex', alignItems: 'center', padding: '6px 4px', borderRadius: '4px', position: 'relative' }}>
+                                <div key={u.id} className="party-popup-member hover-bg" style={{ display: 'flex', alignItems: 'center', padding: '6px 4px', borderRadius: '4px', position: 'relative', cursor: 'pointer' }} onClick={() => navigate('profile', { profileId: u.id })}>
                                   <img src={u.url} alt={u.name} style={{ width: '24px', height: '24px', borderRadius: '50%', marginRight: '8px', objectFit: 'cover' }} />
                                   <div style={{ flex: 1, fontSize: '12px', color: 'var(--text-primary)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
                                     {u.name}
                                     {effectivePartyId === u.id && <span style={{ fontSize: '10px', color: 'var(--accent-primary)', marginLeft: '6px' }}>({t('partyHost')})</span>}
                                   </div>
                                   {effectivePartyId === discordUser.id && u.id !== discordUser.id && (
-                                     <button className="kick-btn" style={{ background: 'none', border: 'none', color: 'var(--text-muted)', cursor: 'pointer', padding: '2px' }} title={t('kickUser') || 'Kick User'} onClick={(e) => {
-                                       e.stopPropagation();
-                                       setUserToKick({ id: u.id, name: u.name });
-                                     }}>
-                                       <MinusCircle size={14} />
-                                     </button>
+                                    <button className="kick-btn" style={{ background: 'none', border: 'none', color: 'var(--text-muted)', cursor: 'pointer', padding: '2px' }} title={t('kickUser') || 'Kick User'} onClick={(e) => {
+                                      e.stopPropagation();
+                                      setUserToKick({ id: u.id, name: u.name });
+                                    }}>
+                                      <MinusCircle size={14} />
+                                    </button>
                                   )}
                                 </div>
                               ))}
@@ -6004,12 +6282,12 @@ function App() {
                             groupsMap.get(gId)!.push(u);
                           });
                           const groupedFriends = Array.from(groupsMap.values());
-                          
+
                           return groupedFriends.map(group => {
                             if (group.length > 1) {
                               const hostUser = group.find(u => u.discordId === (group[0].partyId || group[0].discordId)) || group[0];
                               const targetId = hostUser.discordId;
-                              
+
                               return (
                                 <div key={`party-${targetId}`} className="friend-item current-party-block" onClick={() => setPopupPartyId(popupPartyId === targetId ? null : targetId)} style={{ flexDirection: 'row', alignItems: 'center', padding: '10px', background: 'rgba(255,255,255,0.03)', borderRadius: '8px', position: 'relative', marginBottom: '8px', width: '100%', boxSizing: 'border-box', cursor: 'pointer' }}>
                                   <div className="party-avatars" style={{ display: 'flex', marginRight: '12px' }}>
@@ -6045,16 +6323,18 @@ function App() {
                                   </div>
                                   <button
                                     className="leave-party-icon-btn"
-                                    onClick={async (e) => {
+                                    onClick={(e) => {
                                       e.stopPropagation();
-                                      if (hostUser.status === 'idle') {
-                                        const success = await (window as any).electronAPI.sendJoinRequest(targetId, discordUser.id, discordUser.global_name || discordUser.username);
-                                        if (success) showToast(t('joinRequestSent'), 'success');
-                                      } else if (hostUser.status !== 'dnd') {
-                                        setActivePartyId(targetId);
-                                        setIsGuest(true);
-                                        showToast(`${t('nowListeningWith')} party...`, 'success');
-                                      }
+                                      simulateLoading(async () => {
+                                        if (hostUser.status === 'idle') {
+                                          const success = await (window as any).electronAPI.sendJoinRequest(targetId, discordUser.id, discordUser.global_name || discordUser.username);
+                                          if (success) showToast(t('joinRequestSent'), 'success');
+                                        } else if (hostUser.status !== 'dnd') {
+                                          setActivePartyId(targetId);
+                                          setIsGuest(true);
+                                          showToast(`${t('nowListeningWith')} party...`, 'success');
+                                        }
+                                      });
                                     }}
                                     title={hostUser.status === 'idle' ? t('askToJoin') : t('listenAlong')}
                                     style={{ marginLeft: '8px', cursor: hostUser.status === 'dnd' ? 'not-allowed' : 'pointer' }}
@@ -6062,12 +6342,12 @@ function App() {
                                   >
                                     <LogIn size={16} style={{ opacity: hostUser.status === 'dnd' ? 0.5 : 1 }} />
                                   </button>
-                                  
+
                                   {popupPartyId === targetId && (
                                     <div className="party-popup-bubble" style={{ position: 'absolute', top: '100%', left: 0, width: '100%', background: 'var(--bg-card)', border: '1px solid var(--border-color)', borderRadius: '8px', padding: '8px', zIndex: 100, boxShadow: '0 4px 12px rgba(0,0,0,0.5)', marginTop: '4px', cursor: 'default' }} onClick={(e) => e.stopPropagation()}>
                                       <div style={{ fontSize: '11px', fontWeight: 600, color: 'var(--text-secondary)', marginBottom: '8px', padding: '0 4px' }}>{t('partyMembers') || 'Party Members'}</div>
                                       {group.map(u => (
-                                        <div key={u.discordId} className="party-popup-member hover-bg" style={{ display: 'flex', alignItems: 'center', padding: '6px 4px', borderRadius: '4px', position: 'relative' }}>
+                                        <div key={u.discordId} className="party-popup-member hover-bg" style={{ display: 'flex', alignItems: 'center', padding: '6px 4px', borderRadius: '4px', position: 'relative', cursor: 'pointer' }} onClick={() => navigate('profile', { profileId: u.discordId })}>
                                           <img src={u.avatarUrl || `https://ui-avatars.com/api/?name=${u.username}`} alt={u.username} style={{ width: '24px', height: '24px', borderRadius: '50%', marginRight: '8px', objectFit: 'cover' }} />
                                           <div style={{ flex: 1, fontSize: '12px', color: 'var(--text-primary)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
                                             {u.username}
@@ -6093,18 +6373,20 @@ function App() {
                                       <>
                                         <div className="friend-song" title={user.currentSong.title} style={{ display: 'flex', alignItems: 'center' }}><Music size={10} style={{ marginRight: '4px', flexShrink: 0, opacity: 0.7 }} /> {user.currentSong.title}</div>
                                         {user.status !== 'dnd' && (
-                                          <button className="listen-along-btn" onClick={async (e) => {
+                                          <button className="listen-along-btn" onClick={(e) => {
                                             e.stopPropagation();
-                                            if (user.status === 'idle') {
-                                              const success = await (window as any).electronAPI.sendJoinRequest(user.partyId || user.discordId, discordUser.id, discordUser.global_name || discordUser.username);
-                                              if (success) {
-                                                showToast(t('joinRequestSent'), 'success');
+                                            simulateLoading(async () => {
+                                              if (user.status === 'idle') {
+                                                const success = await (window as any).electronAPI.sendJoinRequest(user.partyId || user.discordId, discordUser.id, discordUser.global_name || discordUser.username);
+                                                if (success) {
+                                                  showToast(t('joinRequestSent'), 'success');
+                                                }
+                                              } else {
+                                                setActivePartyId(user.partyId || user.discordId);
+                                                setIsGuest(true);
+                                                showToast(`${t('nowListeningWith')} ${user.username}...`, 'success');
                                               }
-                                            } else {
-                                              setActivePartyId(user.partyId || user.discordId);
-                                              setIsGuest(true);
-                                              showToast(`${t('nowListeningWith')} ${user.username}...`, 'success');
-                                            }
+                                            });
                                           }}><Headphones size={12} style={{ marginRight: '4px' }} /> {user.status === 'idle' ? t('askToJoin') : t('listenAlong')}</button>
                                         )}
                                         {user.status === 'dnd' && (
@@ -6249,7 +6531,32 @@ function App() {
                     if (idx < currentIndex) return null;
                     const isPlayingNow = currentSong?.id === song.id;
                     return (
-                      <div key={idx} className={`queue-item ${isPlayingNow ? 'playing' : ''}`} style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                      <div key={idx} className={`queue-item ${isPlayingNow ? 'playing' : ''}`}
+                        draggable={!isPlayingNow && !(isGuest && activePartyId)}
+                        onDragStart={(e) => {
+                          setDraggedQueueIdx(idx);
+                          e.dataTransfer.effectAllowed = 'move';
+                        }}
+                        onDragEnter={() => {
+                          if (draggedQueueIdx === null || draggedQueueIdx === idx || isPlayingNow) return;
+                          setDragOverQueueIdx(idx);
+                        }}
+                        onDragEnd={() => {
+                          if (draggedQueueIdx !== null && dragOverQueueIdx !== null && draggedQueueIdx !== dragOverQueueIdx) {
+                            setQueue(prev => {
+                              const newQ = [...prev];
+                              const draggedItem = newQ[draggedQueueIdx];
+                              newQ.splice(draggedQueueIdx, 1);
+                              newQ.splice(dragOverQueueIdx, 0, draggedItem);
+                              setOriginalQueue(newQ);
+                              return newQ;
+                            });
+                          }
+                          setDraggedQueueIdx(null);
+                          setDragOverQueueIdx(null);
+                        }}
+                        onDragOver={(e) => e.preventDefault()}
+                        style={{ display: 'flex', alignItems: 'center', gap: '8px', opacity: draggedQueueIdx === idx ? 0.5 : 1, borderTop: dragOverQueueIdx === idx && dragOverQueueIdx < draggedQueueIdx! ? '2px solid var(--accent-primary)' : 'none', borderBottom: dragOverQueueIdx === idx && dragOverQueueIdx > draggedQueueIdx! ? '2px solid var(--accent-primary)' : 'none', transition: 'all 0.2s' }}>
                         <div style={{ display: 'flex', flex: 1, alignItems: 'center', gap: '12px', cursor: 'pointer', minWidth: 0 }} onClick={() => { setCurrentIndex(idx); executePlay(song); }}>
                           <img src={getCleanThumbnail(song.thumbnail)} alt={song.title} style={{ width: '40px', height: '40px', borderRadius: '6px', objectFit: 'cover', flexShrink: 0 }} />
                           <div style={{ flex: 1, overflow: 'hidden', minWidth: 0 }}>
@@ -6291,7 +6598,7 @@ function App() {
                     );
                   })}
                   {queue.length > 0 && !(isGuest && activePartyId) && (
-                    <div className="clear-queue" onClick={() => { setQueue([]); setOriginalQueue([]); setCurrentIndex(-1); }}>{t('clearQueue')}</div>
+                    <div className="clear-queue" onClick={() => setShowClearQueueConfirm(true)}>{t('clearQueue')}</div>
                   )}
                 </>
               )}

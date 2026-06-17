@@ -1058,13 +1058,29 @@ ipcMain.handle('romanize-lyrics', async (event, text: string, lang: 'ko' | 'ja')
 
 // CACHING SYSTEM
 const CACHE_LIMIT_BYTES = 1024 * 1024 * 1024; // 1 GB
-const cacheDir = path.join(app.getPath('userData'), 'AudioCache');
-const metadataPath = path.join(cacheDir, 'metadata.json');
+let cacheDir = path.join(app.getPath('userData'), 'AudioCache');
 
-
-if (!fs.existsSync(cacheDir)) {
-  fs.mkdirSync(cacheDir, { recursive: true });
+const configPath = path.join(app.getPath('userData'), 'config.json');
+try {
+  if (fs.existsSync(configPath)) {
+    const configData = JSON.parse(fs.readFileSync(configPath, 'utf-8'));
+    if (configData.cacheDir) {
+      cacheDir = configData.cacheDir;
+    }
+  }
+} catch (e) {
+  console.error('Failed to load config.json', e);
 }
+
+let metadataPath = path.join(cacheDir, 'metadata.json');
+
+function ensureCacheDir() {
+  if (!fs.existsSync(cacheDir)) {
+    fs.mkdirSync(cacheDir, { recursive: true });
+  }
+  metadataPath = path.join(cacheDir, 'metadata.json');
+}
+ensureCacheDir();
 
 function getCachedMetadata() {
   try {
@@ -1118,10 +1134,12 @@ function downloadToCache(songData: any, urlStr: string, sender: any, isTemp: boo
 
   // If already fully cached, send completion event and ensure metadata is saved
   if (fs.existsSync(filePath)) {
-    const metadata = getCachedMetadata();
-    if (!metadata.find((s: any) => s.id === songId)) {
-      metadata.push(songData);
-      saveCachedMetadata(metadata);
+    if (!isTemp) {
+      const metadata = getCachedMetadata();
+      if (!metadata.find((s: any) => s.id === songId)) {
+        metadata.push(songData);
+        saveCachedMetadata(metadata);
+      }
     }
     if (sender) sender.send('download-cache-complete', songData);
     return;
@@ -1153,10 +1171,12 @@ function downloadToCache(songData: any, urlStr: string, sender: any, isTemp: boo
         fileStream.close(async () => {
           try {
             await fs.promises.rename(tempPath, filePath);
-            const metadata = getCachedMetadata();
-            if (!metadata.find((s: any) => s.id === songId)) {
-              metadata.push(songData);
-              saveCachedMetadata(metadata);
+            if (!isTemp) {
+              const metadata = getCachedMetadata();
+              if (!metadata.find((s: any) => s.id === songId)) {
+                metadata.push(songData);
+                saveCachedMetadata(metadata);
+              }
             }
             enforceCacheLimit();
             if (sender) sender.send('download-cache-complete', songData);
@@ -1181,8 +1201,8 @@ ipcMain.handle('check-cache', async (event, songId) => {
   return fs.existsSync(filePath);
 });
 
-ipcMain.on('cache-audio', (event, songData, url, isSilent) => {
-  downloadToCache(songData, url, isSilent ? null : event.sender);
+ipcMain.on('cache-audio', (event, songData, url, isSilent, isTemp) => {
+  downloadToCache(songData, url, isSilent ? null : event.sender, isTemp);
 });
 
 ipcMain.handle('get-downloaded-songs', async () => {
@@ -1254,6 +1274,52 @@ ipcMain.handle('get-cache-size', async () => {
 
 ipcMain.handle('get-cache-path', () => {
   return cacheDir;
+});
+
+ipcMain.handle('select-cache-dir', async () => {
+  const result = await dialog.showOpenDialog(mainWindow!, {
+    properties: ['openDirectory']
+  });
+  if (!result.canceled && result.filePaths.length > 0) {
+    return result.filePaths[0];
+  }
+  return null;
+});
+
+ipcMain.handle('set-cache-dir', async (event, newPath) => {
+  if (newPath === cacheDir) return true;
+
+  try {
+    // Save to config
+    const configData = fs.existsSync(configPath) ? JSON.parse(fs.readFileSync(configPath, 'utf-8')) : {};
+    configData.cacheDir = newPath;
+    fs.writeFileSync(configPath, JSON.stringify(configData, null, 2));
+
+    const oldCacheDir = cacheDir;
+    cacheDir = newPath;
+    ensureCacheDir();
+
+    // Move existing files
+    if (fs.existsSync(oldCacheDir)) {
+      const files = fs.readdirSync(oldCacheDir);
+      for (const file of files) {
+        const oldFile = path.join(oldCacheDir, file);
+        const newFile = path.join(newPath, file);
+        if (oldFile !== newFile) {
+          try {
+            fs.copyFileSync(oldFile, newFile);
+            fs.unlinkSync(oldFile);
+          } catch (e) {
+            console.error('Failed to move cache file', file, e);
+          }
+        }
+      }
+    }
+    return true;
+  } catch (e) {
+    console.error('Failed to set new cache dir', e);
+    return false;
+  }
 });
 
 // APP LIFECYCLE

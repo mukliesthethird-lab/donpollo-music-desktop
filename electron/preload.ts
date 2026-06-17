@@ -47,6 +47,9 @@ contextBridge.exposeInMainWorld('electronAPI', {
   romanizeLyrics: (text: string, lang: 'ko' | 'ja') => ipcRenderer.invoke('romanize-lyrics', text, lang),
   setActivity: (song: any, extraData?: any) => ipcRenderer.send('set-activity', song, extraData),
   clearActivity: () => ipcRenderer.send('clear-activity'),
+  selectCacheDir: () => ipcRenderer.invoke('select-cache-dir'),
+  getCacheDir: () => ipcRenderer.invoke('get-cache-path'),
+  setCacheDir: (newPath: string) => ipcRenderer.invoke('set-cache-dir', newPath),
   onDiscordOAuthToken: (callback: (token: string) => void) => {
     const wrapped = (_event: any, token: string) => callback(token);
     ipcRenderer.on('discord-oauth-token', wrapped);

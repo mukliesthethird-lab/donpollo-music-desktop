@@ -126,6 +126,11 @@ type TranslationKeys = {
   queue: string;
   emptyQueue: string;
   clearQueue: string;
+  confirmClearQueueTitle: string;
+  confirmClearQueueDesc: string;
+  loadingPleaseWait: string;
+  normalizeAudio: string;
+  normalizeAudioDesc: string;
   lyricsPanel: string;
   noLyrics: string;
   offsetLabel: string;
@@ -138,6 +143,8 @@ type TranslationKeys = {
   loginToSync: string;
   loginDiscord: string;
   logout: string;
+  discordActivity: string;
+  discordActivityDesc: string;
   audioSection: string;
   defaultVolume: string;
   defaultVolumeDesc: string;
@@ -188,11 +195,18 @@ type TranslationKeys = {
   shapeSharp: string;
   shapePill: string;
   dataSection: string;
+  cacheLocation: string;
+  cacheLocationDesc: string;
+  changeLocation: string;
+  movingCache: string;
   playHistory: string;
   savedSongs: string;
   clearHistory: string;
+  confirmClearHistory: string;
   playlistCount: string;
   deleteAllPlaylists: string;
+  confirmDeletePlaylists: string;
+  btnKick: string;
   appVersion: string;
   clearAudioCache: string;
   confirmClearCache: string;
@@ -480,6 +494,11 @@ const translations: Record<Language, TranslationKeys> = {
     queue: 'Antrean',
     emptyQueue: 'Tidak ada musik dalam antrian',
     clearQueue: 'Hapus Antrean',
+    confirmClearQueueTitle: 'Hapus Semua Antrean?',
+    confirmClearQueueDesc: 'Tindakan ini akan menghapus semua lagu dalam antrean saat ini. Apakah Anda yakin?',
+    loadingPleaseWait: 'Memuat, mohon tunggu...',
+    normalizeAudio: 'Normalisasi Audio',
+    normalizeAudioDesc: 'Sesuaikan volume semua lagu agar terdengar setara',
     lyricsPanel: 'Lirik',
     noLyrics: 'Tidak ada lirik tersedia.',
     offsetLabel: 'Offset',
@@ -492,6 +511,8 @@ const translations: Record<Language, TranslationKeys> = {
     loginToSync: 'Login untuk menyinkronkan data antar perangkat',
     loginDiscord: 'Login Discord',
     logout: 'Keluar',
+    discordActivity: 'Status Aktivitas Discord',
+    discordActivityDesc: 'Tampilkan lagu yang sedang didengar di profil Discord Anda',
     audioSection: 'Audio',
     defaultVolume: 'Volume Default',
     defaultVolumeDesc: 'Volume yang digunakan saat aplikasi pertama dibuka',
@@ -545,8 +566,15 @@ const translations: Record<Language, TranslationKeys> = {
     playHistory: 'Riwayat Putar',
     savedSongs: 'lagu tersimpan',
     clearHistory: 'Hapus Riwayat',
-    playlistCount: 'playlist tersimpan',
+    confirmClearHistory: 'Apakah Anda yakin ingin menghapus semua riwayat pemutaran lagu?',
+    playlistCount: 'Jumlah Playlist',
     deleteAllPlaylists: 'Hapus Semua Playlist',
+    confirmDeletePlaylists: 'Apakah Anda yakin ingin menghapus SEMUA playlist yang Anda buat? Tindakan ini tidak dapat dibatalkan.',
+    btnKick: 'Ya, Keluarkan',
+    cacheLocation: 'Lokasi Folder Cache',
+    cacheLocationDesc: 'Pilih lokasi di komputer Anda untuk menyimpan file lagu',
+    changeLocation: 'Ubah Lokasi',
+    movingCache: 'Memindahkan file cache, mohon tunggu...',
     appVersion: 'Versi Aplikasi',
     clearAudioCache: 'Hapus Cache Lagu Lokal',
     confirmClearCache: 'Apakah Anda yakin ingin menghapus semua cache lagu? Ini tidak bisa dikembalikan.',
@@ -833,6 +861,11 @@ const translations: Record<Language, TranslationKeys> = {
     queue: 'Queue',
     emptyQueue: 'No music in queue',
     clearQueue: 'Clear Queue',
+    confirmClearQueueTitle: 'Clear Entire Queue?',
+    confirmClearQueueDesc: 'This will remove all songs from your current queue. Are you sure?',
+    loadingPleaseWait: 'Loading, please wait...',
+    normalizeAudio: 'Audio Normalization',
+    normalizeAudioDesc: 'Adjust volume of all songs to be equal',
     lyricsPanel: 'Lyrics',
     noLyrics: 'No lyrics available.',
     offsetLabel: 'Offset',
@@ -845,6 +878,8 @@ const translations: Record<Language, TranslationKeys> = {
     loginToSync: 'Login to sync data across devices',
     loginDiscord: 'Login with Discord',
     logout: 'Logout',
+    discordActivity: 'Discord Activity Status',
+    discordActivityDesc: 'Show the song you are currently listening to on your Discord profile',
     audioSection: 'Audio',
     defaultVolume: 'Default Volume',
     defaultVolumeDesc: 'Volume used when the app first opens',
@@ -898,8 +933,15 @@ const translations: Record<Language, TranslationKeys> = {
     playHistory: 'Play History',
     savedSongs: 'songs saved',
     clearHistory: 'Clear History',
-    playlistCount: 'playlists saved',
+    confirmClearHistory: 'Are you sure you want to clear your entire listening history?',
+    playlistCount: 'Playlist Count',
     deleteAllPlaylists: 'Delete All Playlists',
+    confirmDeletePlaylists: 'Are you sure you want to delete ALL of your playlists? This action cannot be undone.',
+    btnKick: 'Yes, Kick',
+    cacheLocation: 'Cache Folder Location',
+    cacheLocationDesc: 'Choose a folder on your computer to store downloaded songs',
+    changeLocation: 'Change Location',
+    movingCache: 'Moving cache files, please wait...',
     appVersion: 'App Version',
     clearAudioCache: 'Clear Local Audio Cache',
     confirmClearCache: 'Are you sure you want to clear the audio cache? This cannot be undone.',
@@ -1186,6 +1228,11 @@ const translations: Record<Language, TranslationKeys> = {
     queue: 'キュー',
     emptyQueue: 'キューに音楽がありません',
     clearQueue: 'キューをクリア',
+    confirmClearQueueTitle: 'キューをすべてクリアしますか？',
+    confirmClearQueueDesc: 'これにより、現在のキューからすべての曲が削除されます。よろしいですか？',
+    loadingPleaseWait: '読み込み中、お待ちください...',
+    normalizeAudio: 'オーディオの正規化',
+    normalizeAudioDesc: 'すべての曲の音量が同じになるように調整します',
     lyricsPanel: '歌詞',
     noLyrics: '歌詞はありません。',
     offsetLabel: 'オフセット',
@@ -1195,9 +1242,11 @@ const translations: Record<Language, TranslationKeys> = {
     settingsTitle: '設定',
     accountSection: 'アカウント',
     notLoggedIn: '未ログイン',
-    loginToSync: 'デバイス間でデータを同期するにはログインしてください',
+    loginToSync: 'デバイス間でデータを同期するためにログイン',
     loginDiscord: 'Discordでログイン',
     logout: 'ログアウト',
+    discordActivity: 'Discord アクティビティステータス',
+    discordActivityDesc: '現在聴いている曲をDiscordのプロフィールに表示します',
     audioSection: 'オーディオ',
     defaultVolume: 'デフォルト音量',
     defaultVolumeDesc: 'アプリを起動したときの音量',
@@ -1250,9 +1299,16 @@ const translations: Record<Language, TranslationKeys> = {
     dataSection: 'データ',
     playHistory: '再生履歴',
     savedSongs: '曲が保存されています',
-    clearHistory: '履歴を削除',
-    playlistCount: 'プレイリストが保存されています',
+    clearHistory: '履歴をクリア',
+    confirmClearHistory: 'すべての再生履歴を消去してもよろしいですか？',
+    playlistCount: 'プレイリスト数',
     deleteAllPlaylists: 'すべてのプレイリストを削除',
+    confirmDeletePlaylists: '本当にすべてのプレイリストを削除しますか？この操作は元に戻せません。',
+    btnKick: 'はい、キックします',
+    cacheLocation: 'キャッシュフォルダの場所',
+    cacheLocationDesc: 'ダウンロードした曲を保存するコンピュータ上のフォルダを選択します',
+    changeLocation: '場所を変更',
+    movingCache: 'キャッシュファイルを移動しています。お待ちください...',
     appVersion: 'アプリバージョン',
     clearAudioCache: 'ローカルオーディオキャッシュをクリア',
     confirmClearCache: '本当にオーディオキャッシュをクリアしますか？この操作は元に戻せません。',
@@ -1540,6 +1596,11 @@ const translations: Record<Language, TranslationKeys> = {
     queue: '대기열',
     emptyQueue: '대기열이 비어 있습니다',
     clearQueue: '대기열 지우기',
+    confirmClearQueueTitle: '모든 대기열 지우기?',
+    confirmClearQueueDesc: '현재 대기열에서 모든 노래가 제거됩니다. 계속하시겠습니까?',
+    loadingPleaseWait: '로드 중, 잠시만 기다려주세요...',
+    normalizeAudio: '오디오 정규화',
+    normalizeAudioDesc: '모든 노래의 볼륨이 같도록 조정합니다',
     lyricsPanel: '가사',
     noLyrics: '가사가 없습니다.',
     offsetLabel: '오프셋',
@@ -1549,9 +1610,11 @@ const translations: Record<Language, TranslationKeys> = {
     settingsTitle: '설정',
     accountSection: '계정',
     notLoggedIn: '로그인하지 않음',
-    loginToSync: '기기 간 데이터 동기화를 위해 로그인하세요',
+    loginToSync: '기기 간 데이터를 동기화하려면 로그인하세요',
     loginDiscord: 'Discord로 로그인',
     logout: '로그아웃',
+    discordActivity: 'Discord 활동 상태',
+    discordActivityDesc: '현재 듣고 있는 노래를 Discord 프로필에 표시합니다',
     audioSection: '오디오',
     defaultVolume: '기본 볼륨',
     defaultVolumeDesc: '앱이 처음 열릴 때 사용되는 볼륨',
@@ -1604,9 +1667,16 @@ const translations: Record<Language, TranslationKeys> = {
     dataSection: '데이터',
     playHistory: '재생 기록',
     savedSongs: '곡 저장됨',
-    clearHistory: '기록 삭제',
-    playlistCount: '플레이리스트 저장됨',
+    clearHistory: '기록 지우기',
+    confirmClearHistory: '모든 재생 기록을 지우시겠습니까?',
+    playlistCount: '플레이리스트 수',
     deleteAllPlaylists: '모든 플레이리스트 삭제',
+    confirmDeletePlaylists: '모든 플레이리스트를 삭제하시겠습니까? 이 작업은 되돌릴 수 없습니다.',
+    btnKick: '예, 추방합니다',
+    cacheLocation: '캐시 폴더 위치',
+    cacheLocationDesc: '다운로드한 노래를 저장할 컴퓨터의 폴더를 선택하세요',
+    changeLocation: '위치 변경',
+    movingCache: '캐시 파일을 이동하는 중입니다. 잠시만 기다려주세요...',
     appVersion: '앱 버전',
     clearAudioCache: '로컬 오디오 캐시 삭제',
     confirmClearCache: '오디오 캐시를 지우시겠습니까? 이 작업은 되돌릴 수 없습니다.',
