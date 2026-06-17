@@ -1,4 +1,4 @@
-import { app, BrowserWindow, ipcMain, Menu, protocol, globalShortcut, Tray, nativeImage } from 'electron';
+import { app, BrowserWindow, ipcMain, Menu, protocol, globalShortcut, Tray, nativeImage, dialog } from 'electron';
 import * as path from 'path';
 import * as fs from 'fs';
 import * as https from 'https';
