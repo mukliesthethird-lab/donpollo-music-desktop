@@ -501,7 +501,7 @@ ipcMain.handle('get-profile', async (event, discordId) => {
       try {
         const saved: string[] = JSON.parse(row.saved_playlists || '[]');
         for (const pid of saved) saveCountMap[pid] = (saveCountMap[pid] || 0) + 1;
-      } catch {}
+      } catch { }
     }
 
     const playlists = (playlistRows as any[]).map(r => ({
@@ -612,7 +612,7 @@ ipcMain.handle('get-user-percentile', async (event, discordId) => {
       try {
         const statsObj = JSON.parse(r.stats || '{}');
         time = statsObj.totalListenSeconds || 0;
-      } catch (e) {}
+      } catch (e) { }
       return { id: r.discord_id, time };
     }).sort((a, b) => b.time - a.time);
 
@@ -626,7 +626,7 @@ ipcMain.handle('get-user-percentile', async (event, discordId) => {
     // To make it fun: if you are rank 1 out of 1, you are 1%.
     let percentile = Math.floor((userIndex / totalUsers) * 100);
     if (percentile === 0 && totalUsers > 0) percentile = 1; // Top 1%
-    
+
     // Normalize to standard badges
     if (percentile <= 1) return 1;
     if (percentile <= 2) return 2;
@@ -652,9 +652,9 @@ ipcMain.handle('update-profile', async (event, profileData) => {
        username = VALUES(username), avatar_url = VALUES(avatar_url), liked_songs = VALUES(liked_songs), 
        stats = VALUES(stats), privacy_settings = VALUES(privacy_settings), saved_playlists = VALUES(saved_playlists), following = VALUES(following), banner_url = COALESCE(VALUES(banner_url), banner_url)`,
       [
-        discordId, username, avatarUrl, 
-        JSON.stringify(likedSongs || []), 
-        JSON.stringify(stats || {}), 
+        discordId, username, avatarUrl,
+        JSON.stringify(likedSongs || []),
+        JSON.stringify(stats || {}),
         JSON.stringify(privacySettings || {}),
         JSON.stringify(savedPlaylists || []),
         JSON.stringify(following || []),
@@ -680,7 +680,7 @@ ipcMain.handle('toggle-follow', async (event, discordId, targetId) => {
       await db.execute('UPDATE user_profiles SET following = ? WHERE discord_id = ?', [JSON.stringify(following), discordId]);
       return following;
     }
-  } catch(e) {}
+  } catch (e) { }
   return null;
 });
 
@@ -695,7 +695,7 @@ ipcMain.handle('toggle-save-playlist', async (event, discordId, playlistId) => {
       await db.execute('UPDATE user_profiles SET saved_playlists = ? WHERE discord_id = ?', [JSON.stringify(saved), discordId]);
       return saved;
     }
-  } catch(e) {}
+  } catch (e) { }
   return null;
 });
 

@@ -1415,6 +1415,29 @@ body {
   color: #f23f43;
 }
 
+.join-party-icon-btn {
+  opacity: 0;
+  transition: all 0.2s ease;
+  background: transparent;
+  border: none;
+  color: var(--text-muted);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 4px;
+  border-radius: 4px;
+}
+
+.current-party-block:hover .join-party-icon-btn {
+  opacity: 1;
+}
+
+.join-party-icon-btn:hover {
+  background: rgba(var(--accent-primary-rgb), 0.15);
+  color: var(--accent-primary);
+}
+
 .section-header h2:hover {
   text-decoration: underline;
 }
@@ -1428,6 +1451,23 @@ body {
 
 .show-all:hover {
   text-decoration: underline;
+}
+
+/* ─── Party Popup Bubble Animation ─── */
+.party-popup-bubble-wrapper {
+  display: grid;
+  grid-template-rows: 0fr;
+  transition: grid-template-rows 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.party-popup-bubble-wrapper.open {
+  grid-template-rows: 1fr;
+}
+
+.party-popup-bubble-inner {
+  overflow: hidden;
+  background: rgba(0, 0, 0, 0.15);
+  border-radius: 8px;
 }
 
 /* ─── Slider Wrapper & Nav Buttons ─── */
