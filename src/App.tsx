@@ -1,6 +1,6 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { FastAverageColor } from 'fast-average-color';
-import { Home, Library, Plus, Mic2, Settings, Play, Pause, SkipBack, SkipForward, Repeat, Shuffle, Volume2, VolumeX, ListMusic, UserCircle, ChevronRight, Search, AlertCircle, Headset, Loader2, Maximize2, X, ChevronLeft, ChevronUp, ChevronDown, Music, PanelRight, Trash2, Heart, LogIn, LogOut, Check, FolderPlus, Globe, Headphones, Download, DownloadCloud, Database, WifiOff, CheckCircle2, Paintbrush, Clock, Trophy, Zap, Radio, Timer, Repeat1, MinusCircle, PlusCircle, Edit3, Share2, Copy } from 'lucide-react';
+import { Home, Library, Plus, Mic2, Settings, Play, Pause, SkipBack, SkipForward, Repeat, Shuffle, Volume2, VolumeX, ListMusic, UserCircle, ChevronRight, Search, AlertCircle, Headset, Loader2, Maximize2, X, ChevronLeft, ChevronUp, ChevronDown, Music, PanelRight, Trash2, Heart, LogIn, LogOut, Check, FolderPlus, Globe, Headphones, Download, DownloadCloud, Database, WifiOff, CheckCircle2, Paintbrush, Clock, Trophy, Zap, Radio, Timer, Repeat1, MinusCircle, PlusCircle, Edit3, Share2, Copy, Smartphone } from 'lucide-react';
 import './index.css';
 import './themes.css';
 import { createTranslator } from './translations';
@@ -2455,15 +2455,27 @@ function App() {
     }
 
     let song = list[startIndex];
-    setQueue(list);
-    setOriginalQueue(list);
+    
+    // Reorder list so the clicked song is first, then wrapping around
+    const reorderedList = [...list.slice(startIndex), ...list.slice(0, startIndex)];
+    
+    setOriginalQueue(reorderedList);
+
     if (isShuffled) {
-      const shuffled = [...list].sort(() => Math.random() - 0.5);
+      const shuffled = [...reorderedList].sort(() => Math.random() - 0.5);
+      // Ensure the clicked song remains the first one even when shuffled
+      const songIndex = shuffled.findIndex(s => s === song);
+      if (songIndex !== -1) {
+        shuffled.splice(songIndex, 1);
+        shuffled.unshift(song);
+      }
       setQueue(shuffled);
       setCurrentIndex(0);
     } else {
-      setCurrentIndex(startIndex);
+      setQueue(reorderedList);
+      setCurrentIndex(0);
     }
+    
     addToHistory(song);
     executePlay(song);
   };
@@ -5869,7 +5881,14 @@ function App() {
                                       <div className={`status-dot-avatar status-dot ${user.status || 'online'}`}></div>
                                     </div>
                                     <div className="friend-info">
-                                      <div className="friend-name">{user.username}</div>
+                                      <div className="friend-name" style={{ display: 'flex', alignItems: 'center' }}>
+                                        {user.username}
+                                        {user.platform === 'mobile' && (
+                                          <span title={t('playingOnMobile') || 'Playing on Mobile'} style={{ display: 'inline-flex', alignItems: 'center', padding: '0 4px', cursor: 'default' }} onClick={(e) => e.stopPropagation()}>
+                                            <Smartphone size={12} color="var(--text-muted)" />
+                                          </span>
+                                        )}
+                                      </div>
                                       {user.currentSong && user.currentSong.isPlaying ? (
                                         <>
                                           <div className="friend-song" title={user.currentSong.title} style={{ display: 'flex', alignItems: 'center' }}><Music size={10} style={{ marginRight: '4px', flexShrink: 0, opacity: 0.7 }} /> {user.currentSong.title}</div>
@@ -6538,7 +6557,15 @@ function App() {
                                     <div className={`status-dot-avatar status-dot ${user.status || 'online'}`}></div>
                                   </div>
                                   <div className="friend-info">
-                                    <div className="friend-name">{user.username}</div>
+                                      <div className="friend-name" style={{ display: 'flex', alignItems: 'center' }}>
+                                        {user.username}
+                                        {user.platform === 'mobile' && (
+                                          <div className="mobile-tooltip-container" onClick={(e) => e.stopPropagation()}>
+                                            <Smartphone size={12} color="var(--text-muted)" />
+                                            <div className="mobile-tooltip-text">{t('playingOnMobile') || 'Playing on Mobile'}</div>
+                                          </div>
+                                        )}
+                                      </div>
                                     {user.currentSong && user.currentSong.isPlaying ? (
                                       <>
                                         <div className="friend-song" title={user.currentSong.title} style={{ display: 'flex', alignItems: 'center' }}><Music size={10} style={{ marginRight: '4px', flexShrink: 0, opacity: 0.7 }} /> {user.currentSong.title}</div>

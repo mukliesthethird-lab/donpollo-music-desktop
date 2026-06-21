@@ -17,6 +17,63 @@ let minimizeToMiniPlayerEnabled = false; // kept for manual enter-mini-player IP
 let closeToTrayEnabled = false;
 let isQuitting = false;
 
+let globalStatsCache = {
+  percentileMap: new Map<string, number>(),
+  saveCountMap: {} as Record<string, number>,
+  lastUpdated: 0
+};
+
+async function ensureGlobalStatsCache() {
+  if (Date.now() - globalStatsCache.lastUpdated < 30 * 1000) return;
+  if (!db) return;
+  
+  try {
+    const [[savedRows], [statsRows]] = await Promise.all([
+      db.execute('SELECT saved_playlists FROM user_profiles WHERE saved_playlists IS NOT NULL AND saved_playlists != ?', ['[]']),
+      db.execute('SELECT discord_id, stats FROM user_profiles WHERE stats IS NOT NULL')
+    ]);
+
+    const saveCountMap: Record<string, number> = {};
+    for (const row of (savedRows as any[])) {
+      try {
+        const saved = JSON.parse(row.saved_playlists || '[]');
+        for (const pid of saved) saveCountMap[pid] = (saveCountMap[pid] || 0) + 1;
+      } catch { }
+    }
+
+    const users = (statsRows as any[]).map(r => {
+      let time = 0;
+      try { time = JSON.parse(r.stats || '{}').totalListenSeconds || 0; } catch (e) { }
+      return { id: r.discord_id, time };
+    }).sort((a, b) => b.time - a.time);
+
+    const percentileMap = new Map<string, number>();
+    const totalUsers = users.length;
+    if (totalUsers > 0) {
+      users.forEach((u, index) => {
+        let percentile = Math.floor((index / totalUsers) * 100);
+        if (percentile === 0 && totalUsers > 0) percentile = 1;
+        
+        let p = 100;
+        if (percentile <= 1) p = 1;
+        else if (percentile <= 2) p = 2;
+        else if (percentile <= 5) p = 5;
+        else if (percentile <= 10) p = 10;
+        else if (percentile <= 20) p = 20;
+        else if (percentile <= 50) p = 50;
+        
+        percentileMap.set(u.id, p);
+      });
+    }
+
+    globalStatsCache.saveCountMap = saveCountMap;
+    globalStatsCache.percentileMap = percentileMap;
+    globalStatsCache.lastUpdated = Date.now();
+  } catch (error) {
+    console.error('Stats cache error', error);
+  }
+}
+
 app.on('before-quit', () => {
   isQuitting = true;
 });
@@ -168,11 +225,10 @@ async function initDB() {
     `);
 
     try {
-      await db.execute("ALTER TABLE online_users ADD COLUMN status VARCHAR(20) DEFAULT 'online'");
-    } catch (e: any) { }
-
-    try {
-      await db.execute("ALTER TABLE online_users ADD COLUMN queue LONGTEXT");
+      await db.execute("ALTER TABLE online_users ADD COLUMN status VARCHAR(20) DEFAULT 'online'").catch(() => {});
+      await db.execute("ALTER TABLE online_users ADD COLUMN queue LONGTEXT").catch(() => {});
+      await db.execute("ALTER TABLE online_users ADD COLUMN platform VARCHAR(20) DEFAULT 'desktop'").catch(() => {});
+      console.log('Database connected and initialized.');
     } catch (e: any) { }
 
     await db.execute(`
@@ -483,26 +539,17 @@ ipcMain.handle('save-playlist', async (event, pl) => {
 ipcMain.handle('get-profile', async (event, discordId) => {
   if (!db) return null;
   try {
-    // Run all queries in parallel for performance
-    const [[rows], [playlistRows], [followerRows], [allSavedRows]] = await Promise.all([
+    await ensureGlobalStatsCache();
+    // Run all user-specific queries in parallel for performance
+    const [[rows], [playlistRows], [followerRows]] = await Promise.all([
       db.execute('SELECT * FROM user_profiles WHERE discord_id = ?', [discordId]),
       db.execute('SELECT id, name, avatar, songs, discord_id FROM playlists WHERE discord_id = ? AND (is_private = 0 OR is_private IS NULL)', [discordId]),
-      db.execute('SELECT discord_id FROM user_profiles WHERE following LIKE ?', [`%"${discordId}"%`]),
-      db.execute('SELECT saved_playlists FROM user_profiles WHERE saved_playlists IS NOT NULL AND saved_playlists != ?', ['[]'])
+      db.execute('SELECT discord_id FROM user_profiles WHERE following LIKE ?', [`%"${discordId}"%`])
     ]);
 
     const username = (rows as any[]).length > 0 ? (rows as any[])[0].username : '';
     const avatarUrl = (rows as any[]).length > 0 ? (rows as any[])[0].avatar_url : '';
     const followers = (followerRows as any[]).map(r => r.discord_id);
-
-    // Build saveCount map in memory (much faster than N queries)
-    const saveCountMap: Record<string, number> = {};
-    for (const row of (allSavedRows as any[])) {
-      try {
-        const saved: string[] = JSON.parse(row.saved_playlists || '[]');
-        for (const pid of saved) saveCountMap[pid] = (saveCountMap[pid] || 0) + 1;
-      } catch { }
-    }
 
     const playlists = (playlistRows as any[]).map(r => ({
       id: r.id,
@@ -512,7 +559,7 @@ ipcMain.handle('get-profile', async (event, discordId) => {
       discordId: r.discord_id,
       authorName: username,
       authorAvatar: avatarUrl,
-      saveCount: saveCountMap[r.id] || 0,
+      saveCount: globalStatsCache.saveCountMap[r.id] || 0,
       isPrivate: false
     }));
 
@@ -606,35 +653,8 @@ ipcMain.handle('resolve-share-code', async (event, code) => {
 ipcMain.handle('get-user-percentile', async (event, discordId) => {
   if (!db) return 50;
   try {
-    const [rows] = await db.execute('SELECT discord_id, stats FROM user_profiles');
-    const users = (rows as any[]).map(r => {
-      let time = 0;
-      try {
-        const statsObj = JSON.parse(r.stats || '{}');
-        time = statsObj.totalListenSeconds || 0;
-      } catch (e) { }
-      return { id: r.discord_id, time };
-    }).sort((a, b) => b.time - a.time);
-
-    const totalUsers = users.length;
-    if (totalUsers === 0) return 50;
-
-    const userIndex = users.findIndex(u => u.id === discordId);
-    if (userIndex === -1) return 50;
-
-    // Percentile = (rank - 1) / totalUsers * 100
-    // To make it fun: if you are rank 1 out of 1, you are 1%.
-    let percentile = Math.floor((userIndex / totalUsers) * 100);
-    if (percentile === 0 && totalUsers > 0) percentile = 1; // Top 1%
-
-    // Normalize to standard badges
-    if (percentile <= 1) return 1;
-    if (percentile <= 2) return 2;
-    if (percentile <= 5) return 5;
-    if (percentile <= 10) return 10;
-    if (percentile <= 20) return 20;
-    if (percentile <= 50) return 50;
-    return 100;
+    await ensureGlobalStatsCache();
+    return globalStatsCache.percentileMap.get(discordId) || 50;
   } catch (error) {
     console.error('get-user-percentile error:', error);
     return 50;
@@ -728,9 +748,9 @@ ipcMain.handle('update-presence', async (event, data) => {
     const songDataStr = currentSong ? JSON.stringify(currentSong) : '';
     const queueStr = queue ? JSON.stringify(queue) : '';
     await db.execute(
-      `INSERT INTO online_users (discord_id, username, avatar_url, current_song, party_id, status, queue, last_seen) 
-       VALUES (?, ?, ?, ?, ?, ?, ?, NOW()) 
-       ON DUPLICATE KEY UPDATE username = ?, avatar_url = ?, current_song = ?, party_id = ?, status = ?, queue = ?, last_seen = NOW()`,
+      `INSERT INTO online_users (discord_id, username, avatar_url, current_song, party_id, status, queue, platform, last_seen) 
+       VALUES (?, ?, ?, ?, ?, ?, ?, 'desktop', NOW()) 
+       ON DUPLICATE KEY UPDATE username = ?, avatar_url = ?, current_song = ?, party_id = ?, status = ?, queue = ?, platform = 'desktop', last_seen = NOW()`,
       [discordId, username, avatarUrl, songDataStr, partyId || '', status || 'online', queueStr, username, avatarUrl, songDataStr, partyId || '', status || 'online', queueStr]
     );
     return true;
@@ -756,7 +776,8 @@ ipcMain.handle('get-online-users', async (event, currentUserId) => {
       currentSong: row.current_song ? JSON.parse(row.current_song) : null,
       partyId: row.party_id,
       status: row.status,
-      queue: row.queue ? JSON.parse(row.queue) : []
+      queue: row.queue ? JSON.parse(row.queue) : [],
+      platform: row.platform || 'desktop'
     }));
   } catch (error) {
     console.error(error);

@@ -366,6 +366,7 @@ type TranslationKeys = {
   editBanner: string;
   browsing: string;
   enterBannerUrl: string;
+  playingOnMobile: string;
 
 };
 
@@ -733,7 +734,8 @@ const translations: Record<Language, TranslationKeys> = {
     profile: 'Profil',
     editBanner: 'Edit Banner',
     browsing: 'Mencari Lagu...',
-    enterBannerUrl: 'Masukkan URL Banner (biarkan kosong untuk menghapus):'
+    enterBannerUrl: 'Masukkan URL Banner (biarkan kosong untuk menghapus):',
+    playingOnMobile: 'Sedang memutar di HP'
 
   },
 
@@ -1100,7 +1102,8 @@ const translations: Record<Language, TranslationKeys> = {
     profile: 'Profile',
     editBanner: 'Edit Banner',
     browsing: 'Browsing...',
-    enterBannerUrl: 'Enter Banner URL (leave empty to remove):'
+    enterBannerUrl: 'Enter Banner URL (leave blank to remove):',
+    playingOnMobile: 'Playing on Mobile'
 
   },
 
@@ -1466,8 +1469,9 @@ const translations: Record<Language, TranslationKeys> = {
     podcastNotFoundYt: 'YouTubeで見つかりません',
     profile: 'プロフィール',
     editBanner: 'バナーを編集',
-    browsing: '閲覧中...',
-    enterBannerUrl: 'バナーのURLを入力（空にすると削除）:'
+    browsing: '検索中...',
+    enterBannerUrl: 'バナーURLを入力（削除するには空白のままにしてください）:',
+    playingOnMobile: 'モバイルで再生中'
 
   },
 
@@ -1834,8 +1838,9 @@ const translations: Record<Language, TranslationKeys> = {
     podcastNotFoundYt: 'YouTube에서 찾을 수 없음',
     profile: '프로필',
     editBanner: '배너 편집',
-    browsing: '둘러보는 중...',
-    enterBannerUrl: '배너 URL 입력 (비워두면 삭제):'
+    browsing: '탐색 중...',
+    enterBannerUrl: '배너 URL 입력 (제거하려면 비워 두세요):',
+    playingOnMobile: '모바일에서 재생 중'
 
   }
 };
