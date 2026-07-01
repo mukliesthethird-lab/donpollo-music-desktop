@@ -3,6 +3,7 @@
 @import url('https://fonts.googleapis.com/css2?family=Roboto:wght@400;500;700;900&display=swap');
 
 :root {
+  color-scheme: dark;
   --bg-main: #000000;
   --bg-sidebar: #1E1F22;
   --bg-card: #2B2D31;
@@ -2723,7 +2724,7 @@ body {
    ========================================= */
 .settings-section {
   background-color: var(--bg-card);
-  border-radius: 16px;
+  border-radius: var(--global-radius, 16px);
   padding: 24px;
   margin-bottom: 20px;
   border: 1px solid var(--border-color);
@@ -2785,14 +2786,40 @@ body {
 }
 
 .settings-select {
-  background-color: var(--bg-card-hover);
+  appearance: none;
+  -webkit-appearance: none;
+  -moz-appearance: none;
+  background-color: var(--bg-card);
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%23888888' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'%3E%3C/polyline%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 12px center;
   border: 1px solid var(--border-color);
   color: var(--text-primary);
-  padding: 8px 12px;
-  border-radius: var(--global-radius);
+  padding: 10px 36px 10px 14px;
+  border-radius: var(--global-radius, 8px);
   font-size: 13px;
+  font-family: inherit;
   cursor: pointer;
   outline: none;
+  transition: border-color 0.2s ease, background-color 0.2s ease, box-shadow 0.2s ease;
+  min-width: 140px;
+}
+
+.settings-select:hover {
+  border-color: var(--accent-primary);
+  background-color: var(--bg-card-hover);
+}
+
+.settings-select:focus {
+  border-color: var(--accent-primary);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent-primary) 20%, transparent);
+  background-color: var(--bg-card-hover);
+}
+
+.settings-select option {
+  background-color: var(--bg-secondary, #1a1a2e);
+  color: var(--text-primary);
+  padding: 8px 12px;
 }
 
 .settings-account-card {
@@ -4402,4 +4429,20 @@ body {
 }
 .party-popup-member.hover-bg:hover {
   background: rgba(255, 255, 255, 0.05);
+}
+
+.dragging-origin img {
+  box-shadow: 0 4px 12px rgba(0,0,0,0.5);
+  opacity: 0.5;
+  transform: scale(0.98);
+  animation: drag-shake 0.3s ease-in-out infinite alternate;
+}
+
+@keyframes drag-shake {
+  0% { transform: scale(0.98) rotate(-1deg); }
+  100% { transform: scale(0.98) rotate(1deg); }
+}
+
+.dragging-ghost {
+  transform: rotate(5deg) scale(1.1);
 }

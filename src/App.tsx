@@ -1,5 +1,4 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react';
-import { FastAverageColor } from 'fast-average-color';
 import { Home, Library, Plus, Mic2, Settings, Play, Pause, SkipBack, SkipForward, Repeat, Shuffle, Volume2, VolumeX, ListMusic, UserCircle, ChevronRight, Search, AlertCircle, Headset, Loader2, Maximize2, X, ChevronLeft, ChevronUp, ChevronDown, Music, PanelRight, Trash2, Heart, LogIn, LogOut, Check, FolderPlus, Globe, Headphones, Download, DownloadCloud, Database, WifiOff, CheckCircle2, Paintbrush, Clock, Trophy, Zap, Radio, Timer, Repeat1, MinusCircle, PlusCircle, Edit3, Share2, Copy, Smartphone } from 'lucide-react';
 import './index.css';
 import './themes.css';
@@ -56,6 +55,73 @@ const getCleanThumbnail = (url: string | undefined) => {
     return url.replace('hqdefault.jpg', 'mqdefault.jpg');
   }
   return url;
+};
+
+const applyDragGhost = (e: React.DragEvent, song: any) => {
+  const dragGhost = document.createElement('div');
+  
+  const img = document.createElement('img');
+  img.src = getCleanThumbnail(song.thumbnail) || getHighResImage(song.cover);
+  img.style.width = '120px';
+  img.style.height = '120px';
+  img.style.borderRadius = '16px';
+  img.style.objectFit = 'cover';
+  img.style.boxShadow = '0 10px 25px rgba(0,0,0,0.8)';
+  
+  const infoContainer = document.createElement('div');
+  infoContainer.style.background = 'rgba(0,0,0,0.8)';
+  infoContainer.style.backdropFilter = 'blur(10px)';
+  infoContainer.style.padding = '8px 12px';
+  infoContainer.style.borderRadius = '12px';
+  infoContainer.style.marginTop = '12px';
+  infoContainer.style.textAlign = 'center';
+  infoContainer.style.color = 'white';
+  infoContainer.style.width = '160px';
+  infoContainer.style.boxSizing = 'border-box';
+  infoContainer.style.boxShadow = '0 4px 15px rgba(0,0,0,0.5)';
+  
+  const title = document.createElement('div');
+  title.innerText = song.title;
+  title.style.fontSize = '13px';
+  title.style.fontWeight = '700';
+  title.style.whiteSpace = 'nowrap';
+  title.style.overflow = 'hidden';
+  title.style.textOverflow = 'ellipsis';
+  title.style.fontFamily = 'Inter, sans-serif';
+  
+  const artist = document.createElement('div');
+  artist.innerText = song.artist || song.uploader || 'Unknown Artist';
+  artist.style.fontSize = '11px';
+  artist.style.color = 'rgba(255,255,255,0.7)';
+  artist.style.whiteSpace = 'nowrap';
+  artist.style.overflow = 'hidden';
+  artist.style.textOverflow = 'ellipsis';
+  artist.style.marginTop = '4px';
+  artist.style.fontFamily = 'Inter, sans-serif';
+  
+  infoContainer.appendChild(title);
+  infoContainer.appendChild(artist);
+
+  dragGhost.appendChild(img);
+  dragGhost.appendChild(infoContainer);
+  
+  dragGhost.style.position = 'absolute';
+  dragGhost.style.top = '-1000px';
+  dragGhost.style.display = 'flex';
+  dragGhost.style.flexDirection = 'column';
+  dragGhost.style.alignItems = 'center';
+  dragGhost.className = 'dragging-ghost'; 
+
+  
+  document.body.appendChild(dragGhost);
+  e.dataTransfer.setDragImage(dragGhost, 60, 60);
+  
+  setTimeout(() => {
+    if (document.body.contains(dragGhost)) document.body.removeChild(dragGhost);
+  }, 100);
+
+  const currentTarget = e.currentTarget as HTMLElement;
+  currentTarget.classList.add('dragging-origin');
 };
 
 function App() {
@@ -255,11 +321,13 @@ function App() {
   const [playlistToRemove, setPlaylistToRemove] = useState<string | null>(null);
   const [userToKick, setUserToKick] = useState<{ id: string, name: string } | null>(null);
   const [showClearQueueConfirm, setShowClearQueueConfirm] = useState(false);
+  const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
   const [showClearHistoryConfirm, setShowClearHistoryConfirm] = useState(false);
   const [showClearPlaylistsConfirm, setShowClearPlaylistsConfirm] = useState(false);
   const [isGlobalLoading, setIsGlobalLoading] = useState(false);
   const [draggedQueueIdx, setDraggedQueueIdx] = useState<number | null>(null);
   const [dragOverQueueIdx, setDragOverQueueIdx] = useState<number | null>(null);
+  const [dragOverQueueList, setDragOverQueueList] = useState(false);
   const [shareCodeResult, setShareCodeResult] = useState<{ code: string; expiresAt: string } | null>(null);
   const [following, setFollowing] = useState<string[]>([]);
   const [isEditingBanner, setIsEditingBanner] = useState(false);
@@ -316,7 +384,7 @@ function App() {
       try {
         const fetchItunesRSS = async (countryCode: string) => {
           try {
-            const targetUrl = `https://rss.applemarketingtools.com/api/v2/${countryCode}/music/most-played/25/songs.json`;
+            const targetUrl = `https://rss.applemarketingtools.com/api/v2/${countryCode}/music/most-played/25/songs.json?nocache=${Math.floor(Date.now() / (7 * 24 * 60 * 60 * 1000))}`;
             const data = (window as any).electronAPI
               ? await (window as any).electronAPI.fetchUrl(targetUrl)
               : await (await fetch(`https://api.allorigins.win/get?url=${encodeURIComponent(targetUrl)}`)).json();
@@ -415,7 +483,7 @@ function App() {
       try {
         const loadPodcastCategory = async (region: string, setter: React.Dispatch<React.SetStateAction<any[]>>) => {
           try {
-            const targetUrl = `https://rss.applemarketingtools.com/api/v2/${region}/podcasts/top/25/podcasts.json`;
+            const targetUrl = `https://rss.applemarketingtools.com/api/v2/${region}/podcasts/top/25/podcasts.json?nocache=${Math.floor(Date.now() / (7 * 24 * 60 * 60 * 1000))}`;
             const data = (window as any).electronAPI
               ? await (window as any).electronAPI.fetchUrl(targetUrl)
               : await (await fetch(`https://api.allorigins.win/get?url=${encodeURIComponent(targetUrl)}`)).json();
@@ -567,6 +635,17 @@ function App() {
   const [playlistToDelete, setPlaylistToDelete] = useState<string | null>(null);
   const [isEditingPlaylistName, setIsEditingPlaylistName] = useState(false);
   const [editPlaylistNameValue, setEditPlaylistNameValue] = useState('');
+  
+  // Feature: Drag and Drop
+  const [draggedGlobalSong, setDraggedGlobalSong] = useState<any | null>(null);
+  const [dragOverPlaylistId, setDragOverPlaylistId] = useState<string | null>(null);
+  const [draggedPlaylistSongIdx, setDraggedPlaylistSongIdx] = useState<number | null>(null);
+  const [dragOverPlaylistSongIdx, setDragOverPlaylistSongIdx] = useState<number | null>(null);
+
+  // Feature: Download Manager
+  const [activeDownloads, setActiveDownloads] = useState<Record<string, {progress: number, songData: any}>>({});
+  const [playlistContextMenu, setPlaylistContextMenu] = useState<{ x: number, y: number, playlist: any } | null>(null);
+
   const [showImportPlaylist, setShowImportPlaylist] = useState(false);
   const [importPlaylistUrl, setImportPlaylistUrl] = useState('');
   const [isImporting, setIsImporting] = useState(false);
@@ -605,20 +684,12 @@ function App() {
       const saved = JSON.parse(localStorage.getItem('donpollo_settings') || '{}');
       return {
         theme: 'default',
-        customAccentColor: '#1db954',
-        customBgUrl: '',
-        dynamicBackground: false,
-        customBgMain: '',
-        customBgSidebar: '',
-        customBgCard: '',
-        customTextPrimary: '',
-        customTextSecondary: '',
         layoutMode: 'left',
         fontFamily: 'Inter',
         borderRadiusMode: 'rounded',
         ...saved
       };
-    } catch { return { theme: 'default', customAccentColor: '#1db954', customBgUrl: '', dynamicBackground: false }; }
+    } catch { return { theme: 'default' }; }
   });
 
   useEffect(() => {
@@ -640,10 +711,9 @@ function App() {
   const [showLyrics, setShowLyrics] = useState(false);
   const [isWidgetMode, setIsWidgetMode] = useState(false);
 
-  // ─── Custom Theme & Dynamic Background Effect ────────────────
+  // ─── Theme Font & Radius Effect ────────────────────────────
   useEffect(() => {
     const root = document.documentElement;
-    const isCustom = settings.theme === 'custom';
 
     // Font Settings (applied globally regardless of theme)
     const fontMap: Record<string, string> = {
@@ -657,70 +727,10 @@ function App() {
     if (settings.borderRadiusMode === 'sharp') root.style.setProperty('--global-radius', '0px');
     else if (settings.borderRadiusMode === 'pill') root.style.setProperty('--global-radius', '24px');
     else root.style.setProperty('--global-radius', '8px');
-
-    if (isCustom) {
-      document.body.classList.add('theme-custom');
-      root.style.setProperty('--accent-primary', settings.customAccentColor || '#1db954');
-      root.style.setProperty('--accent-text', '#ffffff');
-
-      if (settings.customBgMain) root.style.setProperty('--bg-main', settings.customBgMain);
-      if (settings.customBgSidebar) root.style.setProperty('--bg-sidebar', settings.customBgSidebar);
-      if (settings.customBgCard) {
-        root.style.setProperty('--bg-card', settings.customBgCard);
-        root.style.setProperty('--bg-card-hover', settings.customBgCard);
-      }
-      if (settings.customTextPrimary) root.style.setProperty('--text-primary', settings.customTextPrimary);
-      if (settings.customTextSecondary) root.style.setProperty('--text-secondary', settings.customTextSecondary);
-
-      if (!settings.dynamicBackground && settings.customBgUrl) {
-        root.style.setProperty('background-image', `url(${settings.customBgUrl})`);
-        root.style.setProperty('background-size', 'cover');
-        root.style.setProperty('background-position', 'center');
-        root.style.setProperty('background-color', 'transparent');
-      } else if (!settings.dynamicBackground) {
-        root.style.removeProperty('background-image');
-        root.style.setProperty('background-color', settings.customBgMain || 'var(--bg-main)');
-      }
-    } else {
-      document.body.classList.remove('theme-custom');
-      root.style.removeProperty('--accent-primary');
-      root.style.removeProperty('--accent-text');
-      root.style.removeProperty('--bg-main');
-      root.style.removeProperty('--bg-sidebar');
-      root.style.removeProperty('--bg-card');
-      root.style.removeProperty('--bg-card-hover');
-      root.style.removeProperty('--text-primary');
-      root.style.removeProperty('--text-secondary');
-      root.style.removeProperty('background-image');
-      root.style.removeProperty('background-color');
-    }
-
-    if (isCustom && settings.dynamicBackground && currentSong?.thumbnail) {
-      const fac = new FastAverageColor();
-      const imgUrl = getCleanThumbnail(currentSong.thumbnail);
-      fac.getColorAsync(imgUrl, { algorithm: 'dominant', crossOrigin: 'anonymous' })
-        .then(color => {
-          root.style.setProperty('background-image', 'none');
-          root.style.setProperty('background-color', color.rgba);
-        })
-        .catch(e => {
-          console.error('Failed to extract color', e);
-        });
-    }
   }, [
     settings.theme,
-    settings.customAccentColor,
-    settings.customBgUrl,
-    settings.dynamicBackground,
-    settings.layoutOrder,
     settings.fontFamily,
     settings.borderRadiusMode,
-    settings.customBgMain,
-    settings.customBgSidebar,
-    settings.customBgCard,
-    settings.customTextPrimary,
-    settings.customTextSecondary,
-    currentSong?.thumbnail
   ]);
   const [isRightSidebarOpen, setIsRightSidebarOpen] = useState(() => {
     try {
@@ -800,20 +810,20 @@ function App() {
   }, [cacheSize, activePage]);
 
   useEffect(() => {
-    const handleProgress = (_event: any, _data: { songId: string, progress: number, songData: any }) => {
-      // setActiveDownloads(prev => ({ ...prev, [data.songId]: { progress: data.progress, songData: data.songData } }));
+    const handleProgress = (_event: any, data: { songId: string, progress: number, songData: any }) => {
+      setActiveDownloads(prev => ({ ...prev, [data.songId]: { progress: data.progress, songData: data.songData } }));
     };
 
     const handleComplete = (_event: any, songData: any) => {
-      /* setActiveDownloads(prev => {
+      setActiveDownloads(prev => {
         const next = { ...prev };
         delete next[songData.id];
         return next;
-      }); */
+      });
       if ((window as any).electronAPI?.getDownloadedSongs) {
         (window as any).electronAPI.getDownloadedSongs().then(setDownloadedSongs);
       }
-      showToast(`${t('toastDownloadComplete')}: ${songData.title}`, 'success');
+      showToast(`${t('toastDownloadComplete') || 'Berhasil mengunduh'}: ${songData.title}`, 'success');
     };
 
     let unsub1: any;
@@ -928,7 +938,7 @@ function App() {
               console.log(`[Prefetch] Lagu berikutnya adalah podcast/durasi panjang, di-skip agar streaming murni.`);
               return;
             }
-            
+
             console.log(`[Prefetch] Memulai download diam-diam untuk lagu berikutnya: ${nextSong.title}`);
             let streamUrl = `${API_BASE_URL}/api/stream?id=${nextSong.id}`;
             if (settings.audioQuality && settings.audioQuality !== 'auto') {
@@ -1641,7 +1651,7 @@ function App() {
 
     setToastData({ msg, icon: IconComponent, type });
     if (toastTimeoutRef.current) clearTimeout(toastTimeoutRef.current);
-    toastTimeoutRef.current = setTimeout(() => setToastData(null), 4000);
+    toastTimeoutRef.current = setTimeout(() => setToastData(null), 1500);
   };
 
   const handleUserScroll = () => {
@@ -1705,7 +1715,7 @@ function App() {
     showToast(`Playlist "${newPl.name}" ${t('toastPlaylistCreated')}`, 'playlist');
   };
 
-  const handleLogout = () => {
+  const confirmLogoutAction = () => {
     if (audioRef.current) {
       audioRef.current.pause();
     }
@@ -1717,15 +1727,26 @@ function App() {
     setLyricsData(null);
     setDiscordUser(null);
     localStorage.removeItem('donpollo_user');
-    setShowLogoutDropdown(false);
+    localStorage.removeItem('donpollo_discord_token');
+    setShowLogoutConfirm(false);
     setActivePage('home');
     showToast(t('toastLogout'), 'success');
   };
 
+  const handleLogout = () => {
+    setShowLogoutDropdown(false);
+    setShowLogoutConfirm(true);
+  };
+
   const addSongToPlaylist = async (playlistId: string, song: any) => {
     const pl = playlists.find(p => p.id === playlistId);
-    if (!pl || pl.songs.some(s => s.id === song.id)) {
+    if (!pl) {
       setAddToPlaylistSong(null);
+      return;
+    }
+    if (pl.songs.some(s => s.id === song.id)) {
+      setAddToPlaylistSong(null);
+      showToast(t('toastAlreadyInPlaylist'), 'error');
       return;
     }
 
@@ -2004,10 +2025,7 @@ function App() {
   };
 
   const logoutDiscord = () => {
-    setDiscordUser(null);
-    localStorage.removeItem('donpollo_user');
-    localStorage.removeItem('donpollo_discord_token');
-    showToast(t('toastLogout'));
+    setShowLogoutConfirm(true);
   };
 
   const getDiscordAvatar = (user: DiscordUser) => {
@@ -2080,14 +2098,14 @@ function App() {
           const resData = await res.json();
           if (resData && Array.isArray(resData) && resData.length > 0) {
             allResults = [...allResults, ...resData];
-            
+
             // Smart Early Break: If we find a highly confident match, stop querying
-            const hasGoodMatch = resData.some(item => 
-              item.syncedLyrics && 
+            const hasGoodMatch = resData.some(item =>
+              item.syncedLyrics &&
               titleSimilarity(item.trackName || '', cleanTitle) > 0.9 &&
               titleSimilarity(item.artistName || '', finalArtist) > 0.9
             );
-            
+
             if (hasGoodMatch) {
               break;
             }
@@ -2102,23 +2120,23 @@ function App() {
         // Scoring system
         const scoredMatches = uniqueResults.map((item: any) => {
           let score = 0;
-          
+
           if (item.syncedLyrics) score += 50;
           else if (item.plainLyrics) score += 10;
-          
+
           const tSim = titleSimilarity(item.trackName || '', cleanTitle);
           score += tSim * 20;
-          
+
           const aSim = titleSimilarity(item.artistName || '', finalArtist);
           score += aSim * 20;
-          
+
           if (songDuration > 0 && item.duration) {
             const diff = Math.abs(item.duration - songDuration);
             if (diff <= 5) score += 10;
             else if (diff <= 15) score += 5;
             else score -= diff * 0.1;
           }
-          
+
           return { ...item, score };
         }).sort((a, b) => b.score - a.score);
 
@@ -2280,6 +2298,7 @@ function App() {
 
       // 1. Update UI langsung agar terasa lebih cepat
       setCurrentSong(song);
+      addToHistory(song);
       setDuration(song.duration || 0);
       setIsPlaying(true);
       if (settings.autoLyrics) {
@@ -2309,7 +2328,7 @@ function App() {
         if (settings.audioQuality && settings.audioQuality !== 'auto') {
           streamUrl += `&quality=${settings.audioQuality}`;
         }
-        
+
         if (isStreamingOnly) {
           streamUrl += '&nocache=true';
         }
@@ -2455,10 +2474,10 @@ function App() {
     }
 
     let song = list[startIndex];
-    
+
     // Reorder list so the clicked song is first, then wrapping around
     const reorderedList = [...list.slice(startIndex), ...list.slice(0, startIndex)];
-    
+
     setOriginalQueue(reorderedList);
 
     if (isShuffled) {
@@ -2475,8 +2494,7 @@ function App() {
       setQueue(reorderedList);
       setCurrentIndex(0);
     }
-    
-    addToHistory(song);
+
     executePlay(song);
   };
 
@@ -2537,13 +2555,11 @@ function App() {
       setQueue(newQ);
       setOriginalQueue(newQ);
       setCurrentIndex(currentIndex + 1);
-      addToHistory(finalSong);
       executePlay(finalSong);
     } else {
       setQueue([finalSong]);
       setOriginalQueue([finalSong]);
       setCurrentIndex(0);
-      addToHistory(finalSong);
       executePlay(finalSong);
     }
   };
@@ -2626,12 +2642,12 @@ function App() {
         const played = queue.slice(0, currentIndex);
         const current = queue[currentIndex];
         const remaining = queue.slice(currentIndex + 1);
-        
+
         for (let i = remaining.length - 1; i > 0; i--) {
           const j = Math.floor(Math.random() * (i + 1));
           [remaining[i], remaining[j]] = [remaining[j], remaining[i]];
         }
-        
+
         setQueue([...played, current, ...remaining]);
         // currentIndex remains the same!
       }
@@ -2989,7 +3005,11 @@ function App() {
 
                   <div style={{ display: 'flex', flexDirection: 'column' }}>
                     {likedSongs.map((song, i) => (
-                      <div key={i} className={`offline-row ${currentSong?.id === song.id ? 'active-row' : ''}`} style={{ display: 'grid', gridTemplateColumns: '40px 1fr 100px 80px', padding: '12px 24px', alignItems: 'center', transition: 'background 0.2s', cursor: 'pointer', borderBottom: i === likedSongs.length - 1 ? 'none' : '1px solid rgba(255,255,255,0.03)' }} onClick={() => startPlayingFromList(likedSongs, i)}>
+                      <div key={i} className={`offline-row ${currentSong?.id === song.id ? 'active-row' : ''}`} style={{ display: 'grid', gridTemplateColumns: '40px 1fr 100px 80px', padding: '12px 24px', alignItems: 'center', transition: 'background 0.2s', cursor: 'pointer', borderBottom: i === likedSongs.length - 1 ? 'none' : '1px solid rgba(255,255,255,0.03)' }} onClick={() => startPlayingFromList(likedSongs, i)}
+                        draggable={true}
+                        onDragStart={(e) => { setDraggedGlobalSong(song); applyDragGhost(e, song); }}
+                        onDragEnd={(e) => { setDraggedGlobalSong(null); (e.currentTarget as HTMLElement).classList.remove('dragging-origin'); }}
+                      >
                         <span style={{ color: currentSong?.id === song.id ? 'var(--accent-primary)' : 'var(--text-muted)', fontSize: '13px', fontWeight: '600' }}>{currentSong?.id === song.id ? <Play size={14} fill="currentColor" /> : String(i + 1).padStart(2, '0')}</span>
                         <div style={{ display: 'flex', gap: '16px', alignItems: 'center', minWidth: 0 }}>
                           <div style={{ position: 'relative', width: '40px', height: '40px', borderRadius: '6px', overflow: 'hidden', flexShrink: 0 }}>
@@ -3044,7 +3064,11 @@ function App() {
 
                   <div style={{ display: 'flex', flexDirection: 'column' }}>
                     {playHistory.map((song, i) => (
-                      <div key={i} className={`offline-row ${currentSong?.id === song.id ? 'active-row' : ''}`} style={{ display: 'grid', gridTemplateColumns: '40px 1fr 100px 80px', padding: '12px 24px', alignItems: 'center', transition: 'background 0.2s', cursor: 'pointer', borderBottom: i === playHistory.length - 1 ? 'none' : '1px solid rgba(255,255,255,0.03)' }} onClick={() => playSingleSong(song)}>
+                      <div key={i} className={`offline-row ${currentSong?.id === song.id ? 'active-row' : ''}`} style={{ display: 'grid', gridTemplateColumns: '40px 1fr 100px 80px', padding: '12px 24px', alignItems: 'center', transition: 'background 0.2s', cursor: 'pointer', borderBottom: i === playHistory.length - 1 ? 'none' : '1px solid rgba(255,255,255,0.03)' }} onClick={() => playSingleSong(song)}
+                        draggable={true}
+                        onDragStart={(e) => { setDraggedGlobalSong(song); applyDragGhost(e, song); }}
+                        onDragEnd={(e) => { setDraggedGlobalSong(null); (e.currentTarget as HTMLElement).classList.remove('dragging-origin'); }}
+                      >
                         <span style={{ color: currentSong?.id === song.id ? 'var(--accent-primary)' : 'var(--text-muted)', fontSize: '13px', fontWeight: '600' }}>{currentSong?.id === song.id ? <Play size={14} fill="currentColor" /> : String(i + 1).padStart(2, '0')}</span>
                         <div style={{ display: 'flex', gap: '16px', alignItems: 'center', minWidth: 0 }}>
                           <div style={{ position: 'relative', width: '40px', height: '40px', borderRadius: '6px', overflow: 'hidden', flexShrink: 0 }}>
@@ -3182,10 +3206,33 @@ function App() {
                 </div>
               </div>
             </div>
-            <div style={{ display: 'flex', gap: '12px', marginTop: 'auto' }}>
+            <div style={{ display: 'flex', gap: '12px', marginTop: 'auto', flexWrap: 'wrap' }}>
               {pl.songs.length > 0 && (
                 <button className="btn-primary" onClick={() => startPlayingFromList(pl.songs, 0)}>
                   <Play size={16} fill="currentColor" /> {t('playAll')}
+                </button>
+              )}
+              {pl.songs.length > 0 && (
+                <button className="btn-secondary" onClick={() => {
+                  if ((window as any).electronAPI?.cacheAudio) {
+                    const toDownload = pl.songs.filter(s => !downloadedSongs.some(ds => ds.id === s.id) && !activeDownloads[s.id]);
+                    if (toDownload.length === 0) {
+                      showToast('Semua lagu sudah diunduh', 'success');
+                      return;
+                    }
+                    showToast(`Mulai mengunduh ${toDownload.length} lagu...`, 'success');
+                    toDownload.forEach(song => {
+                      let streamUrl = `${API_BASE_URL}/api/stream?id=${song.id}`;
+                      if (settings.audioQuality && settings.audioQuality !== 'auto') {
+                        streamUrl += `&quality=${settings.audioQuality}`;
+                      }
+                      (window as any).electronAPI.cacheAudio(song, streamUrl);
+                    });
+                  } else {
+                    showToast(t('downloadDesktopOnly'), 'error');
+                  }
+                }}>
+                  <DownloadCloud size={16} /> Download All
                 </button>
               )}
               {isMyPlaylist && (
@@ -3213,7 +3260,55 @@ function App() {
           {pl.songs.length > 0 ? (
             <div className="library-list">
               {pl.songs.map((song, i) => (
-                <div key={i} className={`library-item ${currentSong?.id === song.id ? 'playing' : ''}`} onContextMenu={(e) => handleContextMenu(e, song)}>
+                <div key={i} className={`library-item ${currentSong?.id === song.id ? 'playing' : ''}`} onContextMenu={(e) => handleContextMenu(e, song)}
+                  draggable={true}
+                  onDragStart={(e) => {
+                    setDraggedPlaylistSongIdx(i);
+                    setDraggedGlobalSong(song);
+                    applyDragGhost(e, song);
+                  }}
+                  onDragOver={(e) => {
+                    e.preventDefault();
+                    if (isMyPlaylist) setDragOverPlaylistSongIdx(i);
+                  }}
+                  onDragLeave={() => setDragOverPlaylistSongIdx(null)}
+                  onDrop={async (e) => {
+                    if (!isMyPlaylist) return;
+                    e.preventDefault();
+                    if (draggedPlaylistSongIdx !== null && draggedPlaylistSongIdx !== i) {
+                      const newSongs = [...pl.songs];
+                      const [moved] = newSongs.splice(draggedPlaylistSongIdx, 1);
+                      newSongs.splice(i, 0, moved);
+                      const updated = { ...pl, songs: newSongs };
+                      if ((window as any).electronAPI) await (window as any).electronAPI.savePlaylist(updated);
+                      setPlaylists(prev => prev.map(p => p.id === pl.id ? updated : p));
+                    } else if (draggedGlobalSong && draggedPlaylistSongIdx === null) {
+                      if (!pl.songs.some(s => s.id === draggedGlobalSong.id)) {
+                        const newSongs = [...pl.songs];
+                        newSongs.splice(i, 0, draggedGlobalSong);
+                        const updated = { ...pl, songs: newSongs };
+                        if ((window as any).electronAPI) await (window as any).electronAPI.savePlaylist(updated);
+                        setPlaylists(prev => prev.map(p => p.id === pl.id ? updated : p));
+                        showToast(t('toastAddedToPlaylist', { playlist: pl.name }), 'playlist');
+                      } else {
+                        showToast(t('toastAlreadyInPlaylist'), 'error');
+                      }
+                    }
+                    setDragOverPlaylistSongIdx(null);
+                    setDraggedPlaylistSongIdx(null);
+                    setDraggedGlobalSong(null);
+                  }}
+                  onDragEnd={(e) => {
+                    setDragOverPlaylistSongIdx(null);
+                    setDraggedPlaylistSongIdx(null);
+                    setDraggedGlobalSong(null);
+                    (e.currentTarget as HTMLElement).classList.remove('dragging-origin');
+                  }}
+                  style={{
+                    borderTop: dragOverPlaylistSongIdx === i ? '2px solid var(--accent-primary)' : 'none',
+                    transition: 'border 0.2s',
+                  }}
+                >
                   <div className="library-item-art" onClick={() => startPlayingFromList(pl.songs, i)}>
                     <img src={getCleanThumbnail(song.thumbnail)} alt={song.title} />
                     <div className="library-item-play"><Play size={16} fill="currentColor" /></div>
@@ -3274,7 +3369,11 @@ function App() {
               {playlistSearchResults.length > 0 && (
                 <div className="library-list">
                   {playlistSearchResults.map((song, i) => (
-                    <div key={i} className="library-item">
+                    <div key={i} className="library-item"
+                      draggable={true}
+                      onDragStart={(e) => { setDraggedGlobalSong(song); applyDragGhost(e, song); }}
+                      onDragEnd={(e) => { setDraggedGlobalSong(null); (e.currentTarget as HTMLElement).classList.remove('dragging-origin'); }}
+                    >
                       <div className="library-item-art">
                         <img src={getCleanThumbnail(song.thumbnail)} alt={song.title} />
                       </div>
@@ -3705,7 +3804,7 @@ function App() {
           {[
             { id: 'default', name: t('themeDefault'), desc: t('themeDefaultDesc') },
             { id: 'minimalist', name: t('themeMinimalist'), desc: t('themeMinimalistDesc') },
-            { id: 'custom', name: t('themeCustom'), desc: t('themeCustomDesc') }
+            { id: 'vibrant', name: t('themeVibrant'), desc: t('themeVibrantDesc') }
           ].map(theme => (
             <button
               key={theme.id}
@@ -3727,106 +3826,43 @@ function App() {
           ))}
         </div>
 
-        {settings.theme === 'custom' && (
-          <div style={{ marginTop: '16px', display: 'flex', flexDirection: 'column', gap: '16px', padding: '16px', background: 'var(--bg-secondary)', borderRadius: '12px', border: '1px solid var(--border-color)' }}>
-            <div className="settings-row" style={{ padding: 0, border: 'none' }}>
-              <div>
-                <div className="settings-label">{t('dynamicBackground')}</div>
-                <div className="settings-desc">{t('dynamicBackgroundDesc')}</div>
-              </div>
-              <button className={`settings-toggle ${settings.dynamicBackground ? 'on' : ''}`}
-                onClick={() => {
-                  const newSettings = { ...settings, dynamicBackground: !settings.dynamicBackground };
-                  setSettings(newSettings);
-                  localStorage.setItem('donpollo_settings', JSON.stringify(newSettings));
-                }}>
-                {settings.dynamicBackground && <Check size={14} />}
-              </button>
-            </div>
+        {/* Font & Shape Settings — Always Visible for All Themes */}
+        <div style={{ marginTop: '16px', display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '16px' }}>
 
-            {!settings.dynamicBackground && (
-              <div className="settings-row" style={{ padding: 0, border: 'none' }}>
-                <div style={{ flex: 1 }}>
-                  <div className="settings-label">{t('bgImageUrl')}</div>
-                  <input type="text" value={settings.customBgUrl || ''} placeholder="https://..."
-                    onChange={(e) => {
-                      const newSettings = { ...settings, customBgUrl: e.target.value };
-                      setSettings(newSettings);
-                      localStorage.setItem('donpollo_settings', JSON.stringify(newSettings));
-                    }}
-                    style={{ marginTop: '8px', width: '100%', padding: '10px 14px', borderRadius: '8px', background: 'var(--bg-card)', border: '1px solid var(--border-color)', color: 'white' }}
-                  />
-                </div>
-              </div>
-            )}
-
-            <div style={{ marginTop: '24px', paddingTop: '24px', borderTop: '1px solid var(--border-color)' }}>
-              <div style={{ fontSize: '14px', fontWeight: 'bold', marginBottom: '16px', color: 'var(--text-primary)' }}>{t('advCustomTitle')}</div>
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: '12px' }}>
-
-                {[
-                  { id: 'customAccentColor', label: t('accentColor'), default: '#1db954' },
-                  { id: 'customBgMain', label: t('bgMain'), default: '#000000' },
-                  { id: 'customBgSidebar', label: t('bgSidebar'), default: '#1E1F22' },
-                  { id: 'customBgCard', label: t('bgCard'), default: '#2B2D31' },
-                  { id: 'customTextPrimary', label: t('textPrimary'), default: '#F2F3F5' },
-                  { id: 'customTextSecondary', label: t('textSecondary'), default: '#B5BAC1' }
-                ].map((colorOpt) => (
-                  <div key={colorOpt.id} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', background: 'var(--bg-card)', padding: '12px 16px', borderRadius: '8px', border: '1px solid var(--border-color)' }}>
-                    <div style={{ fontSize: '13px', color: 'var(--text-primary)' }}>{colorOpt.label}</div>
-                    <input type="color" value={settings[colorOpt.id] || colorOpt.default}
-                      onChange={(e) => {
-                        const newSettings = { ...settings, [colorOpt.id]: e.target.value };
-                        setSettings(newSettings);
-                        localStorage.setItem('donpollo_settings', JSON.stringify(newSettings));
-                      }}
-                      style={{ width: '32px', height: '32px', border: 'none', borderRadius: '4px', cursor: 'pointer', background: 'transparent' }}
-                    />
-                  </div>
-                ))}
-              </div>
-            </div>
-
-
-
-            <div style={{ marginTop: '16px', display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '16px' }}>
-
-              {/* Font Family */}
-              <div style={{ background: 'var(--bg-card)', padding: '12px 16px', borderRadius: '8px' }}>
-                <div style={{ fontSize: '13px', color: 'var(--text-primary)', marginBottom: '8px' }}>{t('fontFamily')}</div>
-                <select value={settings.fontFamily || 'Inter'}
-                  onChange={(e) => {
-                    const newSettings = { ...settings, fontFamily: e.target.value };
-                    setSettings(newSettings);
-                    localStorage.setItem('donpollo_settings', JSON.stringify(newSettings));
-                  }}
-                  className="settings-select" style={{ width: '100%', padding: '8px', borderRadius: '6px', background: 'var(--bg-sidebar)', color: 'white', border: '1px solid var(--border-color)' }}>
-                  <option value="Inter">{t('fontInter')}</option>
-                  <option value="Roboto">{t('fontRoboto')}</option>
-                  <option value="Outfit">{t('fontOutfit')}</option>
-                  <option value="monospace">{t('fontMono')}</option>
-                </select>
-              </div>
-
-              {/* Border Radius */}
-              <div style={{ background: 'var(--bg-card)', padding: '12px 16px', borderRadius: '8px' }}>
-                <div style={{ fontSize: '13px', color: 'var(--text-primary)', marginBottom: '8px' }}>{t('shapeStyle')}</div>
-                <select value={settings.borderRadiusMode || 'rounded'}
-                  onChange={(e) => {
-                    const newSettings = { ...settings, borderRadiusMode: e.target.value };
-                    setSettings(newSettings);
-                    localStorage.setItem('donpollo_settings', JSON.stringify(newSettings));
-                  }}
-                  className="settings-select" style={{ width: '100%', padding: '8px', borderRadius: '6px', background: 'var(--bg-sidebar)', color: 'white', border: '1px solid var(--border-color)' }}>
-                  <option value="rounded">{t('shapeRounded')}</option>
-                  <option value="sharp">{t('shapeSharp')}</option>
-                  <option value="pill">{t('shapePill')}</option>
-                </select>
-              </div>
-            </div>
-
+          {/* Font Family */}
+          <div style={{ background: 'var(--bg-card)', padding: '12px 16px', borderRadius: 'var(--global-radius)' }}>
+            <div style={{ fontSize: '13px', color: 'var(--text-primary)', marginBottom: '8px' }}>{t('fontFamily')}</div>
+            <select value={settings.fontFamily || 'Inter'}
+              onChange={(e) => {
+                const newSettings = { ...settings, fontFamily: e.target.value };
+                setSettings(newSettings);
+                localStorage.setItem('donpollo_settings', JSON.stringify(newSettings));
+              }}
+              className="settings-select" style={{ width: '100%' }}>
+              <option value="Inter">{t('fontInter')}</option>
+              <option value="Roboto">{t('fontRoboto')}</option>
+              <option value="Outfit">{t('fontOutfit')}</option>
+              <option value="monospace">{t('fontMono')}</option>
+            </select>
           </div>
-        )}
+
+          {/* Border Radius */}
+          <div style={{ background: 'var(--bg-card)', padding: '12px 16px', borderRadius: 'var(--global-radius)' }}>
+            <div style={{ fontSize: '13px', color: 'var(--text-primary)', marginBottom: '8px' }}>{t('shapeStyle')}</div>
+            <select value={settings.borderRadiusMode || 'rounded'}
+              onChange={(e) => {
+                const newSettings = { ...settings, borderRadiusMode: e.target.value };
+                setSettings(newSettings);
+                localStorage.setItem('donpollo_settings', JSON.stringify(newSettings));
+              }}
+              className="settings-select" style={{ width: '100%' }}>
+              <option value="rounded">{t('shapeRounded')}</option>
+              <option value="sharp">{t('shapeSharp')}</option>
+              <option value="pill">{t('shapePill')}</option>
+            </select>
+          </div>
+        </div>
+
       </div>
 
       {/* Akun Discord */}
@@ -4034,7 +4070,7 @@ function App() {
                 <span style={{ fontSize: '12px', fontWeight: 'bold', color: 'var(--text-secondary)', textTransform: 'uppercase' }}>Preset</span>
                 <select
                   className="settings-select"
-                  style={{ padding: '4px 8px', fontSize: '12px', minWidth: '120px' }}
+                  style={{ padding: '10px 36px 10px 14px', fontSize: '12px', minWidth: '120px' }}
                   value={
                     (() => {
                       const b = (settings.eqBands || [0, 0, 0, 0, 0]).join(',');
@@ -4249,7 +4285,7 @@ function App() {
               </div>
             )}
             <button className="btn-secondary" style={{ whiteSpace: 'nowrap' }} onClick={handleChangeCacheDir}>
-               {t('changeLocation') || 'Change Location'}
+              {t('changeLocation') || 'Change Location'}
             </button>
           </div>
         </div>
@@ -4341,7 +4377,11 @@ function App() {
 
                 <div style={{ display: 'flex', flexDirection: 'column' }}>
                   {downloadedSongs.map((song, i) => (
-                    <div key={i} className={`offline-row ${currentSong?.id === song.id ? 'active-row' : ''}`} style={{ display: 'grid', gridTemplateColumns: '40px 1fr 100px 80px', padding: '12px 24px', alignItems: 'center', transition: 'background 0.2s', cursor: 'pointer', borderBottom: i === downloadedSongs.length - 1 ? 'none' : '1px solid rgba(255,255,255,0.03)' }} onClick={() => startPlayingFromList(downloadedSongs, i)}>
+                    <div key={i} className={`offline-row ${currentSong?.id === song.id ? 'active-row' : ''}`} style={{ display: 'grid', gridTemplateColumns: '40px 1fr 100px 80px', padding: '12px 24px', alignItems: 'center', transition: 'background 0.2s', cursor: 'pointer', borderBottom: i === downloadedSongs.length - 1 ? 'none' : '1px solid rgba(255,255,255,0.03)' }} onClick={() => startPlayingFromList(downloadedSongs, i)}
+                      draggable={true}
+                      onDragStart={(e) => { setDraggedGlobalSong(song); applyDragGhost(e, song); }}
+                      onDragEnd={(e) => { setDraggedGlobalSong(null); (e.currentTarget as HTMLElement).classList.remove('dragging-origin'); }}
+                    >
                       <span style={{ color: currentSong?.id === song.id ? 'var(--accent-primary)' : 'var(--text-muted)', fontSize: '13px', fontWeight: '600' }}>{currentSong?.id === song.id ? <Play size={14} fill="currentColor" /> : String(i + 1).padStart(2, '0')}</span>
                       <div style={{ display: 'flex', gap: '16px', alignItems: 'center', minWidth: 0 }}>
                         <div style={{ position: 'relative', width: '40px', height: '40px', borderRadius: '6px', overflow: 'hidden', flexShrink: 0 }}>
@@ -4465,6 +4505,9 @@ function App() {
                   className={`song-row ${currentSong?.id === song.id ? 'active' : ''}`}
                   onClick={() => playSingleSong(song)}
                   onContextMenu={(e) => handleContextMenu(e, song)}
+                  draggable={true}
+                  onDragStart={(e) => { setDraggedGlobalSong(song); applyDragGhost(e, song); }}
+                  onDragEnd={(e) => { setDraggedGlobalSong(null); (e.currentTarget as HTMLElement).classList.remove('dragging-origin'); }}
                 >
                   <div className="song-index">
                     {currentSong?.id === song.id && isPlaying ? (
@@ -4576,13 +4619,17 @@ function App() {
 
                   {/* Podcast Grids */}
                   {(() => {
-                    const renderPodcastGrid = (title: string, items: any[], dotClass: string) => {
+                    const renderPodcastGrid = (title: string, items: any[], icon: string | React.ReactNode) => {
                       if (!items || items.length === 0) return null;
                       return (
                         <section className="home-section">
                           <div className="section-header-v2">
                             <div className="section-header-left">
-                              <div className={`section-dot ${dotClass}`} />
+                              {typeof icon === 'string' && icon.startsWith('http') ? (
+                                <img src={icon} alt="" style={{ width: '24px', height: '16px', objectFit: 'cover', borderRadius: '3px' }} />
+                              ) : (
+                                <span style={{ display: 'flex', alignItems: 'center', color: 'var(--text-secondary)' }}>{icon}</span>
+                              )}
                               <h2 className="section-title-v2">{title}</h2>
                             </div>
                           </div>
@@ -4616,11 +4663,11 @@ function App() {
 
                     return (
                       <>
-                        {renderPodcastGrid(t('topPodcasts') + " (Global)", podcastsUs, 'section-dot-cyan')}
-                        {renderPodcastGrid(t('topPodcasts') + " (Indonesia)", podcastsId, 'section-dot-purple')}
-                        {renderPodcastGrid(t('topPodcasts') + " (Japan)", podcastsJp, 'section-dot-pink')}
-                        {renderPodcastGrid(t('topPodcasts') + " (Korea)", podcastsKr, 'section-dot-purple')}
-                        {renderPodcastGrid(t('topPodcasts') + " (Latin)", podcastsLatin, 'section-dot-yellow')}
+                        {renderPodcastGrid(t('topPodcasts') + " (Global)", podcastsUs, <Globe size={20} />)}
+                        {renderPodcastGrid(t('topPodcasts') + " (Indonesia)", podcastsId, 'https://flagcdn.com/w40/id.png')}
+                        {renderPodcastGrid(t('topPodcasts') + " (Japan)", podcastsJp, 'https://flagcdn.com/w40/jp.png')}
+                        {renderPodcastGrid(t('topPodcasts') + " (Korea)", podcastsKr, 'https://flagcdn.com/w40/kr.png')}
+                        {renderPodcastGrid(t('topPodcasts') + " (Latin)", podcastsLatin, 'https://flagcdn.com/w40/mx.png')}
                       </>
                     );
                   })()}
@@ -4663,6 +4710,9 @@ function App() {
                     className={`bento-card bento-hero ${currentSong?.id === dailyMix[0].id ? 'bento-active' : ''}`}
                     onClick={() => startPlayingFromList(dailyMix, 0)}
                     onContextMenu={(e) => handleContextMenu(e, dailyMix[0])}
+                    draggable={true}
+                    onDragStart={(e) => { setDraggedGlobalSong(dailyMix[0]); applyDragGhost(e, dailyMix[0]); }}
+                    onDragEnd={(e) => { setDraggedGlobalSong(null); (e.currentTarget as HTMLElement).classList.remove('dragging-origin'); }}
                   >
                     <img src={getCleanThumbnail(dailyMix[0].thumbnail)} alt={dailyMix[0].title} className="bento-img" />
                     <div className="bento-gradient" />
@@ -4685,6 +4735,9 @@ function App() {
                       className={`bento-card bento-mini ${currentSong?.id === item.id ? 'bento-active' : ''}`}
                       onClick={() => startPlayingFromList(dailyMix, i + 1)}
                       onContextMenu={(e) => handleContextMenu(e, item)}
+                      draggable={true}
+                      onDragStart={(e) => { setDraggedGlobalSong(item); applyDragGhost(e, item); }}
+                      onDragEnd={(e) => { setDraggedGlobalSong(null); (e.currentTarget as HTMLElement).classList.remove('dragging-origin'); }}
                     >
                       <img src={getCleanThumbnail(item.thumbnail)} alt={item.title} className="bento-img" />
                       <div className="bento-gradient" />
@@ -4709,7 +4762,7 @@ function App() {
               <section className="home-section">
                 <div className="section-header-v2">
                   <div className="section-header-left">
-                    <div className="section-dot" />
+                    <span style={{ display: 'flex', alignItems: 'center', color: 'var(--text-secondary)' }}><Clock size={20} /></span>
                     <h2 className="section-title-v2">{t('recentlyPlayed')}</h2>
                   </div>
                   <span className="show-all" onClick={() => setIsRecentExpanded(!isRecentExpanded)}>
@@ -4725,6 +4778,9 @@ function App() {
                         className={`music-card-v2 ${currentSong?.id === item.id ? 'music-card-v2-playing' : ''}`}
                         onClick={() => playSingleSong(item)}
                         onContextMenu={(e) => handleContextMenu(e, item)}
+                        draggable={true}
+                        onDragStart={(e) => { setDraggedGlobalSong(item); applyDragGhost(e, item); }}
+                        onDragEnd={(e) => { setDraggedGlobalSong(null); (e.currentTarget as HTMLElement).classList.remove('dragging-origin'); }}
                       >
                         <div className="card-v2-art">
                           <img src={getCleanThumbnail(item.thumbnail)} alt={item.title} />
@@ -4757,6 +4813,9 @@ function App() {
                           className={`music-card-v2 ${currentSong?.id === item.id ? 'music-card-v2-playing' : ''}`}
                           onClick={() => playSingleSong(item)}
                           onContextMenu={(e) => handleContextMenu(e, item)}
+                          draggable={true}
+                          onDragStart={(e) => { setDraggedGlobalSong(item); applyDragGhost(e, item); }}
+                          onDragEnd={(e) => { setDraggedGlobalSong(null); (e.currentTarget as HTMLElement).classList.remove('dragging-origin'); }}
                         >
                           <div className="card-v2-art">
                             <img src={getCleanThumbnail(item.thumbnail)} alt={item.title} />
@@ -4790,7 +4849,7 @@ function App() {
               <section className="home-section">
                 <div className="section-header-v2">
                   <div className="section-header-left">
-                    <div className="section-dot section-dot-cyan" />
+                    <span style={{ display: 'flex', alignItems: 'center', color: 'var(--text-secondary)' }}><Zap size={20} /></span>
                     <h2 className="section-title-v2">
                       {(() => {
                         if (playHistory.length === 0) return t('recommendations');
@@ -4873,13 +4932,17 @@ function App() {
 
             {/* ── Hits Sections ───────────── */}
             {(() => {
-              const renderHitsSection = (title: string, songs: any[], ref: React.RefObject<HTMLDivElement | null>, dotClass: string, isExpanded: boolean, setIsExpanded: (val: boolean) => void) => {
+              const renderHitsSection = (title: string, songs: any[], ref: React.RefObject<HTMLDivElement | null>, icon: string | React.ReactNode, isExpanded: boolean, setIsExpanded: (val: boolean) => void) => {
                 if (songs.length === 0) return null;
                 return (
                   <section className="home-section">
                     <div className="section-header-v2">
                       <div className="section-header-left">
-                        <div className={`section-dot ${dotClass}`} />
+                        {typeof icon === 'string' && icon.startsWith('http') ? (
+                          <img src={icon} alt="" style={{ width: '24px', height: '16px', objectFit: 'cover', borderRadius: '3px' }} />
+                        ) : (
+                          <span style={{ display: 'flex', alignItems: 'center', color: 'var(--text-secondary)' }}>{icon}</span>
+                        )}
                         <h2 className="section-title-v2">{title}</h2>
                       </div>
                       <div style={{ display: 'flex', gap: '16px', alignItems: 'center' }}>
@@ -4891,7 +4954,7 @@ function App() {
                     {isExpanded ? (
                       <div className="card-expanded-grid">
                         {songs.map((item, i) => (
-                          <div key={i} className={`music-card-v2 ${currentSong?.id === item.id ? 'music-card-v2-playing' : ''}`} onClick={() => playSingleSong(item)} onContextMenu={(e) => handleContextMenu(e, item)}>
+                          <div key={i} className={`music-card-v2 ${currentSong?.id === item.id ? 'music-card-v2-playing' : ''}`} onClick={() => playSingleSong(item)} onContextMenu={(e) => handleContextMenu(e, item)} draggable={true} onDragStart={(e) => { setDraggedGlobalSong(item); applyDragGhost(e, item); }} onDragEnd={(e) => { setDraggedGlobalSong(null); (e.currentTarget as HTMLElement).classList.remove('dragging-origin'); }}>
                             <div className="card-v2-art">
                               <img src={getCleanThumbnail(item.thumbnail)} alt={item.title} />
                               {currentSong?.id === item.id && isPlaying ? (
@@ -4912,7 +4975,7 @@ function App() {
                         <button className="slider-nav-btn slider-nav-left" onClick={() => scrollSlider(ref, 'left')} aria-label="Scroll left"><ChevronLeft size={20} /></button>
                         <div className="card-scroll-container" ref={ref}>
                           {songs.map((item, i) => (
-                            <div key={i} className={`music-card-v2 ${currentSong?.id === item.id ? 'music-card-v2-playing' : ''}`} onClick={() => playSingleSong(item)} onContextMenu={(e) => handleContextMenu(e, item)}>
+                            <div key={i} className={`music-card-v2 ${currentSong?.id === item.id ? 'music-card-v2-playing' : ''}`} onClick={() => playSingleSong(item)} onContextMenu={(e) => handleContextMenu(e, item)} draggable={true} onDragStart={(e) => { setDraggedGlobalSong(item); applyDragGhost(e, item); }} onDragEnd={(e) => { setDraggedGlobalSong(null); (e.currentTarget as HTMLElement).classList.remove('dragging-origin'); }}>
                               <div className="card-v2-art">
                                 <img src={getCleanThumbnail(item.thumbnail)} alt={item.title} />
                                 {currentSong?.id === item.id && isPlaying ? (
@@ -4938,12 +5001,12 @@ function App() {
               return (
                 <>
                   {localCountry && hitsLocal.length > 0 &&
-                    renderHitsSection(`${t('trendingLocal')} ${localCountry.name} ${localCountry.flag}`, hitsLocal, localScrollRef, 'section-dot-cyan', isLocalExpanded, setIsLocalExpanded)}
-                  {renderHitsSection(t('hitsInt'), hitsInternational, intScrollRef, '', isIntExpanded, setIsIntExpanded)}
-                  {renderHitsSection(t('hitsId'), hitsIndonesia, idScrollRef, 'section-dot-green', isIdExpanded, setIsIdExpanded)}
-                  {renderHitsSection(t('hitsJp'), hitsJapan, jpScrollRef, 'section-dot-cyan', isJpExpanded, setIsJpExpanded)}
-                  {renderHitsSection(t('hitsKr'), hitsKorean, krScrollRef, 'section-dot-pink', isKrExpanded, setIsKrExpanded)}
-                  {renderHitsSection(t('hitsLatin'), hitsLatin, latinScrollRef, 'section-dot-yellow', isLatinExpanded, setIsLatinExpanded)}
+                    renderHitsSection(`${t('trendingLocal')} ${localCountry.name}`, hitsLocal, localScrollRef, `https://flagcdn.com/w40/${localCountry.code.toLowerCase()}.png`, isLocalExpanded, setIsLocalExpanded)}
+                  {renderHitsSection(t('hitsInt'), hitsInternational, intScrollRef, <Globe size={20} />, isIntExpanded, setIsIntExpanded)}
+                  {renderHitsSection(t('hitsId'), hitsIndonesia, idScrollRef, 'https://flagcdn.com/w40/id.png', isIdExpanded, setIsIdExpanded)}
+                  {renderHitsSection(t('hitsJp'), hitsJapan, jpScrollRef, 'https://flagcdn.com/w40/jp.png', isJpExpanded, setIsJpExpanded)}
+                  {renderHitsSection(t('hitsKr'), hitsKorean, krScrollRef, 'https://flagcdn.com/w40/kr.png', isKrExpanded, setIsKrExpanded)}
+                  {renderHitsSection(t('hitsLatin'), hitsLatin, latinScrollRef, 'https://flagcdn.com/w40/mx.png', isLatinExpanded, setIsLatinExpanded)}
                 </>
               );
             })()}
@@ -5009,7 +5072,11 @@ function App() {
           {searchResults.length > 0 && (
             <div className="tracklist-container">
               {searchResults.map((song, idx) => (
-                <div key={idx} className={`tracklist-item ${currentSong?.id === song.id ? 'playing' : ''}`} onClick={() => playSingleSong(song)} onContextMenu={(e) => handleContextMenu(e, song)}>
+                <div key={idx} className={`tracklist-item ${currentSong?.id === song.id ? 'playing' : ''}`} onClick={() => playSingleSong(song)} onContextMenu={(e) => handleContextMenu(e, song)}
+                  draggable={true}
+                  onDragStart={(e) => { setDraggedGlobalSong(song); applyDragGhost(e, song); }}
+                  onDragEnd={(e) => { setDraggedGlobalSong(null); (e.currentTarget as HTMLElement).classList.remove('dragging-origin'); }}
+                >
                   <div className="track-index">{currentSong?.id === song.id && isPlaying ? <Headset size={16} /> : (idx + 1)}</div>
                   <div className="track-title" title={song.title}>{song.title}</div>
                   <button className={`library-item-action ${isLiked(song.id) ? 'liked' : ''}`} style={{ marginLeft: 'auto', marginRight: '8px' }}
@@ -5148,15 +5215,15 @@ function App() {
         </div>
       )}
 
-      {/* Modal: Clear Audio Cache Confirm */}
-      {showClearCacheConfirm && (
-        <div className="modal-overlay" onClick={() => setShowClearCacheConfirm(false)}>
+      {/* Modal: Logout Confirm */}
+      {showLogoutConfirm && (
+        <div className="modal-overlay" onClick={() => setShowLogoutConfirm(false)}>
           <div className="modal" onClick={e => e.stopPropagation()}>
-            <h3 className="modal-title">{t('clearAudioCache')}</h3>
-            <p style={{ color: 'var(--text-secondary)', marginBottom: '24px' }}>{t('confirmClearCache')}</p>
+            <h3 className="modal-title">{t('logout')}</h3>
+            <p style={{ color: 'var(--text-secondary)', marginBottom: '24px' }}>{t('confirmLogout')}</p>
             <div className="modal-actions">
-              <button className="btn-secondary" onClick={() => setShowClearCacheConfirm(false)}>{t('cancel')}</button>
-              <button className="btn-primary" style={{ backgroundColor: '#ff5555', color: 'white' }} onClick={confirmClearCacheAction}>{t('delete')}</button>
+              <button className="btn-secondary" onClick={() => setShowLogoutConfirm(false)}>{t('cancel')}</button>
+              <button className="btn-primary" style={{ backgroundColor: '#ff5555', color: 'white' }} onClick={confirmLogoutAction}>{t('logout')}</button>
             </div>
           </div>
         </div>
@@ -5592,10 +5659,42 @@ function App() {
 
               {/* Playlists */}
               {playlists.filter(pl => pl.discordId === discordUser?.id || savedPlaylists.includes(pl.id)).map(pl => (
-                <button key={pl.id} className={`sidebar-list-item ${(activePage === 'playlist-detail' && activePlaylistId === pl.id) ? 'active' : ''}`} onClick={() => {
-                  setActivePlaylistId(pl.id);
-                  navigate('playlist-detail', { playlistId: pl.id });
-                }}>
+                <button key={pl.id} className={`sidebar-list-item ${(activePage === 'playlist-detail' && activePlaylistId === pl.id) ? 'active' : ''}`} 
+                  onClick={() => {
+                    setActivePlaylistId(pl.id);
+                    navigate('playlist-detail', { playlistId: pl.id });
+                  }}
+                  onContextMenu={(e) => {
+                    e.preventDefault();
+                    setPlaylistContextMenu({ x: e.clientX, y: e.clientY, playlist: pl });
+                  }}
+                  onDragOver={(e) => {
+                    if (draggedGlobalSong && pl.discordId === discordUser?.id) {
+                      e.preventDefault();
+                      setDragOverPlaylistId(pl.id);
+                    }
+                  }}
+                  onDragLeave={() => setDragOverPlaylistId(null)}
+                  onDrop={async () => {
+                    if (draggedGlobalSong && pl.discordId === discordUser?.id) {
+                      if (!pl.songs.some(s => s.id === draggedGlobalSong.id)) {
+                        const updated = { ...pl, songs: [...pl.songs, draggedGlobalSong] };
+                        if ((window as any).electronAPI) await (window as any).electronAPI.savePlaylist(updated);
+                        setPlaylists(prev => prev.map(p => p.id === pl.id ? updated : p));
+                        showToast(t('toastAddedToPlaylist', { playlist: pl.name }), 'playlist');
+                      } else {
+                        showToast(t('toastAlreadyInPlaylist'), 'error');
+                      }
+                    }
+                    setDragOverPlaylistId(null);
+                    setDraggedGlobalSong(null);
+                  }}
+                  style={{
+                    border: dragOverPlaylistId === pl.id ? '2px dashed var(--accent-primary)' : '2px solid transparent',
+                    background: dragOverPlaylistId === pl.id ? 'rgba(255,255,255,0.1)' : 'transparent',
+                    boxSizing: 'border-box'
+                  }}
+                >
                   <div className="sidebar-item-img">
                     {pl.avatar ? (
                       <img
@@ -5772,7 +5871,7 @@ function App() {
                           otherFriends.forEach(user => {
                             const pId = user.partyId || user.discordId;
                             const isParty = user.partyId || otherFriends.some(other => other.partyId === user.discordId);
-                            
+
                             if (isParty) {
                               if (!otherParties.has(pId)) {
                                 otherParties.set(pId, []);
@@ -5792,7 +5891,7 @@ function App() {
                                   url: m.avatarUrl || `https://ui-avatars.com/api/?name=${m.username}`,
                                   name: m.username
                                 }));
-                                
+
                                 return (
                                   <div key={`party-${pId}`} className="friend-item current-party-block" onClick={() => setPopupPartyId(popupPartyId === pId ? null : pId)} style={{ flexDirection: 'column', alignItems: 'stretch', padding: '10px', background: 'rgba(255,255,255,0.03)', borderRadius: '8px', position: 'relative', marginBottom: '8px', width: '100%', boxSizing: 'border-box', cursor: 'pointer' }}>
                                     <div style={{ display: 'flex', flexDirection: 'row', alignItems: 'center', width: '100%' }}>
@@ -5826,7 +5925,7 @@ function App() {
                                         ) : (
                                           <div className="friend-song" style={{ fontSize: '12px', color: 'var(--text-muted)' }}>{t('browsing') || 'Browsing...'}</div>
                                         )}
-                                        
+
                                         {host.currentSong && host.currentSong.isPlaying && (
                                           <div style={{ marginTop: '6px' }}>
                                             {host.status !== 'dnd' ? (
@@ -6557,15 +6656,15 @@ function App() {
                                     <div className={`status-dot-avatar status-dot ${user.status || 'online'}`}></div>
                                   </div>
                                   <div className="friend-info">
-                                      <div className="friend-name" style={{ display: 'flex', alignItems: 'center' }}>
-                                        {user.username}
-                                        {user.platform === 'mobile' && (
-                                          <div className="mobile-tooltip-container" onClick={(e) => e.stopPropagation()}>
-                                            <Smartphone size={12} color="var(--text-muted)" />
-                                            <div className="mobile-tooltip-text">{t('playingOnMobile') || 'Playing on Mobile'}</div>
-                                          </div>
-                                        )}
-                                      </div>
+                                    <div className="friend-name" style={{ display: 'flex', alignItems: 'center' }}>
+                                      {user.username}
+                                      {user.platform === 'mobile' && (
+                                        <div className="mobile-tooltip-container" onClick={(e) => e.stopPropagation()}>
+                                          <Smartphone size={12} color="var(--text-muted)" />
+                                          <div className="mobile-tooltip-text">{t('playingOnMobile') || 'Playing on Mobile'}</div>
+                                        </div>
+                                      )}
+                                    </div>
                                     {user.currentSong && user.currentSong.isPlaying ? (
                                       <>
                                         <div className="friend-song" title={user.currentSong.title} style={{ display: 'flex', alignItems: 'center' }}><Music size={10} style={{ marginRight: '4px', flexShrink: 0, opacity: 0.7 }} /> {user.currentSong.title}</div>
@@ -6719,7 +6818,36 @@ function App() {
               </div>
             </div>
           ) : (
-            <div className="queue-list">
+            <div className="queue-list"
+                 onDragOver={(e) => {
+                   if (draggedGlobalSong) {
+                     e.preventDefault();
+                     setDragOverQueueList(true);
+                   }
+                 }}
+                 onDragLeave={() => setDragOverQueueList(false)}
+                 onDrop={async () => {
+                   if (draggedGlobalSong) {
+                     if (isGuest && activePartyId) {
+                       await (window as any).electronAPI.sendQueueRequest(activePartyId, discordUser?.id, discordUser?.global_name || discordUser?.username, draggedGlobalSong);
+                       showToast(`Berhasil meminta Host untuk menambahkan "${draggedGlobalSong.title}" ke antrean!`, 'success');
+                     } else {
+                       const augSong = augmentSongWithUser(draggedGlobalSong);
+                       setQueue(prev => [...prev, augSong]);
+                       setOriginalQueue(prev => [...prev, augSong]);
+                       if (currentIndex === -1) {
+                         setCurrentIndex(0);
+                         executePlay(augSong);
+                       } else {
+                         showToast(t('toastAddedToQueue'));
+                       }
+                     }
+                     setDraggedGlobalSong(null);
+                     setDragOverQueueList(false);
+                   }
+                 }}
+                 style={{ border: dragOverQueueList ? '2px dashed var(--accent-primary)' : '2px solid transparent', background: dragOverQueueList ? 'rgba(255,255,255,0.05)' : 'transparent', boxSizing: 'border-box', transition: 'all 0.2s' }}
+            >
               {queue.length - Math.max(0, currentIndex) <= 0 ? (
                 <div style={{ color: 'var(--text-secondary)', fontSize: '13px', textAlign: 'center', marginTop: '32px' }}>{t('emptyQueue')}</div>
               ) : (
@@ -6816,6 +6944,52 @@ function App() {
       </div>
 
       {/* RIGHT SIDEBAR */}
+
+      {/* VIBRANT THEME — BOTTOM NAVIGATION BAR */}
+      {settings.theme === 'vibrant' && !isWidgetMode && (
+        <nav className="vibrant-bottom-nav">
+          <button
+            className={`vibrant-nav-btn ${activePage === 'home' ? 'active' : ''}`}
+            onClick={goHome}
+            title={t('home')}
+          >
+            <Home size={22} />
+            <span>{t('home')}</span>
+          </button>
+          <button
+            className={`vibrant-nav-btn ${activePage === 'library' ? 'active' : ''}`}
+            onClick={() => navigate('library')}
+            title={t('yourLibrary')}
+          >
+            <Library size={22} />
+            <span>{t('yourLibrary')}</span>
+          </button>
+          <button
+            className={`vibrant-nav-btn ${(activePage === 'playlist' || activePage === 'playlist-detail') ? 'active' : ''}`}
+            onClick={() => setShowCreatePlaylist(true)}
+            title={t('createPlaylist')}
+          >
+            <Plus size={24} />
+            <span>{t('createPlaylist')}</span>
+          </button>
+          <button
+            className={`vibrant-nav-btn ${activePage === 'downloads' ? 'active' : ''}`}
+            onClick={() => navigate('downloads')}
+            title={t('downloads')}
+          >
+            <Download size={22} />
+            <span>{t('downloads')}</span>
+          </button>
+          <button
+            className={`vibrant-nav-btn ${activePage === 'settings' ? 'active' : ''}`}
+            onClick={() => navigate('settings')}
+            title={t('settings')}
+          >
+            <Settings size={22} />
+            <span>{t('settings')}</span>
+          </button>
+        </nav>
+      )}
 
       {/* FULLSCREEN PLAYER */}
       {isWidgetMode && (
@@ -6990,6 +7164,86 @@ function App() {
               <DownloadCloud size={16} /> {t('downloadSong')}
             </div>
           )}
+        </div>
+      )}
+
+      {/* Playlist Context Menu */}
+      {playlistContextMenu && (
+        <div className="context-menu" style={{ left: playlistContextMenu.x, top: playlistContextMenu.y }}>
+          <div className="context-menu-item" onClick={() => {
+            const pl = playlistContextMenu.playlist;
+            if ((window as any).electronAPI?.cacheAudio) {
+              const toDownload = pl.songs.filter((s: any) => !downloadedSongs.some(ds => ds.id === s.id) && !activeDownloads[s.id]);
+              if (toDownload.length === 0) {
+                showToast('Semua lagu sudah diunduh', 'success');
+              } else {
+                showToast(`Mulai mengunduh ${toDownload.length} lagu...`, 'success');
+                toDownload.forEach((song: any) => {
+                  let streamUrl = `${API_BASE_URL}/api/stream?id=${song.id}`;
+                  if (settings.audioQuality && settings.audioQuality !== 'auto') {
+                    streamUrl += `&quality=${settings.audioQuality}`;
+                  }
+                  (window as any).electronAPI.cacheAudio(song, streamUrl);
+                });
+              }
+            }
+            setPlaylistContextMenu(null);
+          }}>
+            <DownloadCloud size={16} /> Download All
+          </div>
+          {playlistContextMenu.playlist.discordId === discordUser?.id ? (
+            <div className="context-menu-item" onClick={() => {
+              setPlaylistToDelete(playlistContextMenu.playlist.id);
+              setPlaylistContextMenu(null);
+            }} style={{ color: '#ff5555' }}>
+              <Trash2 size={16} /> {t('deletePlaylist')}
+            </div>
+          ) : (
+            <div className="context-menu-item" onClick={() => {
+              setPlaylistToRemove(playlistContextMenu.playlist.id);
+              setPlaylistContextMenu(null);
+            }} style={{ color: '#ff5555' }}>
+              <Trash2 size={16} /> {t('removeFromLibrary')}
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Floating Download Manager UI */}
+      {Object.keys(activeDownloads).length > 0 && (
+        <div style={{
+          position: 'fixed',
+          bottom: currentSong ? '100px' : '20px',
+          left: '20px',
+          background: 'var(--bg-card)',
+          border: '1px solid var(--border-color)',
+          borderRadius: '12px',
+          padding: '16px',
+          width: '280px',
+          zIndex: 9999,
+          boxShadow: '0 8px 32px rgba(0,0,0,0.5)',
+          display: 'flex',
+          flexDirection: 'column',
+          gap: '12px'
+        }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <span style={{ fontSize: '13px', fontWeight: 'bold', color: 'var(--text-primary)' }}>
+              Mengunduh {Object.keys(activeDownloads).length} lagu...
+            </span>
+            <DownloadCloud size={16} color="var(--accent-primary)" />
+          </div>
+          <div style={{ maxHeight: '150px', overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: '8px' }}>
+            {Object.values(activeDownloads).map((d, i) => (
+              <div key={i} style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                <span style={{ fontSize: '11px', color: 'var(--text-secondary)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                  {d.songData.title}
+                </span>
+                <div style={{ width: '100%', height: '4px', background: 'rgba(255,255,255,0.1)', borderRadius: '2px', overflow: 'hidden' }}>
+                  <div style={{ height: '100%', width: `${d.progress}%`, background: 'var(--accent-primary)', transition: 'width 0.2s' }} />
+                </div>
+              </div>
+            ))}
+          </div>
         </div>
       )}
     </div>

@@ -170,8 +170,8 @@ type TranslationKeys = {
   themeDefaultDesc: string;
   themeMinimalist: string;
   themeMinimalistDesc: string;
-  themeCustom: string;
-  themeCustomDesc: string;
+  themeVibrant: string;
+  themeVibrantDesc: string;
   dynamicBackground: string;
   dynamicBackgroundDesc: string;
   accentColor: string;
@@ -308,6 +308,7 @@ type TranslationKeys = {
 
   // Toast
   toastLogout: string;
+  confirmLogout: string;
   hitsInt: string;
   hitsId: string;
   hitsJp: string;
@@ -539,8 +540,8 @@ const translations: Record<Language, TranslationKeys> = {
     themeDefaultDesc: 'Klasik',
     themeMinimalist: 'Minimalis',
     themeMinimalistDesc: 'Bersih & Kompak',
-    themeCustom: 'Kustom',
-    themeCustomDesc: 'Gunakan warna & gambar sendiri',
+    themeVibrant: 'Vibrant',
+    themeVibrantDesc: 'Warna cerah & gaya kaca bawah',
     dynamicBackground: 'Latar Belakang Dinamis',
     dynamicBackgroundDesc: 'Latar beradaptasi dengan warna dominan dari sampul album',
     accentColor: 'Warna Aksen',
@@ -677,6 +678,7 @@ const translations: Record<Language, TranslationKeys> = {
 
     // Toast
     toastLogout: 'Berhasil logout dan pemutaran dihentikan',
+    confirmLogout: 'Apakah Anda yakin ingin keluar dari akun ini?',
     hitsInt: 'Lagu-lagu Hits Internasional',
     hitsId: 'Lagu-lagu Hits Indonesia',
     hitsJp: 'Lagu-lagu Hits Jepang',
@@ -690,7 +692,7 @@ const translations: Record<Language, TranslationKeys> = {
     toastPlaylistDeleted: 'Playlist dihapus.',
     toastPlaylistCreated: 'berhasil dibuat!',
     toastImportSuccess: 'berhasil diimpor!',
-    toastAddedToPlaylist: 'Lagu ditambahkan ke playlist!',
+    toastAddedToPlaylist: 'Lagu ditambahkan ke {playlist}!',
     toastRemovedFromPlaylist: 'Lagu dihapus dari playlist!',
     toastAlreadyInPlaylist: 'Lagu sudah ada di playlist ini.',
     toastLiked: 'Ditambahkan ke Disukai',
@@ -907,8 +909,8 @@ const translations: Record<Language, TranslationKeys> = {
     themeDefaultDesc: 'Classic',
     themeMinimalist: 'Minimalist',
     themeMinimalistDesc: 'Clean & Compact',
-    themeCustom: 'Custom',
-    themeCustomDesc: 'Use your own colors & image',
+    themeVibrant: 'Vibrant',
+    themeVibrantDesc: 'Bright colors & bottom glass style',
     dynamicBackground: 'Dynamic Background',
     dynamicBackgroundDesc: 'Background adapts to the dominant color of the album cover',
     accentColor: 'Accent Color',
@@ -1045,6 +1047,7 @@ const translations: Record<Language, TranslationKeys> = {
 
     // Toast
     toastLogout: 'Logged out and playback stopped',
+    confirmLogout: 'Are you sure you want to log out of this account?',
     hitsInt: 'Global Pop Hits',
     hitsId: 'Indonesian Pop Hits',
     hitsJp: 'J-Pop Hits',
@@ -1058,7 +1061,7 @@ const translations: Record<Language, TranslationKeys> = {
     toastPlaylistDeleted: 'Playlist deleted.',
     toastPlaylistCreated: 'created successfully!',
     toastImportSuccess: 'imported successfully!',
-    toastAddedToPlaylist: 'Song added to playlist!',
+    toastAddedToPlaylist: 'Song added to {playlist}!',
     toastRemovedFromPlaylist: 'Song removed from playlist!',
     toastAlreadyInPlaylist: 'Song is already in this playlist.',
     toastLiked: 'Added to Liked Songs',
@@ -1275,8 +1278,8 @@ const translations: Record<Language, TranslationKeys> = {
     themeDefaultDesc: 'クラシック',
     themeMinimalist: 'ミニマリスト',
     themeMinimalistDesc: 'クリーン＆コンパクト',
-    themeCustom: 'カスタム',
-    themeCustomDesc: '独自の色と画像を使用',
+    themeVibrant: 'Vibrant',
+    themeVibrantDesc: '明るい色とボトムグラススタイル',
     dynamicBackground: 'ダイナミックバックグラウンド',
     dynamicBackgroundDesc: '背景がアルバムカバーの主な色に自動調整されます',
     accentColor: 'アクセントカラー',
@@ -1413,6 +1416,7 @@ const translations: Record<Language, TranslationKeys> = {
 
     // Toast
     toastLogout: 'ログアウトして再生を停止しました',
+    confirmLogout: 'このアカウントからログアウトしてもよろしいですか？',
     hitsInt: 'グローバル・ヒット',
     hitsId: 'インドネシア・ヒット',
     hitsJp: 'J-Pop ヒット',
@@ -1426,7 +1430,7 @@ const translations: Record<Language, TranslationKeys> = {
     toastPlaylistDeleted: 'プレイリストを削除しました。',
     toastPlaylistCreated: 'を作成しました！',
     toastImportSuccess: 'を正常にインポートしました！',
-    toastAddedToPlaylist: 'プレイリストに追加しました！',
+    toastAddedToPlaylist: '{playlist}に追加しました！',
     toastRemovedFromPlaylist: 'プレイリストから削除しました！',
     toastAlreadyInPlaylist: 'この曲はすでにプレイリストに含まれています。',
     toastLiked: 'お気に入りに追加しました',
@@ -1644,8 +1648,8 @@ const translations: Record<Language, TranslationKeys> = {
     themeDefaultDesc: '클래식',
     themeMinimalist: '미니멀',
     themeMinimalistDesc: '깔끔 & 컴팩트',
-    themeCustom: '사용자 지정',
-    themeCustomDesc: '자신만의 색상과 이미지 사용',
+    themeVibrant: 'Vibrant',
+    themeVibrantDesc: '밝은 색상과 하단 유리 스타일',
     dynamicBackground: '동적 배경',
     dynamicBackgroundDesc: '배경이 앨범 커버의 주요 색상에 맞춰 조정됩니다',
     accentColor: '포인트 색상',
@@ -1782,6 +1786,7 @@ const translations: Record<Language, TranslationKeys> = {
 
     // Toast
     toastLogout: '로그아웃하고 재생을 중단했습니다',
+    confirmLogout: '이 계정에서 로그아웃하시겠습니까?',
     hitsInt: '글로벌 팝 히트',
     hitsId: '인도네시아 팝 히트',
     hitsJp: 'J-Pop 히트',
@@ -1795,7 +1800,7 @@ const translations: Record<Language, TranslationKeys> = {
     toastPlaylistDeleted: '플레이리스트가 삭제되었습니다.',
     toastPlaylistCreated: '이(가) 생성되었습니다!',
     toastImportSuccess: '을(를) 성공적으로 가져왔습니다!',
-    toastAddedToPlaylist: '플레이리스트에 곡을 추가했습니다!',
+    toastAddedToPlaylist: '{playlist}에 곡을 추가했습니다!',
     toastRemovedFromPlaylist: '플레이리스트에서 곡을 제거했습니다!',
     toastAlreadyInPlaylist: '이 곡은 이미 플레이리스트에 있습니다.',
     toastLiked: '좋아요한 곡에 추가됨',
@@ -1846,7 +1851,13 @@ const translations: Record<Language, TranslationKeys> = {
 };
 
 export function createTranslator(lang: Language) {
-  return function t(key: keyof TranslationKeys): string {
-    return translations[lang][key] ?? translations['id'][key] ?? key;
+  return function t(key: keyof TranslationKeys, params?: Record<string, string>): string {
+    let text = translations[lang][key] ?? translations['id'][key] ?? key;
+    if (params) {
+      for (const [k, v] of Object.entries(params)) {
+        text = text.replace(new RegExp(`\\{${k}\\}`, 'g'), () => v);
+      }
+    }
+    return text;
   };
 }
