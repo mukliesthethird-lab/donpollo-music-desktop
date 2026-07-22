@@ -1368,6 +1368,89 @@ ipcMain.on('notify-closing', async (event, discordId) => {
   }
 });
 
+// --- Analytics & Wrapped IPC ---
+const getAnalyticsPath = () => path.join(app.getPath('userData'), 'analytics.json');
+const getMoodPath = () => path.join(app.getPath('userData'), 'mood.json');
+
+ipcMain.on('track-song', (event, songData) => {
+  try {
+    const analyticsPath = getAnalyticsPath();
+    let data: any[] = [];
+    if (fs.existsSync(analyticsPath)) {
+      data = JSON.parse(fs.readFileSync(analyticsPath, 'utf8'));
+    }
+    data.push({ ...songData, timestamp: Date.now() });
+    fs.writeFileSync(analyticsPath, JSON.stringify(data));
+  } catch (err) {
+    console.error('Error tracking song:', err);
+  }
+});
+
+ipcMain.on('track-mood', (event, mood) => {
+  try {
+    const moodPath = getMoodPath();
+    let data: any[] = [];
+    if (fs.existsSync(moodPath)) {
+      data = JSON.parse(fs.readFileSync(moodPath, 'utf8'));
+    }
+    data.push({ mood, timestamp: Date.now() });
+    fs.writeFileSync(moodPath, JSON.stringify(data));
+  } catch (err) {
+    console.error('Error tracking mood:', err);
+  }
+});
+
+ipcMain.handle('get-analytics', async () => {
+  try {
+    const analyticsPath = getAnalyticsPath();
+    const moodPath = getMoodPath();
+    let history: any[] = [];
+    let moods: any[] = [];
+    if (fs.existsSync(analyticsPath)) history = JSON.parse(fs.readFileSync(analyticsPath, 'utf8'));
+    if (fs.existsSync(moodPath)) moods = JSON.parse(fs.readFileSync(moodPath, 'utf8'));
+    
+    const totalListenSeconds = history.reduce((acc, s) => acc + (s.duration || 0), 0);
+    
+    const songCount: Record<string, any> = {};
+    const artistCount: Record<string, { count: number, cover: string }> = {};
+    
+    history.forEach(s => {
+      if (!s.title || !s.artist) return; // Skip invalid entries
+      if (!songCount[s.id]) songCount[s.id] = { song: s, count: 0 };
+      songCount[s.id].count++;
+      
+      if (!artistCount[s.artist]) artistCount[s.artist] = { count: 0, cover: s.cover || s.thumbnail || '' };
+      artistCount[s.artist].count++;
+    });
+    
+    const topSongs = Object.values(songCount).sort((a: any, b: any) => b.count - a.count).slice(0, 5);
+    const topArtists = Object.keys(artistCount).map(artist => ({ artist, count: artistCount[artist].count, cover: artistCount[artist].cover })).sort((a, b) => b.count - a.count);
+    
+    const moodCount: Record<string, number> = {};
+    moods.forEach(m => {
+      moodCount[m.mood] = (moodCount[m.mood] || 0) + 1;
+    });
+    let topMood = null;
+    let max = 0;
+    Object.keys(moodCount).forEach(k => {
+      if(moodCount[k] > max) { max = moodCount[k]; topMood = k; }
+    });
+
+    return { 
+      totalListenSeconds, 
+      topSongs, 
+      topArtists, 
+      topMood, 
+      historyCount: history.length,
+      uniqueSongsCount: Object.keys(songCount).length,
+      uniqueArtistsCount: Object.keys(artistCount).length
+    };
+  } catch (err) {
+    console.error('Error getting analytics:', err);
+    return null;
+  }
+});
+
 const gotTheLock = app.requestSingleInstanceLock();
 console.log("gotTheLock:", gotTheLock);
 

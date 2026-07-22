@@ -128,6 +128,13 @@ function App() {
   // ─── Page Navigation ────────────────────────────────────────
   const [activePage, setActivePage] = useState<Page>('home');
   const [activePlaylistId, setActivePlaylistId] = useState<string | null>(null);
+  const [wrappedData, setWrappedData] = useState<any>(null);
+
+  useEffect(() => {
+    if ((window as any).electronAPI?.getAnalytics) {
+       (window as any).electronAPI.getAnalytics().then(setWrappedData);
+    }
+  }, []);
 
   // Navigation history stack (browser-like back/forward)
   type NavEntry = { page: Page; playlistId?: string | null; profileId?: string | null; artistName?: string | null; };
@@ -1130,6 +1137,34 @@ function App() {
   const userScrollingRef = useRef(false);
   const scrollTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [showWidgetOverlay, setShowWidgetOverlay] = useState(false);
+  const [showVibeCheck, setShowVibeCheck] = useState(false);
+  const [showWrappedStory, setShowWrappedStory] = useState(false);
+  const [wrappedStoryIndex, setWrappedStoryIndex] = useState(0);
+
+  useEffect(() => {
+    let timer: any;
+    if (showWrappedStory) {
+      if (wrappedStoryIndex < 8) {
+        timer = setTimeout(() => {
+          setWrappedStoryIndex(prev => prev + 1);
+        }, 5000);
+      }
+    }
+    return () => clearTimeout(timer);
+  }, [showWrappedStory, wrappedStoryIndex]);
+
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape' && showWrappedStory) {
+        setShowWrappedStory(false);
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [showWrappedStory]);
+
+  const trackedSongIdsRef = useRef<Set<string>>(new Set());
+  const songsPlayedInSessionRef = useRef<number>(0);
 
   // ─── Queue State Moved Up
 
@@ -1432,6 +1467,22 @@ function App() {
     const handleTimeUpdate = () => {
       if (audioRef.current !== audio) return;
       setProgress(audio.currentTime);
+
+      if (audio.currentTime >= 30 && currentSongRef.current) {
+        const songId = currentSongRef.current.id;
+        if (!trackedSongIdsRef.current.has(songId)) {
+          trackedSongIdsRef.current.add(songId);
+          songsPlayedInSessionRef.current += 1;
+          
+          if ((window as any).electronAPI?.trackSong) {
+             (window as any).electronAPI.trackSong(currentSongRef.current);
+          }
+
+          if (songsPlayedInSessionRef.current > 0 && songsPlayedInSessionRef.current % 5 === 0) {
+             setShowVibeCheck(true);
+          }
+        }
+      }
     };
     const handleEnded = () => {
       if (audioRef.current !== audio) return;
@@ -3013,7 +3064,7 @@ function App() {
                         <span style={{ color: currentSong?.id === song.id ? 'var(--accent-primary)' : 'var(--text-muted)', fontSize: '13px', fontWeight: '600' }}>{currentSong?.id === song.id ? <Play size={14} fill="currentColor" /> : String(i + 1).padStart(2, '0')}</span>
                         <div style={{ display: 'flex', gap: '16px', alignItems: 'center', minWidth: 0 }}>
                           <div style={{ position: 'relative', width: '40px', height: '40px', borderRadius: '6px', overflow: 'hidden', flexShrink: 0 }}>
-                            <img src={getCleanThumbnail(song.thumbnail)} style={{ width: '100%', height: '100%', objectFit: 'cover' }} alt="Cover" />
+                            <img src={(getCleanThumbnail(song.thumbnail) || getHighResImage(song.cover))} style={{ width: '100%', height: '100%', objectFit: 'cover' }} alt="Cover" />
                             <div className="play-overlay" style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(0,0,0,0.6)', display: 'flex', alignItems: 'center', justifyContent: 'center', opacity: 0, transition: 'opacity 0.2s' }}>
                               <Play fill="currentColor" size={16} />
                             </div>
@@ -3072,7 +3123,7 @@ function App() {
                         <span style={{ color: currentSong?.id === song.id ? 'var(--accent-primary)' : 'var(--text-muted)', fontSize: '13px', fontWeight: '600' }}>{currentSong?.id === song.id ? <Play size={14} fill="currentColor" /> : String(i + 1).padStart(2, '0')}</span>
                         <div style={{ display: 'flex', gap: '16px', alignItems: 'center', minWidth: 0 }}>
                           <div style={{ position: 'relative', width: '40px', height: '40px', borderRadius: '6px', overflow: 'hidden', flexShrink: 0 }}>
-                            <img src={getCleanThumbnail(song.thumbnail)} style={{ width: '100%', height: '100%', objectFit: 'cover' }} alt="Cover" />
+                            <img src={(getCleanThumbnail(song.thumbnail) || getHighResImage(song.cover))} style={{ width: '100%', height: '100%', objectFit: 'cover' }} alt="Cover" />
                             <div className="play-overlay" style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(0,0,0,0.6)', display: 'flex', alignItems: 'center', justifyContent: 'center', opacity: 0, transition: 'opacity 0.2s' }}>
                               <Play fill="currentColor" size={16} />
                             </div>
@@ -3132,7 +3183,7 @@ function App() {
                     style={{ width: '100%', height: '100%', objectFit: 'cover' }}
                     onError={(e) => {
                       if (pl.songs.length > 0) {
-                        e.currentTarget.src = getCleanThumbnail(pl.songs[0].thumbnail);
+                        e.currentTarget.src = (getCleanThumbnail(pl.songs[0].thumbnail) || getHighResImage(pl.songs[0].cover));
                       } else {
                         e.currentTarget.style.display = 'none';
                       }
@@ -3310,7 +3361,7 @@ function App() {
                   }}
                 >
                   <div className="library-item-art" onClick={() => startPlayingFromList(pl.songs, i)}>
-                    <img src={getCleanThumbnail(song.thumbnail)} alt={song.title} />
+                    <img src={(getCleanThumbnail(song.thumbnail) || getHighResImage(song.cover))} alt={song.title} />
                     <div className="library-item-play"><Play size={16} fill="currentColor" /></div>
                   </div>
                   <div className="library-item-info" onClick={() => startPlayingFromList(pl.songs, i)}>
@@ -3375,7 +3426,7 @@ function App() {
                       onDragEnd={(e) => { setDraggedGlobalSong(null); (e.currentTarget as HTMLElement).classList.remove('dragging-origin'); }}
                     >
                       <div className="library-item-art">
-                        <img src={getCleanThumbnail(song.thumbnail)} alt={song.title} />
+                        <img src={(getCleanThumbnail(song.thumbnail) || getHighResImage(song.cover))} alt={song.title} />
                       </div>
                       <div className="library-item-info">
                         <div className="library-item-title" title={song.title}>{song.title}</div>
@@ -3424,7 +3475,7 @@ function App() {
                   {pl.avatar ? (
                     <img src={pl.avatar} alt={pl.name} />
                   ) : pl.songs.length > 0 ? (
-                    <img src={getCleanThumbnail(pl.songs[0].thumbnail)} alt={pl.name} />
+                    <img src={(getCleanThumbnail(pl.songs[0].thumbnail) || getHighResImage(pl.songs[0].cover))} alt={pl.name} />
                   ) : (
                     <div className="playlist-card-empty-art"><ListMusic size={32} color="var(--text-muted)" /></div>
                   )}
@@ -4452,7 +4503,7 @@ function App() {
           <div className="artist-hero-mosaic">
             <div className="mosaic-grid">
               {artistSongs.slice(0, 30).map((song, i) => (
-                <img key={i} src={getCleanThumbnail(song.thumbnail)} alt="" />
+                <img key={i} src={(getCleanThumbnail(song.thumbnail) || getHighResImage(song.cover))} alt="" />
               ))}
             </div>
             <div className="mosaic-overlay" />
@@ -4518,7 +4569,7 @@ function App() {
                     <div className="play-overlay"><Play size={12} fill="currentColor" /></div>
                   </div>
                   <div className="song-thumb-wrapper">
-                    <img src={getCleanThumbnail(song.thumbnail)} alt={song.title} className="song-thumb" />
+                    <img src={(getCleanThumbnail(song.thumbnail) || getHighResImage(song.cover))} alt={song.title} className="song-thumb" />
                   </div>
                   <div className="song-info">
                     <div className="song-title">{song.title}</div>
@@ -4679,8 +4730,51 @@ function App() {
           {/* ── Music Mode: Bento + Sections ─────────── */}
           {homeMode === 'music' && (<>
 
+            {/* ── Wrapped Dashboard Hero ──────── */}
+            {wrappedData && wrappedData.historyCount > 0 && (new Date().getDate() <= 7 || localStorage.getItem('force_wrapped_visible') === 'true') && (
+              <div className="wrapped-editorial-hero">
+                 {wrappedData?.topSongs && wrappedData.topSongs.length > 0 && (
+                    <div className="editorial-bg-collage">
+                       {Array.from({ length: 32 }).map((_, idx) => {
+                          const songData = wrappedData.topSongs[idx % wrappedData.topSongs.length].song;
+                          return (
+                             <div 
+                                key={idx} 
+                                className="editorial-collage-item" 
+                                style={{ backgroundImage: `url(${getCleanThumbnail(songData.thumbnail) || getHighResImage(songData.cover)})` }}
+                             />
+                          );
+                       })}
+                    </div>
+                 )}
+                 <h2 className="editorial-title">Your <span className="editorial-title-accent">Wrapped</span></h2>
+                 <p className="editorial-sentence">
+                    {t('wrappedEditorialP1')}<span className="ed-highlight">{Math.floor(wrappedData.totalListenSeconds / 60)} {t('listeningTimeMins')}</span>{t('wrappedEditorialP2')}
+                    <span className="ed-highlight">{wrappedData.topMood ? t(`mood${wrappedData.topMood.charAt(0).toUpperCase() + wrappedData.topMood.slice(1)}` as any) : '-'}</span>
+                    {t('wrappedEditorialP3')}<span className="ed-highlight">{wrappedData.historyCount}</span>{t('wrappedEditorialP4')}
+                 </p>
+                 <div className="editorial-actions">
+                    <button className="editorial-btn-primary" onClick={() => {
+                        if (wrappedData?.topSongs) {
+                            const playlistSongs = wrappedData.topSongs.map((item: any) => item.song);
+                            startPlayingFromList(playlistSongs, 0);
+                        }
+                    }}>
+                       <Play size={18} fill="currentColor" /> {t('playYourTopSongs')}
+                    </button>
+                    <button className="editorial-btn-secondary" onClick={() => {
+                        setWrappedStoryIndex(0);
+                        setShowWrappedStory(true);
+                    }}>
+                       <Maximize2 size={18} /> {t('viewYourStory')}
+                    </button>
+                 </div>
+              </div>
+            )}
+
             {/* ── Bento Featured Grid (Daily Mix) ──────── */}
             {(() => {
+
               const getDailyMix = () => {
                 const mix: any[] = [];
                 if (playHistory.length > 0) mix.push({ ...playHistory[0], bentoTag: 'JUMP BACK IN', tagClass: 'tag-hero' });
@@ -4714,7 +4808,7 @@ function App() {
                     onDragStart={(e) => { setDraggedGlobalSong(dailyMix[0]); applyDragGhost(e, dailyMix[0]); }}
                     onDragEnd={(e) => { setDraggedGlobalSong(null); (e.currentTarget as HTMLElement).classList.remove('dragging-origin'); }}
                   >
-                    <img src={getCleanThumbnail(dailyMix[0].thumbnail)} alt={dailyMix[0].title} className="bento-img" />
+                    <img src={(getCleanThumbnail(dailyMix[0].thumbnail) || getHighResImage(dailyMix[0].cover))} alt={dailyMix[0].title} className="bento-img" />
                     <div className="bento-gradient" />
                     <div className={`bento-tag ${dailyMix[0].tagClass}`}>{dailyMix[0].bentoTag}</div>
                     <div className="bento-meta">
@@ -4739,7 +4833,7 @@ function App() {
                       onDragStart={(e) => { setDraggedGlobalSong(item); applyDragGhost(e, item); }}
                       onDragEnd={(e) => { setDraggedGlobalSong(null); (e.currentTarget as HTMLElement).classList.remove('dragging-origin'); }}
                     >
-                      <img src={getCleanThumbnail(item.thumbnail)} alt={item.title} className="bento-img" />
+                      <img src={(getCleanThumbnail(item.thumbnail) || getHighResImage(item.cover))} alt={item.title} className="bento-img" />
                       <div className="bento-gradient" />
                       <div className={`bento-tag ${item.tagClass}`}>{item.bentoTag}</div>
                       <div className="bento-meta bento-meta-sm">
@@ -4783,7 +4877,7 @@ function App() {
                         onDragEnd={(e) => { setDraggedGlobalSong(null); (e.currentTarget as HTMLElement).classList.remove('dragging-origin'); }}
                       >
                         <div className="card-v2-art">
-                          <img src={getCleanThumbnail(item.thumbnail)} alt={item.title} />
+                          <img src={(getCleanThumbnail(item.thumbnail) || getHighResImage(item.cover))} alt={item.title} />
                           {currentSong?.id === item.id && isPlaying ? (
                             <div className="card-v2-eq">
                               <div className="eq-bar" /><div className="eq-bar" /><div className="eq-bar" />
@@ -4818,7 +4912,7 @@ function App() {
                           onDragEnd={(e) => { setDraggedGlobalSong(null); (e.currentTarget as HTMLElement).classList.remove('dragging-origin'); }}
                         >
                           <div className="card-v2-art">
-                            <img src={getCleanThumbnail(item.thumbnail)} alt={item.title} />
+                            <img src={(getCleanThumbnail(item.thumbnail) || getHighResImage(item.cover))} alt={item.title} />
                             {currentSong?.id === item.id && isPlaying ? (
                               <div className="card-v2-eq">
                                 <div className="eq-bar" /><div className="eq-bar" /><div className="eq-bar" />
@@ -4880,7 +4974,7 @@ function App() {
                         onContextMenu={(e) => handleContextMenu(e, item)}
                       >
                         <div className="card-circle-art">
-                          <img src={getCleanThumbnail(item.thumbnail)} alt={item.title} />
+                          <img src={(getCleanThumbnail(item.thumbnail) || getHighResImage(item.cover))} alt={item.title} />
                           <div className="card-circle-overlay">
                             <button className="card-circle-play">
                               <Play size={18} fill="currentColor" style={{ marginLeft: '2px' }} />
@@ -4908,7 +5002,7 @@ function App() {
                           onContextMenu={(e) => handleContextMenu(e, item)}
                         >
                           <div className="card-circle-art">
-                            <img src={getCleanThumbnail(item.thumbnail)} alt={item.title} />
+                            <img src={(getCleanThumbnail(item.thumbnail) || getHighResImage(item.cover))} alt={item.title} />
                             <div className="card-circle-overlay">
                               <button className="card-circle-play">
                                 <Play size={18} fill="currentColor" style={{ marginLeft: '2px' }} />
@@ -4956,7 +5050,7 @@ function App() {
                         {songs.map((item, i) => (
                           <div key={i} className={`music-card-v2 ${currentSong?.id === item.id ? 'music-card-v2-playing' : ''}`} onClick={() => playSingleSong(item)} onContextMenu={(e) => handleContextMenu(e, item)} draggable={true} onDragStart={(e) => { setDraggedGlobalSong(item); applyDragGhost(e, item); }} onDragEnd={(e) => { setDraggedGlobalSong(null); (e.currentTarget as HTMLElement).classList.remove('dragging-origin'); }}>
                             <div className="card-v2-art">
-                              <img src={getCleanThumbnail(item.thumbnail)} alt={item.title} />
+                              <img src={(getCleanThumbnail(item.thumbnail) || getHighResImage(item.cover))} alt={item.title} />
                               {currentSong?.id === item.id && isPlaying ? (
                                 <div className="card-v2-eq"><div className="eq-bar" /><div className="eq-bar" /><div className="eq-bar" /></div>
                               ) : (
@@ -4977,7 +5071,7 @@ function App() {
                           {songs.map((item, i) => (
                             <div key={i} className={`music-card-v2 ${currentSong?.id === item.id ? 'music-card-v2-playing' : ''}`} onClick={() => playSingleSong(item)} onContextMenu={(e) => handleContextMenu(e, item)} draggable={true} onDragStart={(e) => { setDraggedGlobalSong(item); applyDragGhost(e, item); }} onDragEnd={(e) => { setDraggedGlobalSong(null); (e.currentTarget as HTMLElement).classList.remove('dragging-origin'); }}>
                               <div className="card-v2-art">
-                                <img src={getCleanThumbnail(item.thumbnail)} alt={item.title} />
+                                <img src={(getCleanThumbnail(item.thumbnail) || getHighResImage(item.cover))} alt={item.title} />
                                 {currentSong?.id === item.id && isPlaying ? (
                                   <div className="card-v2-eq"><div className="eq-bar" /><div className="eq-bar" /><div className="eq-bar" /></div>
                                 ) : (
@@ -5019,9 +5113,9 @@ function App() {
             <div className="hero-art-container">
               <div className="hero-glow"></div>
               {currentSong ? (
-                <img src={getCleanThumbnail(currentSong.thumbnail)} className="hero-art" alt="album art" />
+                <img src={(getCleanThumbnail(currentSong.thumbnail) || getHighResImage(currentSong.cover))} className="hero-art" alt="album art" />
               ) : searchResults.length > 0 ? (
-                <img src={getCleanThumbnail(currentSong.thumbnail)} className="hero-art" alt="album art" />
+                <img src={(getCleanThumbnail(currentSong.thumbnail) || getHighResImage(currentSong.cover))} className="hero-art" alt="album art" />
               ) : (
                 <div className="hero-art" style={{ backgroundColor: 'var(--bg-card)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                   <Music size={64} color="var(--text-muted)" />
@@ -5571,7 +5665,7 @@ function App() {
                       {pl.avatar ? (
                         <img src={pl.avatar} alt="" />
                       ) : pl.songs[0] ? (
-                        <img src={getCleanThumbnail(pl.songs[0].thumbnail)} alt="" />
+                        <img src={(getCleanThumbnail(pl.songs[0].thumbnail) || getHighResImage(pl.songs[0].cover))} alt="" />
                       ) : (
                         <ListMusic size={16} color="var(--text-muted)" />
                       )}
@@ -5703,7 +5797,7 @@ function App() {
                         style={{ width: '100%', height: '100%', objectFit: 'cover', borderRadius: '4px' }}
                         onError={(e) => {
                           if (pl.songs.length > 0) {
-                            e.currentTarget.src = getCleanThumbnail(pl.songs[0].thumbnail);
+                            e.currentTarget.src = (getCleanThumbnail(pl.songs[0].thumbnail) || getHighResImage(pl.songs[0].cover));
                           } else {
                             e.currentTarget.style.display = 'none';
                           }
@@ -5711,7 +5805,7 @@ function App() {
                       />
                     ) : (
                       pl.songs.length > 0 ? (
-                        <img src={getCleanThumbnail(pl.songs[0].thumbnail)} alt="cover" style={{ width: '100%', height: '100%', objectFit: 'cover', borderRadius: '4px' }} />
+                        <img src={(getCleanThumbnail(pl.songs[0].thumbnail) || getHighResImage(pl.songs[0].cover))} alt="cover" style={{ width: '100%', height: '100%', objectFit: 'cover', borderRadius: '4px' }} />
                       ) : (
                         <Music size={24} color="var(--text-secondary)" />
                       )
@@ -6174,7 +6268,7 @@ function App() {
                           onMouseDown={e => e.preventDefault()}
                         >
                           <div className="suggestion-thumb">
-                            <img src={getCleanThumbnail(song.thumbnail)} alt={song.title} />
+                            <img src={(getCleanThumbnail(song.thumbnail) || getHighResImage(song.cover))} alt={song.title} />
                           </div>
                           <div className="suggestion-info">
                             <div className="suggestion-title">{song.title}</div>
@@ -6335,7 +6429,7 @@ function App() {
                 {currentSong ? (
                   <>
                     <img
-                      src={getCleanThumbnail(currentSong.thumbnail)}
+                      src={(getCleanThumbnail(currentSong.thumbnail) || getHighResImage(currentSong.cover))}
                       className="player-cover"
                       alt="cover"
                       style={{
@@ -6894,7 +6988,7 @@ function App() {
                         onDragOver={(e) => e.preventDefault()}
                         style={{ display: 'flex', alignItems: 'center', gap: '8px', opacity: draggedQueueIdx === idx ? 0.5 : 1, borderTop: dragOverQueueIdx === idx && dragOverQueueIdx < draggedQueueIdx! ? '2px solid var(--accent-primary)' : 'none', borderBottom: dragOverQueueIdx === idx && dragOverQueueIdx > draggedQueueIdx! ? '2px solid var(--accent-primary)' : 'none', transition: 'all 0.2s' }}>
                         <div style={{ display: 'flex', flex: 1, alignItems: 'center', gap: '12px', cursor: (isGuest && activePartyId) ? 'default' : 'pointer', minWidth: 0 }} onClick={() => { if (isGuest && activePartyId) return; setCurrentIndex(idx); executePlay(song); }}>
-                          <img src={getCleanThumbnail(song.thumbnail)} alt={song.title} style={{ width: '40px', height: '40px', borderRadius: '6px', objectFit: 'cover', flexShrink: 0 }} />
+                          <img src={(getCleanThumbnail(song.thumbnail) || getHighResImage(song.cover))} alt={song.title} style={{ width: '40px', height: '40px', borderRadius: '6px', objectFit: 'cover', flexShrink: 0 }} />
                           <div style={{ flex: 1, overflow: 'hidden', minWidth: 0 }}>
                             <div title={song.title} style={{ fontSize: "13px", fontWeight: 600, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{song.title}</div>
                             <div style={{ fontSize: '12px', color: 'var(--text-secondary)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{song.artist}</div>
@@ -7243,6 +7337,249 @@ function App() {
                 </div>
               </div>
             ))}
+          </div>
+        </div>
+      )}
+
+      {/* Vibe Check Popup */}
+      {showVibeCheck && (
+        <div className="vibe-check-overlay">
+          <div className="vibe-check-modal">
+            <h3>{t('vibeCheckTitle')}</h3>
+            <p>{t('vibeCheckPrompt')}</p>
+            <div className="vibe-options">
+              {['happy', 'sad', 'chill', 'energetic'].map(mood => (
+                <button key={mood} className="vibe-btn" onClick={() => {
+                  if ((window as any).electronAPI?.trackMood) {
+                    (window as any).electronAPI.trackMood(mood);
+                  }
+                  setShowVibeCheck(false);
+                  showToast('Mood tersimpan!', 'success');
+                }}>
+                  {t(`mood${mood.charAt(0).toUpperCase() + mood.slice(1)}` as any)}
+                </button>
+              ))}
+            </div>
+            <button className="vibe-close-btn" onClick={() => setShowVibeCheck(false)}>
+              <X size={20} />
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Wrapped Story Modal */}
+      {showWrappedStory && wrappedData && (
+        <div className="wrapped-story-modal-overlay" onClick={() => setShowWrappedStory(false)}>
+          
+          {/* Hardcoded background audio for dramatic effect */}
+          {wrappedData.topSongs?.[0]?.song && (
+            <audio 
+               autoPlay 
+               loop 
+               src={`${API_BASE_URL}/api/stream?id=${wrappedData.topSongs[0].song.id}&quality=auto`} 
+               onCanPlay={(e: any) => { e.target.volume = 0.4; }} 
+               style={{ display: 'none' }} 
+            />
+          )}
+
+          <div className="wrapped-story-modal-wrapper">
+            <button className="story-close-btn" onClick={(e) => { e.stopPropagation(); setShowWrappedStory(false); }}>
+              <X size={32} />
+            </button>
+
+            {wrappedStoryIndex > 0 && (
+              <button className="story-nav-btn left" onClick={(e) => { e.stopPropagation(); setWrappedStoryIndex(prev => prev - 1); }}>
+                <ChevronLeft size={32} />
+              </button>
+            )}
+
+            <div className="wrapped-story-modal" onClick={(e) => e.stopPropagation()}>
+              {/* Dynamic Animated Background */}
+              <div className="wrapped-bg-animated">
+                <div className="orb orb-1"></div>
+                <div className="orb orb-2"></div>
+                <div className="orb orb-3"></div>
+                <div className="orb orb-4"></div>
+              </div>
+
+          <div className="story-progress-container">
+             {[0, 1, 2, 3, 4, 5, 6, 7, 8].map(i => (
+                <div key={i} className="story-progress-bar">
+                   <div className={`story-progress-fill ${i === wrappedStoryIndex ? 'active' : i < wrappedStoryIndex ? 'completed' : ''}`} />
+                </div>
+             ))}
+          </div>
+          
+          <div className="story-content">
+             {wrappedStoryIndex === 0 && (
+                <div className="story-slide slide-1">
+                   <div className="story-user-profile zoom-in-anim">
+                      <div className="avatar-ring-container">
+                         <img 
+                            src={discordUser?.avatar ? `https://cdn.discordapp.com/avatars/${discordUser.id}/${discordUser.avatar}.png` : `https://ui-avatars.com/api/?name=${encodeURIComponent(discordUser?.global_name || discordUser?.username || 'User')}&background=random`} 
+                            alt="Avatar" 
+                            className="story-avatar" 
+                         />
+                         <div className="avatar-ring"></div>
+                      </div>
+                      <h2 className="story-username slide-up-anim delay-1">{discordUser?.global_name || discordUser?.username || 'User'}</h2>
+                   </div>
+                   <h1 className="story-title-massive slide-up-anim delay-2" style={{ marginTop: '30px' }}>{t('storyWelcome')}</h1>
+                </div>
+             )}
+             {wrappedStoryIndex === 1 && (
+                <div className="story-slide slide-2">
+                   <h2 className="story-subtitle slide-right-anim">{t('storyUniqueSongs').replace('{0}', '')}</h2>
+                   <div className="story-minutes-highlight pop-in-anim delay-1">
+                      {(wrappedData.uniqueSongsCount || 0).toLocaleString()}
+                   </div>
+                </div>
+             )}
+             {wrappedStoryIndex === 2 && (
+                <div className="story-slide slide-3">
+                   <h2 className="story-subtitle slide-left-anim">{t('storyUniqueArtists').replace('{0}', '')}</h2>
+                   <div className="story-minutes-highlight pop-in-anim delay-1" style={{ color: '#fff' }}>
+                      {(wrappedData.uniqueArtistsCount || 0).toLocaleString()}
+                   </div>
+                </div>
+             )}
+             {wrappedStoryIndex === 3 && (
+                <div className="story-slide slide-4">
+                   <h2 className="story-subtitle slide-down-anim" style={{ letterSpacing: '8px' }}>TIME SPENT</h2>
+                   <div className="story-minutes-highlight pop-in-anim delay-1">
+                      {Math.floor(wrappedData.totalListenSeconds / 60).toLocaleString()}
+                   </div>
+                   <h1 className="story-title slide-up-anim delay-1">MINUTES</h1>
+                   <div className="story-vibe-box slide-up-anim delay-2">
+                      <span className="vibe-emoji">{wrappedData.topMood === 'happy' ? '☀️' : wrappedData.topMood === 'sad' ? '🌧️' : wrappedData.topMood === 'chill' ? '☕' : '⚡'}</span>
+                      <div className="vibe-text-container">
+                         <span className="vibe-label">Your Vibe</span>
+                         <span className="vibe-text">{wrappedData.topMood ? t(`mood${wrappedData.topMood.charAt(0).toUpperCase() + wrappedData.topMood.slice(1)}` as any).replace(/☀️ |🌧️ |☕ |⚡ /g, '') : '-'}</span> 
+                      </div>
+                   </div>
+                </div>
+             )}
+             {wrappedStoryIndex === 4 && (
+                <div className="story-slide slide-5">
+                   <div className="spotify-21-top-song-layout pop-in-anim delay-1">
+                      {wrappedData.topSongs?.[0] && (
+                         <>
+                            <div className="s21-cover-container">
+                               <div className="s21-band">
+                                  <div className="s21-band-text">2026 2026 2026 2026 2026 2026</div>
+                               </div>
+                               <img src={(getCleanThumbnail(wrappedData.topSongs[0].song.thumbnail) || getHighResImage(wrappedData.topSongs[0].song.cover))} className="s21-top-song-cover" alt="Top Song" />
+                            </div>
+                            
+                            <div className="s21-top-song-text-block slide-up-anim delay-2">
+                               <p className="s21-text-normal">Your top song of the year</p>
+                               <p className="s21-text-normal">was <span className="s21-text-highlight">{wrappedData.topSongs[0].song.title}</span></p>
+                               <p className="s21-text-normal">by <span className="s21-text-highlight">{wrappedData.topSongs[0].song.artist}</span></p>
+                            </div>
+                            
+                            <div className="s21-top-song-stat-block slide-up-anim delay-2">
+                               <p className="s21-text-small">You played it a totally reasonable</p>
+                               <p className="s21-text-small"><span className="s21-text-highlight">{wrappedData.topSongs[0].count}</span> times. As is your right.</p>
+                            </div>
+                         </>
+                      )}
+                   </div>
+                </div>
+             )}
+             {wrappedStoryIndex === 5 && (
+                <div className="story-slide slide-6">
+                   <h1 className="story-title-massive slide-down-anim" style={{ fontSize: '48px', marginBottom: '20px' }}>{t('storySongs')}</h1>
+                   <div className="story-top-songs staggered-list">
+                      {wrappedData.topSongs.slice(0, 5).map((item: any, idx: number) => (
+                         <div key={idx} className={`story-song-item pop-in-anim delay-list-${idx + 1}`}>
+                            <span className="story-song-rank">#{idx + 1}</span>
+                            <img src={(getCleanThumbnail(item.song.thumbnail) || getHighResImage(item.song.cover))} alt={item.song.title} />
+                            <div className="story-song-info">
+                               <span className="story-song-title">{item.song.title}</span>
+                               <span className="story-song-artist">{item.song.artist}</span>
+                            </div>
+                         </div>
+                      ))}
+                   </div>
+                   <button className="btn-primary slide-up-anim delay-list-6 glass-btn" style={{ marginTop: '50px' }} onClick={() => {
+                       setShowWrappedStory(false);
+                       const playlistSongs = wrappedData.topSongs.map((item: any) => item.song);
+                       startPlayingFromList(playlistSongs, 0);
+                   }}>
+                      <Play size={20} fill="currentColor" style={{ marginRight: '10px' }} />
+                      {t('playYourTopSongs')}
+                   </button>
+                </div>
+             )}
+             {wrappedStoryIndex === 6 && (
+                <div className="story-slide slide-7">
+                   <div className="spotify-top-artist-layout pop-in-anim delay-1">
+                      {wrappedData.topArtists?.[0]?.cover && (
+                         <img src={(getCleanThumbnail(wrappedData.topArtists[0].cover) || getHighResImage(wrappedData.topArtists[0].cover))} className="spotify-top-artist-cover" alt="Top Artist" />
+                      )}
+                      <h1 className="spotify-top-artist-name">{wrappedData.topArtists?.[0]?.artist || 'Unknown'}</h1>
+                      <div className="spotify-top-artist-sub">Your Top Artist</div>
+                   </div>
+                </div>
+             )}
+             {wrappedStoryIndex === 7 && (
+                <div className="story-slide slide-8">
+                   <h1 className="story-title-massive slide-down-anim" style={{ fontSize: '48px', marginBottom: '20px' }}>{t('storyTopArtistsList')}</h1>
+                   <div className="story-top-songs staggered-list">
+                      {wrappedData.topArtists.slice(0, 5).map((item: any, idx: number) => (
+                         <div key={idx} className={`story-song-item pop-in-anim delay-list-${idx + 1} artist-list-item`}>
+                            <span className="story-song-rank">#{idx + 1}</span>
+                            {item.cover && (
+                               <img src={(getCleanThumbnail(item.cover) || getHighResImage(item.cover))} className="artist-cover-small" alt={item.artist} />
+                            )}
+                            <div className="story-song-info">
+                               <span className="story-song-title">{item.artist}</span>
+                               <span className="story-song-artist">{item.count} Plays</span>
+                            </div>
+                         </div>
+                      ))}
+                   </div>
+                </div>
+             )}
+             {wrappedStoryIndex === 8 && (
+                <div className="story-slide slide-9">
+                   <div className="final-spotify-layout pop-in-anim delay-1">
+                      {wrappedData.topArtists?.[0]?.cover && (
+                         <img src={(getCleanThumbnail(wrappedData.topArtists[0].cover) || getHighResImage(wrappedData.topArtists[0].cover))} className="final-spotify-cover" alt="Top Artist" />
+                      )}
+                      <div className="final-spotify-columns">
+                         <div className="final-spotify-col">
+                            <div className="final-spotify-col-title">Top Artists</div>
+                            {wrappedData.topArtists.slice(0, 5).map((item: any, idx: number) => (
+                               <div key={idx} className="final-spotify-col-item">
+                                  <span className="idx">{idx + 1}</span> <span className="name">{item.artist}</span>
+                               </div>
+                            ))}
+                            <div className="final-spotify-col-title" style={{ marginTop: '30px' }}>Minutes Listened</div>
+                            <div className="final-spotify-col-stat">{Math.floor(wrappedData.totalListenSeconds / 60).toLocaleString()}</div>
+                         </div>
+                         <div className="final-spotify-col">
+                            <div className="final-spotify-col-title">Top Songs</div>
+                            {wrappedData.topSongs.slice(0, 5).map((item: any, idx: number) => (
+                               <div key={idx} className="final-spotify-col-item">
+                                  <span className="idx">{idx + 1}</span> <span className="name">{item.song.title}</span>
+                               </div>
+                            ))}
+                            <div className="final-spotify-col-title" style={{ marginTop: '30px' }}>Top Vibe</div>
+                            <div className="final-spotify-col-stat">{wrappedData.topMood ? t(`mood${wrappedData.topMood.charAt(0).toUpperCase() + wrappedData.topMood.slice(1)}` as any).replace(/☀️ |🌧️ |☕ |⚡ /g, '') : '-'}</div>
+                         </div>
+                      </div>
+                   </div>
+                </div>
+             )}
+          </div>
+          </div>
+          
+          {wrappedStoryIndex < 8 && (
+            <button className="story-nav-btn right" onClick={(e) => { e.stopPropagation(); setWrappedStoryIndex(prev => prev + 1); }}>
+              <ChevronRight size={32} />
+            </button>
+          )}
           </div>
         </div>
       )}

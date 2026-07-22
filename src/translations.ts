@@ -369,6 +369,35 @@ type TranslationKeys = {
   enterBannerUrl: string;
   playingOnMobile: string;
 
+  // Wrapped
+  wrappedTitle: string;
+  wrappedSubtitle: string;
+  wrappedEditorialP1: string;
+  wrappedEditorialP2: string;
+  wrappedEditorialP3: string;
+  wrappedEditorialP4: string;
+  vibeCheckTitle: string;
+  vibeCheckPrompt: string;
+  moodHappy: string;
+  moodSad: string;
+  moodChill: string;
+  moodEnergetic: string;
+  topSongs: string;
+  topMood: string;
+  totalListenTime: string;
+  storyWelcome: string;
+  storyMinutes: string;
+  storyMood: string;
+  storyArtist: string;
+  storySongs: string;
+  storyUniqueSongs: string;
+  storyUniqueArtists: string;
+  storyTopSongTitle: string;
+  storyTopSongStats: string;
+  storyTopArtistsList: string;
+  storyFinalWrap: string;
+  playYourTopSongs: string;
+  viewYourStory: string;
 };
 
 const translations: Record<Language, TranslationKeys> = {
@@ -737,8 +766,37 @@ const translations: Record<Language, TranslationKeys> = {
     editBanner: 'Edit Banner',
     browsing: 'Mencari Lagu...',
     enterBannerUrl: 'Masukkan URL Banner (biarkan kosong untuk menghapus):',
-    playingOnMobile: 'Sedang memutar di HP'
+    playingOnMobile: 'Sedang memutar di HP',
 
+    // Wrapped
+    wrappedTitle: 'DonPollo Wrapped',
+    wrappedSubtitle: 'Ringkasan Aktivitas Kamu',
+    wrappedEditorialP1: 'Kamu telah menghabiskan ',
+    wrappedEditorialP2: ' mendengarkan musik. Vibe paling dominanmu adalah ',
+    wrappedEditorialP3: ', dari total ',
+    wrappedEditorialP4: ' lagu yang menemani harimu.',
+    vibeCheckTitle: 'Vibe Check!',
+    vibeCheckPrompt: 'Gimana vibe kamu hari ini?',
+    moodHappy: '☀️ Senang',
+    moodSad: '🌧️ Sedih',
+    moodChill: '☕ Chill',
+    moodEnergetic: '⚡ Semangat',
+    topSongs: 'Lagu Teratas',
+    topMood: 'Mood Dominan',
+    totalListenTime: 'Total Waktu Mendengarkan',
+    storyWelcome: 'Selamat datang di Wrapped kamu',
+    storyMinutes: 'Tahun ini, kamu menghabiskan {0} menit mendengarkan musik.',
+    storyMood: 'Mood andalanmu adalah {0}.',
+    storyArtist: 'Artis teratasmu adalah {0}.',
+    storySongs: 'Dan inilah lagu-lagu teratasmu.',
+    storyUniqueSongs: 'Kamu menjelajahi {0} lagu unik tahun ini.',
+    storyUniqueArtists: 'Telingamu sungguh luas! Kamu mendengarkan {0} artis berbeda.',
+    storyTopSongTitle: 'Namun ada satu lagu yang paling sering menemanimu...',
+    storyTopSongStats: 'Diputar {0} kali • Menemanimu selama {1} jam',
+    storyTopArtistsList: 'Top 5 Artis Favoritmu',
+    storyFinalWrap: 'Kilas Balik Musikmu',
+    playYourTopSongs: 'Putar Lagu Teratas',
+    viewYourStory: 'Lihat Ceritamu'
   },
 
   en: {
@@ -1106,8 +1164,37 @@ const translations: Record<Language, TranslationKeys> = {
     editBanner: 'Edit Banner',
     browsing: 'Browsing...',
     enterBannerUrl: 'Enter Banner URL (leave blank to remove):',
-    playingOnMobile: 'Playing on Mobile'
+    playingOnMobile: 'Playing on Mobile',
 
+    // Wrapped
+    wrappedTitle: 'DonPollo Wrapped',
+    wrappedSubtitle: 'Your Listening Summary',
+    wrappedEditorialP1: 'You spent ',
+    wrappedEditorialP2: ' listening to music. Your dominant vibe is ',
+    wrappedEditorialP3: ', out of ',
+    wrappedEditorialP4: ' songs that accompanied your days.',
+    vibeCheckTitle: 'Vibe Check!',
+    vibeCheckPrompt: 'How are you feeling today?',
+    moodHappy: '☀️ Happy',
+    moodSad: '🌧️ Sad',
+    moodChill: '☕ Chill',
+    moodEnergetic: '⚡ Energetic',
+    topSongs: 'Top Songs',
+    topMood: 'Top Mood',
+    totalListenTime: 'Total Listening Time',
+    storyWelcome: 'Welcome to your Wrapped',
+    storyMinutes: 'You spent {0} minutes listening to music this year.',
+    storyMood: 'Your dominant mood was {0}.',
+    storyArtist: 'Your top artist was {0}',
+    storySongs: 'Here are your top songs.',
+    storyUniqueSongs: 'You explored {0} unique songs this year.',
+    storyUniqueArtists: 'Your taste is vast! You listened to {0} different artists.',
+    storyTopSongTitle: 'But there was one song that defined your year...',
+    storyTopSongStats: 'Played {0} times • {1} hours spent together',
+    storyTopArtistsList: 'Your Top 5 Artists',
+    storyFinalWrap: 'Your Final Wrapped',
+    playYourTopSongs: 'Play Top Songs',
+    viewYourStory: 'Your Story'
   },
 
   ja: {
@@ -1475,8 +1562,37 @@ const translations: Record<Language, TranslationKeys> = {
     editBanner: 'バナーを編集',
     browsing: '検索中...',
     enterBannerUrl: 'バナーURLを入力（削除するには空白のままにしてください）:',
-    playingOnMobile: 'モバイルで再生中'
+    playingOnMobile: 'モバイルで再生中',
 
+    // Wrapped
+    wrappedTitle: 'DonPollo Wrapped',
+    wrappedSubtitle: 'あなたのリスニングまとめ',
+    wrappedEditorialP1: 'あなたは音楽を聴くのに ',
+    wrappedEditorialP2: ' 費やしました。最もよく聴いた雰囲気は ',
+    wrappedEditorialP3: ' です。合計 ',
+    wrappedEditorialP4: ' 曲があなたの日々に寄り添いました。',
+    vibeCheckTitle: 'Vibe Check!',
+    vibeCheckPrompt: '今日の気分はどうですか？',
+    moodHappy: '☀️ 楽しい',
+    moodSad: '🌧️ 悲しい',
+    moodChill: '☕ 落ち着く',
+    moodEnergetic: '⚡ 元気',
+    topSongs: 'トップソング',
+    topMood: '主な気分',
+    totalListenTime: '合計再生時間',
+    storyWelcome: 'Wrappedへようこそ',
+    storyMinutes: '今年、あなたは{0}分間音楽を聴きました。',
+    storyMood: 'あなたの主な気分は{0}でした。',
+    storyArtist: 'あなたのトップアーティストは{0}でした。',
+    storySongs: 'これがあなたのトップソングです。',
+    storyUniqueSongs: '今年は {0} 曲のユニークな曲を探索しました。',
+    storyUniqueArtists: 'あなたの好みは幅広い！ {0} 人の異なるアーティストを聴きました。',
+    storyTopSongTitle: 'しかし、あなたの一年を定義した曲が一つありました...',
+    storyTopSongStats: '{0} 回再生 • 一緒に過ごした {1} 時間',
+    storyTopArtistsList: 'トップ5アーティスト',
+    storyFinalWrap: '最終まとめ',
+    playYourTopSongs: 'トップソングを再生',
+    viewYourStory: 'あなたのストーリー'
   },
 
   ko: {
@@ -1845,8 +1961,37 @@ const translations: Record<Language, TranslationKeys> = {
     editBanner: '배너 편집',
     browsing: '탐색 중...',
     enterBannerUrl: '배너 URL 입력 (제거하려면 비워 두세요):',
-    playingOnMobile: '모바일에서 재생 중'
+    playingOnMobile: '모바일에서 재생 중',
 
+    // Wrapped
+    wrappedTitle: 'DonPollo Wrapped',
+    wrappedSubtitle: '리스닝 요약',
+    wrappedEditorialP1: '당신은 음악을 듣는 데 ',
+    wrappedEditorialP2: '을(를) 보냈습니다. 가장 많이 들은 분위기는 ',
+    wrappedEditorialP3: '입니다. 총 ',
+    wrappedEditorialP4: '곡이 당신의 하루와 함께했습니다.',
+    vibeCheckTitle: 'Vibe Check!',
+    vibeCheckPrompt: '오늘 기분이 어떠신가요?',
+    moodHappy: '☀️ 행복함',
+    moodSad: '🌧️ 슬픔',
+    moodChill: '☕ 차분함',
+    moodEnergetic: '⚡ 활기참',
+    topSongs: '인기 곡',
+    topMood: '주요 기분',
+    totalListenTime: '총 재생 시간',
+    storyWelcome: 'Wrapped에 오신 것을 환영합니다',
+    storyMinutes: '올해 음악을 듣는 데 {0}분을 보냈습니다.',
+    storyMood: '주요 기분은 {0}이었습니다.',
+    storyArtist: '최고의 아티스트는 {0}입니다.',
+    storySongs: '인기 곡은 다음과 같습니다.',
+    storyUniqueSongs: '올해 {0}곡의 다양한 노래를 탐색했습니다.',
+    storyUniqueArtists: '취향이 참 다양하네요! {0}명의 다른 아티스트를 들었습니다.',
+    storyTopSongTitle: '하지만 올 한 해를 정의한 하나의 노래가 있었습니다...',
+    storyTopSongStats: '{0}번 재생 • 함께한 {1}시간',
+    storyTopArtistsList: '최고의 아티스트 Top 5',
+    storyFinalWrap: '나의 요약',
+    playYourTopSongs: '인기 곡 재생',
+    viewYourStory: '당신의 이야기'
   }
 };
 

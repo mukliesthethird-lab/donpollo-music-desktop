@@ -95,4 +95,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
   notifyClosing: (discordId: string) => ipcRenderer.send('notify-closing', discordId),
   fetchUrl: (url: string) => ipcRenderer.invoke('fetch-url', url),
   fetchText: (url: string) => ipcRenderer.invoke('fetch-text', url),
+  trackSong: (songData: any) => ipcRenderer.send('track-song', songData),
+  trackMood: (mood: string) => ipcRenderer.send('track-mood', mood),
+  getAnalytics: () => ipcRenderer.invoke('get-analytics'),
 });
