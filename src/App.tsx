@@ -1,11 +1,12 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react';
-import { Home, Library, Plus, Mic2, Settings, Play, Pause, SkipBack, SkipForward, Repeat, Shuffle, Volume2, VolumeX, ListMusic, UserCircle, ChevronRight, Search, AlertCircle, Headset, Loader2, Maximize2, X, ChevronLeft, ChevronUp, ChevronDown, Music, PanelRight, Trash2, Heart, LogIn, LogOut, Check, FolderPlus, Globe, Headphones, Download, DownloadCloud, Database, WifiOff, CheckCircle2, Paintbrush, Clock, Trophy, Zap, Radio, Timer, Repeat1, MinusCircle, PlusCircle, Edit3, Share2, Copy, Smartphone } from 'lucide-react';
+import { Home, Library, Plus, Mic2, Settings, Play, Pause, SkipBack, SkipForward, Repeat, Shuffle, Volume2, VolumeX, ListMusic, UserCircle, ChevronRight, Search, AlertCircle, Headset, Loader2, Maximize2, X, ChevronLeft, ChevronUp, ChevronDown, Music, PanelRight, Trash2, Heart, LogIn, LogOut, Check, FolderPlus, Globe, Headphones, Download, DownloadCloud, Database, WifiOff, CheckCircle2, Paintbrush, Clock, Trophy, Zap, Radio, Timer, Repeat1, MinusCircle, PlusCircle, Edit3, Share2, Copy, Smartphone, Hourglass, Lock, Map as MapIcon, Users } from 'lucide-react';
 import './index.css';
 import './themes.css';
 import { createTranslator } from './translations';
 import type { Language } from './translations';
 
 const API_BASE_URL = 'http://179.41.4.182:7097';
+import { SoundMap } from './components/SoundMap';
 // ⚠️ Ganti dengan Client ID dari Discord Developer Portal Anda
 const DISCORD_CLIENT_ID = import.meta.env.VITE_DISCORD_CLIENT_ID || '';
 // Redirect URI: otomatis pilih localhost (dev) atau Vercel (installed app)
@@ -13,7 +14,7 @@ const DISCORD_REDIRECT_URI = window.location.hostname === 'localhost'
   ? 'http://localhost:5173/callback.html'
   : 'https://donpollo-music-desktop.vercel.app/callback';
 
-type Page = 'home' | 'library' | 'playlist' | 'playlist-detail' | 'settings' | 'downloads' | 'artist' | 'profile';
+type Page = 'home' | 'library' | 'playlist' | 'playlist-detail' | 'settings' | 'downloads' | 'artist' | 'profile' | 'time-capsule' | 'sound-map';
 
 interface Playlist {
   id: string;
@@ -23,6 +24,7 @@ interface Playlist {
   createdAt: number;
   discordId?: string;
   privacy?: string;
+  collaborators?: string[];
 }
 
 interface DiscordUser {
@@ -341,6 +343,85 @@ function App() {
   const [bannerInputUrl, setBannerInputUrl] = useState('');
   const [listenerPercentile, setListenerPercentile] = useState<number | null>(null);
 
+  // ─── Focus Mode / Pomodoro State ─────────────────────────────
+  const [isFocusMode, setIsFocusMode] = useState(false);
+  const [focusDuration, setFocusDuration] = useState(25 * 60); // in seconds
+  const [focusTimeLeft, setFocusTimeLeft] = useState(0);
+  const [focusSongsPlayed, setFocusSongsPlayed] = useState<string[]>([]);
+  const [showFocusSetup, setShowFocusSetup] = useState(false);
+  const [showFocusRecap, setShowFocusRecap] = useState(false);
+  const [focusCustomMinutes, setFocusCustomMinutes] = useState('');
+  const [focusRecapData, setFocusRecapData] = useState<{ duration: number; songsPlayed: number; startedAt: number } | null>(null);
+  const [focusSessionHistory, setFocusSessionHistory] = useState<any[]>(() => {
+    try {
+      const user = JSON.parse(localStorage.getItem('donpollo_user') || 'null');
+      const suffix = user ? `_${user.id}` : '';
+      return JSON.parse(localStorage.getItem(`donpollo_focus_history${suffix}`) || '[]');
+    } catch { return []; }
+  });
+  const focusStartedAtRef = useRef<number>(0);
+
+  // ─── Focus Mode / Pomodoro Logic ─────────────────────────────
+  useEffect(() => {
+    let timer: ReturnType<typeof setInterval>;
+    if (isFocusMode && focusTimeLeft > 0) {
+      timer = setInterval(() => {
+        setFocusTimeLeft(prev => {
+          if (prev <= 1) {
+            clearInterval(timer);
+            handleFocusComplete();
+            return 0;
+          }
+          return prev - 1;
+        });
+      }, 1000);
+    }
+    return () => {
+      if (timer) clearInterval(timer);
+    };
+  }, [isFocusMode, focusTimeLeft]);
+
+  const startFocusMode = (durationSeconds: number) => {
+    setFocusDuration(durationSeconds);
+    setFocusTimeLeft(durationSeconds);
+    setFocusSongsPlayed([]);
+    setIsFocusMode(true);
+    setShowFocusSetup(false);
+    focusStartedAtRef.current = Date.now();
+  };
+
+  const handleFocusComplete = () => {
+    setIsFocusMode(false);
+    setShowFocusRecap(true);
+    const durationMins = Math.round(focusDuration / 60);
+    const recap = {
+      duration: durationMins,
+      songsPlayed: focusSongsPlayed.length,
+      startedAt: focusStartedAtRef.current,
+    };
+    setFocusRecapData(recap);
+    
+    // Save to history
+    setFocusSessionHistory(prev => {
+      const newHistory = [recap, ...prev];
+      try {
+        const user = JSON.parse(localStorage.getItem('donpollo_user') || 'null');
+        const suffix = user ? `_${user.id}` : '';
+        localStorage.setItem(`donpollo_focus_history${suffix}`, JSON.stringify(newHistory));
+      } catch { }
+      return newHistory;
+    });
+  };
+
+  const stopFocusMode = () => {
+    setIsFocusMode(false);
+    setFocusTimeLeft(0);
+    // showToast is called below, but we can't use it before it's defined if not careful.
+    // It's defined at line 200+. We can use it.
+    showToast(t('focusStop'), 'music');
+  };
+
+
   // ─── Real Data ──────────────────────────────────────────────
   const [playHistory, setPlayHistory] = useState<any[]>(() => {
     try {
@@ -355,6 +436,49 @@ function App() {
   const [discordUser, setDiscordUser] = useState<DiscordUser | null>(() => {
     try { return JSON.parse(localStorage.getItem('donpollo_user') || 'null'); } catch { return null; }
   });
+
+  // ─── Collaborative Playlist State ────────────────────────────────
+  const [showCollabModal, setShowCollabModal] = useState(false);
+  const [collabInvites, setCollabInvites] = useState<any[]>([]);
+  const [collabPlaylistId, setCollabPlaylistId] = useState<string | null>(null);
+
+  // ─── Time Capsule ──────────────────────────────────────────────
+  const [showTimeCapsuleModal, setShowTimeCapsuleModal] = useState(false);
+  const [timeCapsules, setTimeCapsules] = useState<any[]>([]);
+  const [newCapsule, setNewCapsule] = useState({ id: undefined as number | undefined, title: '', message: '', unlockDate: '', songs: [] as any[] });
+  const [capsuleSearchQuery, setCapsuleSearchQuery] = useState('');
+  const [capsuleSearchResults, setCapsuleSearchResults] = useState<any[]>([]);
+  const [capsuleToDelete, setCapsuleToDelete] = useState<number | null>(null);
+
+  const fetchTimeCapsules = useCallback(async () => {
+    if (!discordUser || !(window as any).electronAPI?.getTimeCapsules) return;
+    const caps = await (window as any).electronAPI.getTimeCapsules(discordUser.id);
+    setTimeCapsules(caps);
+  }, [discordUser]);
+
+
+  useEffect(() => {
+    if (discordUser && activePage === 'time-capsule') {
+      fetchTimeCapsules();
+    }
+  }, [discordUser, activePage, fetchTimeCapsules]);
+
+  useEffect(() => {
+    if (capsuleSearchQuery.length < 2) {
+      setCapsuleSearchResults([]);
+      return;
+    }
+    const handler = setTimeout(async () => {
+      try {
+        const res = await fetch(`${API_BASE_URL}/api/search?q=${encodeURIComponent(capsuleSearchQuery)}`);
+        const data = await res.json();
+        setCapsuleSearchResults((data.results || []).filter((r: any) => r.duration > 0).slice(0, 5));
+      } catch (e) {
+        console.error(e);
+      }
+    }, 500);
+    return () => clearTimeout(handler);
+  }, [capsuleSearchQuery]);
 
 
 
@@ -619,26 +743,28 @@ function App() {
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
 
-  useEffect(() => {
-    const fetchPlaylists = async () => {
-      try {
-        if ((window as any).electronAPI) {
-          const dbPlaylists = await (window as any).electronAPI.getPlaylists(discordUser?.id);
-          if (dbPlaylists) {
-            setPlaylists(dbPlaylists);
-          }
+  const fetchPlaylists = useCallback(async () => {
+    try {
+      if ((window as any).electronAPI) {
+        const dbPlaylists = await (window as any).electronAPI.getPlaylists(discordUser?.id);
+        if (dbPlaylists) {
+          setPlaylists(dbPlaylists);
         }
-      } catch (e) {
-        console.error("Gagal mengambil playlist dari database", e);
       }
-    };
-    if (discordUser) fetchPlaylists();
+    } catch (e) {
+      console.error("Gagal mengambil playlist dari database", e);
+    }
   }, [discordUser]);
+
+  useEffect(() => {
+    if (discordUser) fetchPlaylists();
+  }, [discordUser, fetchPlaylists]);
   const [showCreatePlaylist, setShowCreatePlaylist] = useState(false);
   const [newPlaylistName, setNewPlaylistName] = useState('');
   const [newPlaylistAvatar, setNewPlaylistAvatar] = useState('');
   const [showLogoutDropdown, setShowLogoutDropdown] = useState(false);
   const [addToPlaylistSong, setAddToPlaylistSong] = useState<any | null>(null);
+  const [addToCapsuleSong, setAddToCapsuleSong] = useState<any | null>(null);
   const [playlistToDelete, setPlaylistToDelete] = useState<string | null>(null);
   const [isEditingPlaylistName, setIsEditingPlaylistName] = useState(false);
   const [editPlaylistNameValue, setEditPlaylistNameValue] = useState('');
@@ -715,8 +841,80 @@ function App() {
   const [volume, setVolume] = useState(settings.volume ?? 1);
   const [isMuted, setIsMuted] = useState(false);
   const [loopMode, setLoopMode] = useState<'off' | 'all' | 'one'>('off');
-  const [showLyrics, setShowLyrics] = useState(false);
+  const [rightSidebarMode, setRightSidebarMode] = useState<'queue' | 'lyrics' | 'trending'>('queue');
+  const [trendingCountry, setTrendingCountry] = useState<{name: string, code: string} | null>(null);
+  const [trendingSongs, setTrendingSongs] = useState<any[]>([]);
+  const [isTrendingLoading, setIsTrendingLoading] = useState(false);
+  const [trendingError, setTrendingError] = useState('');
   const [isWidgetMode, setIsWidgetMode] = useState(false);
+
+  const fetchTrendingSongs = async (code: string | undefined, countryName: string) => {
+    setIsTrendingLoading(true);
+    setTrendingError('');
+    setTrendingSongs([]);
+    setRightSidebarMode('trending');
+    setIsRightSidebarOpen(true);
+    try {
+      if (!code) throw new Error('No code, skip to fallback');
+      const targetUrl = `https://rss.applemarketingtools.com/api/v2/${code.toLowerCase()}/music/most-played/25/songs.json`;
+      const data = (window as any).electronAPI
+        ? await (window as any).electronAPI.fetchUrl(targetUrl)
+        : await (await fetch(`https://api.allorigins.win/get?url=${encodeURIComponent(targetUrl)}`)).json();
+
+      let feedData = data;
+      if (data && data.contents) {
+        try { feedData = JSON.parse(data.contents); } catch { }
+      }
+
+      if (feedData?.feed?.results && feedData.feed.results.length > 0) {
+        const fetched = feedData.feed.results.map((t: any) => ({
+          id: null,
+          title: t.name,
+          artist: t.artistName,
+          album: '',
+          cover: t.artworkUrl100,
+          url: '',
+          youtubeId: null
+        }));
+        setTrendingSongs(fetched);
+        setIsTrendingLoading(false);
+        return;
+      } else {
+        throw new Error('No data');
+      }
+    } catch (err) {
+      // Fallback to iTunes search API
+      try {
+        const fallbackUrl = `https://itunes.apple.com/search?term=popular+${encodeURIComponent(countryName)}&entity=song&limit=25`;
+        const data = (window as any).electronAPI
+          ? await (window as any).electronAPI.fetchUrl(fallbackUrl)
+          : await (await fetch(`https://api.allorigins.win/get?url=${encodeURIComponent(fallbackUrl)}`)).json();
+        
+        let searchData = data;
+        if (data && data.contents) {
+          try { searchData = JSON.parse(data.contents); } catch { }
+        }
+
+        if (searchData?.results && searchData.results.length > 0) {
+          const fetched = searchData.results.map((t: any) => ({
+            id: null,
+            title: t.trackName,
+            artist: t.artistName,
+            album: t.collectionName || '',
+            cover: t.artworkUrl100,
+            url: '',
+            youtubeId: null
+          }));
+          setTrendingSongs(fetched);
+        } else {
+          setTrendingError(t('soundMapNoData'));
+        }
+      } catch (fallbackErr) {
+        setTrendingError(t('soundMapNoData'));
+      }
+    }
+    setIsTrendingLoading(false);
+  };
 
   // ─── Theme Font & Radius Effect ────────────────────────────
   useEffect(() => {
@@ -1044,6 +1242,11 @@ function App() {
           const reqs = await (window as any).electronAPI.pollJoinRequests(discordUser.id);
           setJoinRequests(reqs);
 
+          if ((window as any).electronAPI?.pollCollabInvites) {
+            const collabs = await (window as any).electronAPI.pollCollabInvites(discordUser.id);
+            setCollabInvites(collabs);
+          }
+
           // Handle Guest acceptance automatically
           if (reqs.outgoing && reqs.outgoing.length > 0) {
             const allAccepted = reqs.outgoing.filter((r: any) => r.status === 'accepted');
@@ -1182,6 +1385,7 @@ function App() {
   const filtersRef = useRef<BiquadFilterNode[]>([]);
   const compressorNodeRef = useRef<DynamicsCompressorNode | null>(null);
   const autoGainNodeRef = useRef<GainNode | null>(null);
+  const analyserNodeRef = useRef<AnalyserNode | null>(null);
   const toastTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const setupAudioContext = (audio: HTMLAudioElement) => {
@@ -1237,7 +1441,16 @@ function App() {
         }
         prevNode.connect(autoGainNodeRef.current);
         autoGainNodeRef.current.connect(compressorNodeRef.current);
-        compressorNodeRef.current.connect(ctx.destination);
+        
+        if (!analyserNodeRef.current) {
+          const analyser = ctx.createAnalyser();
+          analyser.fftSize = 256;
+          analyser.smoothingTimeConstant = 0.8;
+          analyserNodeRef.current = analyser;
+        }
+        
+        compressorNodeRef.current.connect(analyserNodeRef.current);
+        analyserNodeRef.current.connect(ctx.destination);
       } else {
         source.connect(filtersRef.current[0]);
         // compressor is already connected
@@ -1667,7 +1880,7 @@ function App() {
         return (progress - lyricsOffset) >= line.time && (progress - lyricsOffset) < nextTime;
       });
       if (activeIndex !== -1) {
-        if (showLyrics && sidebarLyricsRef.current) {
+        if (rightSidebarMode === 'lyrics' && sidebarLyricsRef.current) {
           const c = sidebarLyricsRef.current;
           const el = c.querySelector(`[data-lyric-idx="${activeIndex}"]`) as HTMLElement;
           if (el) c.scrollTo({ top: el.offsetTop - c.clientHeight / 2 + el.clientHeight / 2, behavior: 'smooth' });
@@ -1679,7 +1892,7 @@ function App() {
         }
       }
     }
-  }, [progress, lyricsData, duration, showLyrics, lyricsOffset, isWidgetMode, isUserScrolling]);
+  }, [progress, lyricsData, duration, rightSidebarMode, lyricsOffset, isWidgetMode, isUserScrolling]);
 
   // ─── Helpers ─────────────────────────────────────────────────
   const showToast = (msg: string, iconType: 'success' | 'error' | 'music' | 'playlist' | 'user' = 'success') => {
@@ -1801,7 +2014,15 @@ function App() {
       return;
     }
 
-    const updated = { ...pl, songs: [...pl.songs, song] };
+    const songWithAddedBy = {
+      ...song,
+      addedBy: discordUser ? {
+        id: discordUser.id,
+        username: discordUser.global_name || discordUser.username,
+        avatar: discordUser.avatar ? `https://cdn.discordapp.com/avatars/${discordUser.id}/${discordUser.avatar}.png` : null
+      } : null
+    };
+    const updated = { ...pl, songs: [...pl.songs, songWithAddedBy] };
     if ((window as any).electronAPI) await (window as any).electronAPI.savePlaylist(updated);
 
     setPlaylists(prev => prev.map(p => p.id === playlistId ? updated : p));
@@ -2293,6 +2514,9 @@ function App() {
         if (song.isPodcast) {
           query = buildPodcastQuery(song.artist || '', song.title || '');
         } else {
+          if (rightSidebarMode !== 'lyrics') {
+            setRightSidebarMode('lyrics');
+          }
           query = song.originalQuery || (`${song.artist} ${song.title}`);
         }
         let url = `${API_BASE_URL}/api/search?q=${encodeURIComponent(query)}`;
@@ -2300,6 +2524,10 @@ function App() {
           let resData = (window as any).electronAPI
             ? await (window as any).electronAPI.fetchUrl(url)
             : await (await fetch(url)).json();
+            
+          if (typeof resData === 'string') {
+            try { resData = JSON.parse(resData); } catch (e) {}
+          }
 
           if (resData && resData.results && resData.results.length > 0) {
             let validYt: any;
@@ -2350,11 +2578,17 @@ function App() {
       // 1. Update UI langsung agar terasa lebih cepat
       setCurrentSong(song);
       addToHistory(song);
+      
+      // Track Focus Mode songs
+      if (isFocusMode && song.id && !focusSongsPlayed.includes(song.id)) {
+        setFocusSongsPlayed(prev => [...prev, song.id]);
+      }
+      
       setDuration(song.duration || 0);
       setIsPlaying(true);
       if (settings.autoLyrics) {
         setIsRightSidebarOpen(true);
-        setShowLyrics(true);
+        setRightSidebarMode('lyrics');
       }
 
       // 2. Fetch lyrics berjalan di background
@@ -2506,7 +2740,7 @@ function App() {
 
   const addToHistory = (song: any) => {
     if (!song || !song.id) return;
-    const cleanSong = { id: song.id, title: song.title, artist: song.artist, thumbnail: song.thumbnail, duration: song.duration };
+    const cleanSong = { id: song.id, title: song.title, artist: song.artist, thumbnail: song.thumbnail, cover: song.cover, duration: song.duration, originalQuery: song.originalQuery, isPodcast: song.isPodcast };
     setPlayHistory(prev => {
       const filtered = prev.filter(item => item.id !== cleanSong.id);
       return [cleanSong, ...filtered].slice(0, 20);
@@ -3167,6 +3401,8 @@ function App() {
       const pl = playlists.find(p => p.id === activePlaylistId);
       if (!pl) return null;
       const isMyPlaylist = !pl.discordId || pl.discordId === discordUser?.id;
+      const isCollaborator = pl.collaborators?.includes(discordUser?.id || '') || false;
+      const canEditSongs = isMyPlaylist || isCollaborator;
       return (
         <div className="page-content">
           <div className="page-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
@@ -3286,6 +3522,14 @@ function App() {
                   <DownloadCloud size={16} /> Download All
                 </button>
               )}
+              {(isMyPlaylist || isCollaborator) && (
+                <button className="btn-secondary" onClick={() => {
+                  setCollabPlaylistId(pl.id);
+                  setShowCollabModal(true);
+                }}>
+                  <Users size={16} /> Collab ({pl.collaborators?.length || 0})
+                </button>
+              )}
               {isMyPlaylist && (
                 <button className="btn-secondary" onClick={async () => {
                   if ((window as any).electronAPI?.createShareCode) {
@@ -3320,11 +3564,11 @@ function App() {
                   }}
                   onDragOver={(e) => {
                     e.preventDefault();
-                    if (isMyPlaylist) setDragOverPlaylistSongIdx(i);
+                    if (canEditSongs) setDragOverPlaylistSongIdx(i);
                   }}
                   onDragLeave={() => setDragOverPlaylistSongIdx(null)}
                   onDrop={async (e) => {
-                    if (!isMyPlaylist) return;
+                    if (!canEditSongs) return;
                     e.preventDefault();
                     if (draggedPlaylistSongIdx !== null && draggedPlaylistSongIdx !== i) {
                       const newSongs = [...pl.songs];
@@ -3336,7 +3580,15 @@ function App() {
                     } else if (draggedGlobalSong && draggedPlaylistSongIdx === null) {
                       if (!pl.songs.some(s => s.id === draggedGlobalSong.id)) {
                         const newSongs = [...pl.songs];
-                        newSongs.splice(i, 0, draggedGlobalSong);
+                        const songWithAddedBy = {
+                          ...draggedGlobalSong,
+                          addedBy: discordUser ? {
+                            id: discordUser.id,
+                            username: discordUser.global_name || discordUser.username,
+                            avatar: discordUser.avatar ? `https://cdn.discordapp.com/avatars/${discordUser.id}/${discordUser.avatar}.png` : null
+                          } : null
+                        };
+                        newSongs.splice(i, 0, songWithAddedBy);
                         const updated = { ...pl, songs: newSongs };
                         if ((window as any).electronAPI) await (window as any).electronAPI.savePlaylist(updated);
                         setPlaylists(prev => prev.map(p => p.id === pl.id ? updated : p));
@@ -3368,6 +3620,20 @@ function App() {
                     <div className="library-item-title" title={song.title}>{song.title}</div>
                     <div className="library-item-artist">{song.artist}</div>
                   </div>
+                  {song.addedBy && (
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginRight: '16px', flexShrink: 0 }} title={`Added by ${song.addedBy.username}`}>
+                      {song.addedBy.avatar ? (
+                        <img src={song.addedBy.avatar} alt="" style={{ width: '18px', height: '18px', borderRadius: '50%', objectFit: 'cover' }} />
+                      ) : (
+                        <div style={{ width: '18px', height: '18px', borderRadius: '50%', background: 'var(--bg-card-hover)', color: 'var(--text-secondary)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '9px', fontWeight: 'bold' }}>
+                          {song.addedBy.username?.charAt(0).toUpperCase()}
+                        </div>
+                      )}
+                      <span style={{ fontSize: '11px', color: 'var(--text-secondary)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: '80px' }}>
+                        {song.addedBy.username}
+                      </span>
+                    </div>
+                  )}
                   <div className="library-item-duration">{formatTime(song.duration)}</div>
                   <div style={{ display: 'flex', gap: '4px' }}>
                     <button
@@ -3378,7 +3644,7 @@ function App() {
                     >
                       <Heart size={16} fill={isLiked(song.id) ? 'currentColor' : 'none'} />
                     </button>
-                    {isMyPlaylist && (
+                    {canEditSongs && (
                       <button
                         className="library-item-action"
                         onClick={(e) => { e.stopPropagation(); removeSongFromPlaylist(pl.id, song.id); }}
@@ -3400,7 +3666,7 @@ function App() {
           )}
 
           {/* Search bar inside playlist */}
-          {isMyPlaylist && (
+          {canEditSongs && (
             <div className="playlist-search-section" style={{ marginTop: '40px', paddingTop: '20px', borderTop: '1px solid var(--border-color)' }}>
               <h2 style={{ fontSize: '18px', marginBottom: '16px' }}>{t('addSongToPlaylistLabel')}</h2>
               <form onSubmit={handlePlaylistSearch} style={{ display: 'flex', gap: '12px', marginBottom: '20px' }}>
@@ -3456,7 +3722,7 @@ function App() {
         <div className="page-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
           <div>
             <h1>{t('myLibrary')}</h1>
-            <p className="page-subtitle">{playlists.filter(pl => pl.discordId === discordUser?.id || savedPlaylists.includes(pl.id)).length} {t('playlist')}</p>
+            <p className="page-subtitle">{playlists.filter(pl => pl.discordId === discordUser?.id || savedPlaylists.includes(pl.id) || pl.collaborators?.includes(discordUser?.id || '')).length} {t('playlist')}</p>
           </div>
           <div style={{ display: 'flex', gap: '8px' }}>
             <button className="btn-secondary" onClick={() => setShowImportPlaylist(true)}>
@@ -3467,9 +3733,9 @@ function App() {
             </button>
           </div>
         </div>
-        {playlists.filter(pl => pl.discordId === discordUser?.id || savedPlaylists.includes(pl.id)).length > 0 ? (
+        {playlists.filter(pl => pl.discordId === discordUser?.id || savedPlaylists.includes(pl.id) || pl.collaborators?.includes(discordUser?.id || '')).length > 0 ? (
           <div className="playlist-grid">
-            {playlists.filter(pl => pl.discordId === discordUser?.id || savedPlaylists.includes(pl.id)).map(pl => (
+            {playlists.filter(pl => pl.discordId === discordUser?.id || savedPlaylists.includes(pl.id) || pl.collaborators?.includes(discordUser?.id || '')).map(pl => (
               <div key={pl.id} className="playlist-card" onClick={() => { navigate('playlist-detail', { playlistId: pl.id }); }}>
                 <div className="playlist-card-art">
                   {pl.avatar ? (
@@ -4365,6 +4631,150 @@ function App() {
       </div>
     </div>
   );
+
+
+  const renderTimeCapsulePage = () => (
+    <div className="page-content offline-mode" style={{ minHeight: '100%', display: 'flex', flexDirection: 'column', background: 'var(--bg-primary)' }}>
+      <div style={{ padding: '32px 32px 16px 32px' }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '24px' }}>
+          <h1 style={{ fontSize: '28px', fontWeight: '800', color: 'var(--text-primary)', margin: 0 }}>{t('timeCapsule')}</h1>
+          <button className="btn-primary" onClick={() => {
+            setNewCapsule({ id: undefined, title: '', message: '', unlockDate: '', songs: [] });
+            setShowTimeCapsuleModal(true);
+          }}>
+            <Plus size={16} /> {t('createCapsule') || 'Create Capsule'}
+          </button>
+        </div>
+
+        {/* Stat Cards */}
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(250px, 1fr))', gap: '16px', marginBottom: '32px' }}>
+          <div style={{ background: 'var(--bg-card)', padding: '20px', borderRadius: '12px', border: '1px solid var(--border-color)', display: 'flex', flexDirection: 'column', gap: '12px' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', color: 'var(--accent-primary)' }}>
+              <Hourglass size={20} />
+              <h3 style={{ fontSize: '12px', fontWeight: '700', letterSpacing: '1px', textTransform: 'uppercase', margin: 0 }}>{t('timeCapsule')}</h3>
+            </div>
+            <div style={{ fontSize: '36px', fontWeight: '800' }}>{timeCapsules.length} <span style={{ fontSize: '16px', color: 'var(--text-secondary)', fontWeight: '600' }}>{t('capsules') || 'capsules'}</span></div>
+            <div style={{ fontSize: '12px', color: 'var(--text-secondary)' }}>{t('capsuleDesc') || 'Sealed musical memories'}</div>
+          </div>
+
+          <div style={{ background: 'var(--bg-card)', padding: '20px', borderRadius: '12px', border: '1px solid var(--border-color)', display: 'flex', flexDirection: 'column', gap: '12px' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', color: 'var(--text-secondary)' }}>
+              <Lock size={20} />
+              <h3 style={{ fontSize: '12px', fontWeight: '700', letterSpacing: '1px', textTransform: 'uppercase', margin: 0 }}>{t('locked') || 'Locked'}</h3>
+            </div>
+            <div style={{ fontSize: '36px', fontWeight: '800' }}>
+              {timeCapsules.filter(c => new Date(c.unlockDate) > new Date()).length}{' '}
+              <span style={{ fontSize: '16px', color: 'var(--text-secondary)', fontWeight: '600' }}>{t('capsules') || 'capsules'}</span>
+            </div>
+            <div style={{ fontSize: '12px', color: 'var(--text-secondary)' }}>{t('waitingToBeOpened') || 'Waiting to be opened'}</div>
+          </div>
+
+          <div style={{ background: 'linear-gradient(135deg, #10b981, #065f46)', padding: '20px', borderRadius: '12px', display: 'flex', flexDirection: 'column', gap: '8px', justifyContent: 'center', position: 'relative', overflow: 'hidden' }}>
+            <div style={{ position: 'absolute', right: '-15px', bottom: '-15px', opacity: 0.15 }}>
+              <Hourglass size={100} />
+            </div>
+            <h3 style={{ fontSize: '16px', fontWeight: '800', color: '#fff', zIndex: 1, letterSpacing: '0.5px', margin: 0 }}>{t('sealYourMemories') || 'Seal Your\nMemories'}</h3>
+            <p style={{ fontSize: '12px', color: 'rgba(255,255,255,0.85)', zIndex: 1, margin: 0, marginTop: '4px', lineHeight: '1.4' }}>{t('sealYourMemoriesDesc') || 'Lock a playlist and message until a future date.'}</p>
+          </div>
+        </div>
+
+        {/* Capsule List */}
+        {timeCapsules.length === 0 ? (
+          <div className="empty-state" style={{ marginTop: '24px', color: 'var(--text-muted)' }}>
+            <Hourglass size={64} style={{ marginBottom: '16px', opacity: 0.3 }} />
+            <h3 style={{ color: 'var(--text-secondary)' }}>{t('noCapsules') || 'No capsules yet'}</h3>
+            <p style={{ fontSize: '13px' }}>{t('noCapsulesDesc') || 'Create your first time capsule!'}</p>
+          </div>
+        ) : (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '32px' }}>
+            <section>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
+                <h2 style={{ fontSize: '18px', fontWeight: '700', color: 'var(--text-primary)', display: 'flex', alignItems: 'center', gap: '8px', margin: 0 }}>
+                  <Hourglass size={20} color="var(--accent-primary)" /> {t('timeCapsule')}
+                </h2>
+              </div>
+
+              <div style={{ background: 'var(--bg-card)', borderRadius: '12px', border: '1px solid var(--border-color)', overflow: 'hidden' }}>
+                {/* Header Row */}
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 180px 120px 100px', padding: '16px 24px', borderBottom: '1px solid var(--border-color)', fontSize: '11px', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '1px', fontWeight: '700' }}>
+                  <span>{t('capsuleTitle') || 'Title'}</span>
+                  <span>{t('capsuleUnlockDate') || 'Unlock Date'}</span>
+                  <span>{t('songs') || 'Songs'}</span>
+                  <span></span>
+                </div>
+
+                <div style={{ display: 'flex', flexDirection: 'column' }}>
+                  {timeCapsules.map((cap, i) => {
+                    const isUnlocked = new Date(cap.unlockDate) <= new Date();
+                    return (
+                      <div key={cap.id} className="offline-row" style={{ display: 'grid', gridTemplateColumns: '1fr 180px 120px 100px', padding: '14px 24px', alignItems: 'center', transition: 'background 0.2s', borderBottom: i === timeCapsules.length - 1 ? 'none' : '1px solid rgba(255,255,255,0.03)' }}>
+                        {/* Title & message */}
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '14px', minWidth: 0 }}>
+                          <div style={{ width: '40px', height: '40px', borderRadius: '8px', background: isUnlocked ? 'linear-gradient(135deg, #10b981, #065f46)' : 'var(--bg-card-hover)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, border: '1px solid var(--border-color)' }}>
+                            {isUnlocked ? <Hourglass size={18} color="white" /> : <Lock size={18} color="var(--text-muted)" />}
+                          </div>
+                          <div style={{ overflow: 'hidden' }}>
+                            <div style={{ fontWeight: '600', fontSize: '14px', color: 'var(--text-primary)', whiteSpace: 'nowrap', textOverflow: 'ellipsis', overflow: 'hidden' }}>{cap.title}</div>
+                            {cap.message && <div style={{ fontSize: '12px', color: 'var(--text-secondary)', whiteSpace: 'nowrap', textOverflow: 'ellipsis', overflow: 'hidden' }}>{cap.message}</div>}
+                          </div>
+                        </div>
+
+                        {/* Unlock date */}
+                        <div>
+                          <span style={{ fontSize: '13px', color: isUnlocked ? 'var(--accent-primary)' : 'var(--text-secondary)', fontWeight: isUnlocked ? '600' : '400' }}>
+                            {isUnlocked ? `✓ ${t('unlocked') || 'Unlocked'}` : new Date(cap.unlockDate).toLocaleDateString()}
+                          </span>
+                        </div>
+
+                        {/* Songs count */}
+                        <div>
+                          <span style={{ fontSize: '13px', color: 'var(--text-secondary)' }}>{(cap.songs || []).length} {t('songs')}</span>
+                        </div>
+
+                        {/* Actions */}
+                        <div style={{ display: 'flex', gap: '8px', justifyContent: 'flex-end' }}>
+                          <button className="btn-icon" title={t('edit') || 'Edit'} onClick={() => {
+                            setNewCapsule({ id: cap.id, title: cap.title, message: cap.message || '', unlockDate: cap.unlockDate?.split('T')[0] || '', songs: cap.songs || [] });
+                            setShowTimeCapsuleModal(true);
+                          }} style={{ color: 'var(--text-secondary)' }} onMouseEnter={e => e.currentTarget.style.color = 'var(--accent-primary)'} onMouseLeave={e => e.currentTarget.style.color = 'var(--text-secondary)'}>
+                            <Edit3 size={15} />
+                          </button>
+                          <button className="btn-icon delete-btn" title={t('delete') || 'Delete'} onClick={() => setCapsuleToDelete(cap.id)} style={{ color: 'var(--text-secondary)' }} onMouseEnter={e => { e.currentTarget.style.color = '#ff4d4d'; }} onMouseLeave={e => { e.currentTarget.style.color = 'var(--text-secondary)'; }}>
+                            <Trash2 size={15} />
+                          </button>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            </section>
+          </div>
+        )}
+      </div>
+
+      {/* Delete Confirm */}
+      {capsuleToDelete !== null && (
+        <div className="modal-overlay" onClick={() => setCapsuleToDelete(null)}>
+          <div className="modal" onClick={e => e.stopPropagation()}>
+            <h3 className="modal-title">{t('deletePlaylist')}</h3>
+            <p style={{ color: 'var(--text-secondary)', marginBottom: '24px' }}>{t('confirmDeletePlaylist') || 'Are you sure? This cannot be undone.'}</p>
+            <div className="modal-actions">
+              <button className="btn-secondary" onClick={() => setCapsuleToDelete(null)}>{t('cancel')}</button>
+              <button className="btn-primary" style={{ background: '#ff4d4d' }} onClick={async () => {
+                await (window as any).electronAPI?.deleteTimeCapsule(capsuleToDelete);
+                setCapsuleToDelete(null);
+                fetchTimeCapsules();
+              }}>{t('delete')}</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      <style>{`.offline-row:hover { background: var(--bg-card-hover); }`}</style>
+    </div>
+  );
+
 
 
   const renderDownloadsPage = () => (
@@ -5295,6 +5705,24 @@ function App() {
         </div>
       )}
 
+      {/* Modal: Hapus Capsule */}
+      {capsuleToDelete && (
+        <div className="modal-overlay" onClick={() => setCapsuleToDelete(null)}>
+          <div className="modal" onClick={e => e.stopPropagation()}>
+            <h3 className="modal-title">{t('delete')} Time Capsule?</h3>
+            <p style={{ color: 'var(--text-secondary)', marginBottom: '24px' }}>{t('cannotUndo')}</p>
+            <div className="modal-actions">
+              <button className="btn-secondary" onClick={() => setCapsuleToDelete(null)}>{t('cancel')}</button>
+              <button className="btn-primary" style={{ backgroundColor: '#ff5555', color: 'white' }} onClick={async () => {
+                const success = await (window as any).electronAPI.deleteTimeCapsule(capsuleToDelete);
+                if (success) fetchTimeCapsules();
+                setCapsuleToDelete(null);
+              }}>{t('delete')}</button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Modal: Hapus Cache */}
       {showClearCacheConfirm && (
         <div className="modal-overlay" onClick={() => setShowClearCacheConfirm(false)}>
@@ -5659,7 +6087,7 @@ function App() {
               </div>
             ) : (
               <div className="modal-playlist-list">
-                {playlists.filter(pl => pl.discordId === discordUser?.id).map(pl => (
+                {playlists.filter(pl => pl.discordId === discordUser?.id || pl.collaborators?.includes(discordUser?.id || '')).map(pl => (
                   <div key={pl.id} className="modal-playlist-item" onClick={() => addSongToPlaylist(pl.id, addToPlaylistSong)}>
                     <div className="modal-playlist-art">
                       {pl.avatar ? (
@@ -5688,6 +6116,381 @@ function App() {
         </div>
       )}
 
+      {/* Modal: Add to Time Capsule */}
+      {addToCapsuleSong && (
+        <div className="modal-overlay" onClick={() => setAddToCapsuleSong(null)}>
+          <div className="modal" onClick={e => e.stopPropagation()}>
+            <h3 className="modal-title">{t('timeCapsule')}</h3>
+            <p style={{ color: 'var(--text-secondary)', fontSize: '13px', marginBottom: '16px' }}>"{addToCapsuleSong.title}"</p>
+            {timeCapsules.length === 0 ? (
+              <div style={{ textAlign: 'center', padding: '20px 0' }}>
+                <p style={{ color: 'var(--text-muted)' }}>{t('noCapsules') || 'No capsules yet'}</p>
+                <button className="btn-primary" style={{ marginTop: '12px' }} onClick={() => { setAddToCapsuleSong(null); setNewCapsule({ id: undefined, title: '', message: '', unlockDate: '', songs: [addToCapsuleSong] }); setShowTimeCapsuleModal(true); }}>
+                  <Plus size={16} /> {t('createCapsule')}
+                </button>
+              </div>
+            ) : (
+              <div className="modal-playlist-list">
+                {timeCapsules.map(cap => (
+                  <div key={cap.id} className="modal-playlist-item" onClick={async () => {
+                    if (cap.songs?.some((s: any) => s.id === addToCapsuleSong.id)) {
+                       showToast(t('toastAlreadyInPlaylist') || 'Sudah ada', 'error');
+                       return;
+                    }
+                    const updated = { ...cap, songs: [...(cap.songs || []), addToCapsuleSong] };
+                    await (window as any).electronAPI.updateTimeCapsule({ ...updated, discordId: discordUser?.id });
+                    fetchTimeCapsules();
+                    setAddToCapsuleSong(null);
+                    showToast(t('toastAddedToPlaylist') || 'Berhasil', 'success');
+                  }}>
+                    <div className="modal-playlist-art" style={{ background: 'var(--bg-card-hover)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                      <Hourglass size={16} color="var(--text-muted)" />
+                    </div>
+                    <div>
+                      <div style={{ fontWeight: 600, fontSize: '14px' }}>{cap.title}</div>
+                      <div style={{ fontSize: '12px', color: 'var(--text-secondary)' }}>{(cap.songs || []).length} {t('songs')}</div>
+                    </div>
+                    {cap.songs?.some((s: any) => s.id === addToCapsuleSong.id) && (
+                      <Check size={16} color="var(--accent-primary)" style={{ marginLeft: 'auto' }} />
+                    )}
+                  </div>
+                ))}
+              </div>
+            )}
+            <div className="modal-actions">
+              <button className="btn-secondary" onClick={() => setAddToCapsuleSong(null)}>{t('cancel')}</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal: Time Capsule Setup */}
+      {showTimeCapsuleModal && (
+        <div className="modal-overlay" onClick={() => setShowTimeCapsuleModal(false)}>
+          <div className="modal" onClick={e => e.stopPropagation()}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '24px', color: 'var(--accent-primary)' }}>
+              <Hourglass size={24} />
+              <h3 className="modal-title" style={{ margin: 0 }}>{t('createCapsule')}</h3>
+            </div>
+            
+            <div style={{ marginBottom: '16px' }}>
+              <label style={{ display: 'block', fontSize: '12px', color: 'var(--text-secondary)', marginBottom: '8px' }}>{t('capsuleTitle')}</label>
+              <input type="text" className="modal-input" placeholder={t('capsuleTitle')} value={newCapsule.title} onChange={e => setNewCapsule({...newCapsule, title: e.target.value})} style={{ margin: 0, borderRadius: '12px' }} />
+            </div>
+
+            <div style={{ marginBottom: '16px' }}>
+              <label style={{ display: 'block', fontSize: '12px', color: 'var(--text-secondary)', marginBottom: '8px' }}>{t('capsuleMessage')}</label>
+              <textarea className="modal-input" placeholder={t('capsuleMessage')} rows={3} value={newCapsule.message} onChange={e => setNewCapsule({...newCapsule, message: e.target.value})} style={{ resize: 'none', margin: 0, borderRadius: '12px' }} />
+            </div>
+
+            <div style={{ marginBottom: '16px' }}>
+              <label style={{ display: 'block', fontSize: '12px', color: 'var(--text-secondary)', marginBottom: '8px' }}>{t('capsuleUnlockDate')}</label>
+              <input type="date" className="modal-input" value={newCapsule.unlockDate} onChange={e => setNewCapsule({...newCapsule, unlockDate: e.target.value})} min={new Date(Date.now() + 86400000).toISOString().split('T')[0]} style={{ margin: 0, borderRadius: '12px' }} />
+            </div>
+
+            <div style={{ marginBottom: '16px' }}>
+              <label style={{ display: 'block', fontSize: '12px', color: 'var(--text-secondary)', marginBottom: '8px' }}>Search & Add Songs</label>
+              <input type="text" className="modal-input" placeholder="Search a song..." value={capsuleSearchQuery} onChange={(e) => setCapsuleSearchQuery(e.target.value)} style={{ margin: 0, borderRadius: '12px' }} />
+              {capsuleSearchResults.length > 0 && (
+                  <div style={{ background: 'var(--bg-card)', border: '1px solid var(--border-color)', borderRadius: '8px', marginTop: '8px', maxHeight: '150px', overflowY: 'auto' }}>
+                      {capsuleSearchResults.map(s => (
+                           <div key={s.id} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '8px 12px', cursor: 'pointer', borderBottom: '1px solid rgba(255,255,255,0.05)' }} onClick={() => {
+                               if(!newCapsule.songs.some(existing => existing.id === s.id)) {
+                                   setNewCapsule(prev => ({ ...prev, songs: [...prev.songs, s] }));
+                               }
+                               setCapsuleSearchQuery('');
+                               setCapsuleSearchResults([]);
+                           }} onMouseEnter={e => e.currentTarget.style.background = 'var(--bg-card-hover)'} onMouseLeave={e => e.currentTarget.style.background = 'transparent'}>
+                              <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                                  <img src={s.thumbnail} style={{ width: 28, height: 28, borderRadius: 4, objectFit: 'cover' }} />
+                                  <div style={{ fontSize: '13px', color: 'var(--text-primary)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: '200px' }}>{s.title}</div>
+                              </div>
+                              <Plus size={16} color="var(--accent-primary)" />
+                           </div>
+                      ))}
+                  </div>
+              )}
+            </div>
+
+            <div style={{ marginBottom: '24px', background: 'var(--bg-card-hover)', padding: '12px', borderRadius: '8px' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
+                <span style={{ fontSize: '12px', color: 'var(--text-secondary)' }}>Playlist ({newCapsule.songs.length})</span>
+                {currentSong && !newCapsule.songs.some(s => s.id === currentSong.id) && (
+                  <button className="btn-secondary" style={{ padding: '4px 8px', fontSize: '11px' }} onClick={() => setNewCapsule({...newCapsule, songs: [...newCapsule.songs, currentSong]})}>
+                    + {t('capsuleAddCurrentSong')}
+                  </button>
+                )}
+              </div>
+              <div style={{ display: 'flex', gap: '8px', overflowX: 'auto', paddingBottom: '4px' }}>
+                {newCapsule.songs.length === 0 ? (
+                  <div style={{ fontSize: '12px', color: 'var(--text-muted)' }}>{t('capsuleNoSongs')}</div>
+                ) : (
+                  newCapsule.songs.map((s, i) => <img key={i} src={s.thumbnail || s.cover} style={{ width: '32px', height: '32px', borderRadius: '4px', objectFit: 'cover' }} title={s.title} />)
+                )}
+              </div>
+            </div>
+
+            <div className="modal-actions" style={{ marginTop: '24px' }}>
+              <button className="btn-secondary" onClick={() => {
+                setShowTimeCapsuleModal(false);
+                setNewCapsule({ id: undefined, title: '', message: '', unlockDate: '', songs: [] });
+                setCapsuleSearchQuery('');
+                setCapsuleSearchResults([]);
+              }}>{t('cancel')}</button>
+              <button className="btn-primary" onClick={async () => {
+                if (!newCapsule.title || !newCapsule.unlockDate || !discordUser) return;
+                let success = false;
+                if (newCapsule.id) {
+                  success = await (window as any).electronAPI.updateTimeCapsule({ ...newCapsule, discordId: discordUser.id });
+                } else {
+                  success = await (window as any).electronAPI.createTimeCapsule({ ...newCapsule, discordId: discordUser.id });
+                }
+                if (success) {
+                  showToast(t('capsuleSuccess'), 'success');
+                  setShowTimeCapsuleModal(false);
+                  setNewCapsule({ id: undefined, title: '', message: '', unlockDate: '', songs: [] });
+                  setCapsuleSearchQuery('');
+                  setCapsuleSearchResults([]);
+                  fetchTimeCapsules();
+                }
+              }} disabled={!newCapsule.title || !newCapsule.unlockDate}>{newCapsule.id ? t('save') : t('capsuleSeal')}</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal: Collaborators Management */}
+      {showCollabModal && collabPlaylistId && (() => {
+        const pl = playlists.find(p => p.id === collabPlaylistId);
+        if (!pl) return null;
+        const isMyPlaylist = !pl.discordId || pl.discordId === discordUser?.id;
+        const currentCollabs = pl.collaborators || [];
+        
+        return (
+          <div className="modal-overlay" onClick={() => setShowCollabModal(false)}>
+            <div className="modal" onClick={e => e.stopPropagation()} style={{ maxWidth: '480px' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '20px', color: 'var(--accent-primary)' }}>
+                <Users size={24} />
+                <h3 className="modal-title" style={{ margin: 0 }}>Collaborative Playlist</h3>
+              </div>
+              
+              <p style={{ color: 'var(--text-secondary)', fontSize: '13px', marginBottom: '20px' }}>
+                Manage collaborators for <strong>{pl.name}</strong>. Collaborators can add, delete, and reorder songs.
+              </p>
+
+              {/* Current Collaborators */}
+              <div style={{ marginBottom: '24px' }}>
+                <label style={{ display: 'block', fontSize: '12px', color: 'var(--text-secondary)', marginBottom: '8px', fontWeight: 'bold' }}>Current Collaborators ({currentCollabs.length})</label>
+                {currentCollabs.length === 0 ? (
+                  <div style={{ padding: '12px', background: 'var(--bg-card-hover)', borderRadius: '8px', fontSize: '12px', color: 'var(--text-muted)', textAlign: 'center' }}>
+                    No collaborators yet.
+                  </div>
+                ) : (
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                    {currentCollabs.map(cid => {
+                      const friend = onlineUsers.find(u => u.discordId === cid);
+                      return (
+                        <div key={cid} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '8px 12px', background: 'var(--bg-card-hover)', borderRadius: '8px' }}>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                            {friend?.avatarUrl ? (
+                              <img src={friend.avatarUrl} alt="" style={{ width: 24, height: 24, borderRadius: '50%' }} />
+                            ) : (
+                              <div style={{ width: 24, height: 24, borderRadius: '50%', background: 'var(--surface-color)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '10px' }}>
+                                {friend?.username?.charAt(0).toUpperCase() || 'U'}
+                              </div>
+                            )}
+                            <div style={{ fontSize: '13px', color: 'var(--text-primary)' }}>{friend?.username || cid}</div>
+                          </div>
+                          {isMyPlaylist && (
+                            <button className="btn-secondary" style={{ padding: '4px 8px', fontSize: '11px', color: '#ff5555' }} onClick={async () => {
+                              const updated = { ...pl, collaborators: currentCollabs.filter(id => id !== cid) };
+                              if ((window as any).electronAPI) {
+                                await (window as any).electronAPI.savePlaylist(updated);
+                                setPlaylists(prev => prev.map(p => p.id === pl.id ? updated : p));
+                              }
+                              showToast('Collaborator removed', 'success');
+                            }}>
+                              Remove
+                            </button>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+
+              {/* Add Collaborator */}
+              {isMyPlaylist && (
+                <div style={{ marginBottom: '24px' }}>
+                  <label style={{ display: 'block', fontSize: '12px', color: 'var(--text-secondary)', marginBottom: '8px', fontWeight: 'bold' }}>Invite Online Friends</label>
+
+                  {/* Online Friends List */}
+                  {onlineUsers.filter(u => u.discordId !== discordUser?.id && !currentCollabs.includes(u.discordId)).length > 0 ? (
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', maxHeight: '200px', overflowY: 'auto' }}>
+                      {onlineUsers.filter(u => u.discordId !== discordUser?.id && !currentCollabs.includes(u.discordId)).map(friend => (
+                        <div key={friend.discordId} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '6px 10px', background: 'rgba(255,255,255,0.02)', borderRadius: '6px' }}>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                            <img src={friend.avatarUrl} alt="" style={{ width: 20, height: 20, borderRadius: '50%' }} />
+                            <span style={{ fontSize: '12px' }}>{friend.username}</span>
+                          </div>
+                          <button className="btn-secondary" style={{ padding: '3px 6px', fontSize: '10px' }} onClick={async () => {
+                            if ((window as any).electronAPI?.sendCollabInvite) {
+                              await (window as any).electronAPI.sendCollabInvite(
+                                pl.id,
+                                pl.name,
+                                discordUser.id,
+                                discordUser.global_name || discordUser.username,
+                                friend.discordId
+                              );
+                              showToast(`Invitation sent to ${friend.username}!`, 'success');
+                            }
+                          }}>
+                            Invite
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <div style={{ padding: '12px', background: 'var(--bg-card-hover)', borderRadius: '8px', fontSize: '12px', color: 'var(--text-muted)', textAlign: 'center' }}>
+                      No other friends online to invite.
+                    </div>
+                  )}
+                </div>
+              )}
+
+              <div className="modal-actions" style={{ marginTop: '24px' }}>
+                <button className="btn-secondary" onClick={() => setShowCollabModal(false)}>Close</button>
+              </div>
+            </div>
+          </div>
+        );
+      })()}
+
+      {/* Modal: Focus Setup */}
+      {showFocusSetup && (
+        <div className="modal-overlay" onClick={() => setShowFocusSetup(false)}>
+          <div className="modal" onClick={e => e.stopPropagation()}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '16px', color: 'var(--accent-primary)' }}>
+              <Timer size={24} />
+              <h3 className="modal-title" style={{ margin: 0 }}>{t('focusMode')}</h3>
+            </div>
+            <p style={{ color: 'var(--text-muted)', fontSize: '13px', marginBottom: '24px' }}>
+              {t('focusModeDesc')}
+            </p>
+            
+            <div style={{ display: 'flex', gap: '12px', marginBottom: '16px' }}>
+              <button 
+                className={`btn-secondary ${focusCustomMinutes === '25' ? 'active' : ''}`} 
+                onClick={() => { setFocusCustomMinutes('25'); startFocusMode(25 * 60); }} 
+                style={{ flex: 1, padding: '16px 8px', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '4px', borderColor: focusCustomMinutes === '25' ? 'var(--accent-primary)' : 'var(--border-color)', background: focusCustomMinutes === '25' ? 'rgba(0, 255, 170, 0.05)' : '' }}
+              >
+                <span style={{ fontSize: '24px', fontWeight: 'bold', color: focusCustomMinutes === '25' ? 'var(--accent-primary)' : 'var(--text-primary)' }}>25</span>
+                <span style={{ fontSize: '12px', color: 'var(--text-secondary)' }}>{t('focusMinutes')}</span>
+              </button>
+              <button 
+                className={`btn-secondary ${focusCustomMinutes === '45' ? 'active' : ''}`} 
+                onClick={() => { setFocusCustomMinutes('45'); startFocusMode(45 * 60); }} 
+                style={{ flex: 1, padding: '16px 8px', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '4px', borderColor: focusCustomMinutes === '45' ? 'var(--accent-primary)' : 'var(--border-color)', background: focusCustomMinutes === '45' ? 'rgba(0, 255, 170, 0.05)' : '' }}
+              >
+                <span style={{ fontSize: '24px', fontWeight: 'bold', color: focusCustomMinutes === '45' ? 'var(--accent-primary)' : 'var(--text-primary)' }}>45</span>
+                <span style={{ fontSize: '12px', color: 'var(--text-secondary)' }}>{t('focusMinutes')}</span>
+              </button>
+              <button 
+                className={`btn-secondary ${focusCustomMinutes === '60' ? 'active' : ''}`} 
+                onClick={() => { setFocusCustomMinutes('60'); startFocusMode(60 * 60); }} 
+                style={{ flex: 1, padding: '16px 8px', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '4px', borderColor: focusCustomMinutes === '60' ? 'var(--accent-primary)' : 'var(--border-color)', background: focusCustomMinutes === '60' ? 'rgba(0, 255, 170, 0.05)' : '' }}
+              >
+                <span style={{ fontSize: '24px', fontWeight: 'bold', color: focusCustomMinutes === '60' ? 'var(--accent-primary)' : 'var(--text-primary)' }}>60</span>
+                <span style={{ fontSize: '12px', color: 'var(--text-secondary)' }}>{t('focusMinutes')}</span>
+              </button>
+            </div>
+            
+            <div style={{ display: 'flex', gap: '8px', marginBottom: '24px', alignItems: 'stretch' }}>
+              <input 
+                type="number" 
+                className="modal-input" 
+                placeholder={t('focusCustom')} 
+                value={focusCustomMinutes}
+                onChange={e => setFocusCustomMinutes(e.target.value)}
+                style={{ flex: 1, textAlign: 'center', fontSize: '16px', fontWeight: 'bold', padding: '12px', margin: 0, borderRadius: '12px' }}
+              />
+              {focusCustomMinutes && !['25', '45', '60'].includes(focusCustomMinutes) && (
+                <button className="btn-primary" style={{ padding: '0 24px', fontWeight: 'bold', borderRadius: '12px', height: 'auto' }} onClick={() => {
+                  const mins = parseInt(focusCustomMinutes);
+                  if (!isNaN(mins) && mins > 0) startFocusMode(mins * 60);
+                }}>{t('focusStart')}</button>
+              )}
+            </div>
+
+            {isFocusMode && (
+              <div style={{ padding: '16px', background: 'rgba(255, 77, 77, 0.05)', borderRadius: '12px', border: '1px solid rgba(255, 77, 77, 0.2)', marginBottom: '24px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                <div>
+                  <div style={{ fontSize: '14px', fontWeight: 'bold', color: 'var(--text-primary)' }}>{t('focusActive')}</div>
+                  <div style={{ fontSize: '12px', color: 'var(--text-secondary)', marginTop: '2px' }}>{Math.floor(focusTimeLeft / 60)}:{String(focusTimeLeft % 60).padStart(2, '0')} {t('focusMinutes')} remaining</div>
+                </div>
+                <button className="btn-secondary" style={{ color: '#ff4d4d', borderColor: 'rgba(255, 77, 77, 0.3)', padding: '8px 16px' }} onClick={stopFocusMode}>
+                  {t('focusStop')}
+                </button>
+              </div>
+            )}
+            
+            {/* History Section */}
+            <div style={{ marginTop: '16px', paddingTop: '20px', borderTop: '1px solid var(--border-color)' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '12px' }}>
+                <Clock size={16} color="var(--text-secondary)" />
+                <div style={{ fontSize: '12px', color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '0.5px', fontWeight: 'bold' }}>{t('focusSessionHistory')}</div>
+              </div>
+              {focusSessionHistory.length > 0 ? (
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+                  <div style={{ background: 'var(--bg-card)', padding: '16px', borderRadius: '12px', border: '1px solid var(--border-color)', display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
+                    <div style={{ fontSize: '24px', fontWeight: '800', color: 'var(--text-primary)' }}>{focusSessionHistory.length}</div>
+                    <div style={{ fontSize: '12px', color: 'var(--text-secondary)', marginTop: '4px' }}>{t('focusTotalSessions')}</div>
+                  </div>
+                  <div style={{ background: 'var(--bg-card)', padding: '16px', borderRadius: '12px', border: '1px solid var(--border-color)', display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
+                    <div style={{ fontSize: '24px', fontWeight: '800', color: 'var(--text-primary)' }}>{(focusSessionHistory.reduce((acc, curr) => acc + curr.duration, 0) / 60).toFixed(1)}h</div>
+                    <div style={{ fontSize: '12px', color: 'var(--text-secondary)', marginTop: '4px' }}>{t('focusTotalFocusTime')}</div>
+                  </div>
+                </div>
+              ) : (
+                <div style={{ background: 'var(--bg-card)', padding: '16px', borderRadius: '12px', border: '1px dashed var(--border-color)', textAlign: 'center', fontSize: '13px', color: 'var(--text-muted)' }}>
+                  {t('focusNoSessions')}
+                </div>
+              )}
+            </div>
+            
+            <div className="modal-actions" style={{ marginTop: '24px' }}>
+              <button className="btn-secondary" onClick={() => setShowFocusSetup(false)}>{t('focusClose')}</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal: Focus Recap */}
+      {showFocusRecap && focusRecapData && (
+        <div className="modal-overlay" onClick={() => setShowFocusRecap(false)}>
+          <div className="modal" onClick={e => e.stopPropagation()} style={{ textAlign: 'center' }}>
+            <div style={{ fontSize: '48px', marginBottom: '12px' }}>🎉</div>
+            <h3 className="modal-title" style={{ color: 'var(--accent-primary)', marginBottom: '8px' }}>{t('focusSessionComplete')}</h3>
+            
+            <div style={{ display: 'flex', gap: '16px', justifyContent: 'center', margin: '24px 0' }}>
+              <div style={{ background: 'var(--bg-card)', padding: '16px', borderRadius: '12px', border: '1px solid var(--border-color)', minWidth: '100px' }}>
+                <div style={{ fontSize: '28px', fontWeight: '800' }}>{focusRecapData.duration}</div>
+                <div style={{ fontSize: '12px', color: 'var(--text-secondary)' }}>{t('focusMinutes')}</div>
+              </div>
+              <div style={{ background: 'var(--bg-card)', padding: '16px', borderRadius: '12px', border: '1px solid var(--border-color)', minWidth: '100px' }}>
+                <div style={{ fontSize: '28px', fontWeight: '800' }}>{focusRecapData.songsPlayed}</div>
+                <div style={{ fontSize: '12px', color: 'var(--text-secondary)' }}>{t('focusSongsPlayed')}</div>
+              </div>
+            </div>
+
+            <div className="modal-actions" style={{ justifyContent: 'center' }}>
+              <button className="btn-primary" onClick={() => setShowFocusRecap(false)}>{t('focusClose')}</button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* TOP SECTION */}
       <div className="app-top-section" style={{ display: 'flex', flex: 1, overflow: 'hidden' }}>
 
@@ -5701,6 +6504,9 @@ function App() {
             <div className="nav-menu">
               <div className={`nav-item ${activePage === 'home' ? 'active' : ''}`} onClick={goHome}>
                 <Home size={24} /> <span className="nav-label">{t('home')}</span>
+              </div>
+              <div className={`nav-item ${activePage === 'sound-map' ? 'active' : ''}`} onClick={() => navigate('sound-map')}>
+                <MapIcon size={24} /> <span className="nav-label">{t('soundMap')}</span>
               </div>
               <div className={`nav-item ${activePage === 'settings' ? 'active' : ''}`} onClick={() => navigate('settings')}>
                 <Settings size={24} /> <span className="nav-label">{t('settings')}</span>
@@ -5751,8 +6557,18 @@ function App() {
                 </div>
               </button>
 
+              <button className={`sidebar-list-item ${activePage === 'time-capsule' ? 'active' : ''}`} onClick={() => navigate('time-capsule')}>
+                <div className="sidebar-item-img" style={{ background: 'linear-gradient(135deg, #10b981, #065f46)' }}>
+                  <Hourglass size={20} color="white" />
+                </div>
+                <div className="sidebar-item-info">
+                  <div className="sidebar-item-title">{t('timeCapsule')}</div>
+                  <div className="sidebar-item-subtitle">{timeCapsules.length} {t('capsules') || 'capsules'}</div>
+                </div>
+              </button>
+
               {/* Playlists */}
-              {playlists.filter(pl => pl.discordId === discordUser?.id || savedPlaylists.includes(pl.id)).map(pl => (
+              {playlists.filter(pl => pl.discordId === discordUser?.id || savedPlaylists.includes(pl.id) || pl.collaborators?.includes(discordUser?.id || '')).map(pl => (
                 <button key={pl.id} className={`sidebar-list-item ${(activePage === 'playlist-detail' && activePlaylistId === pl.id) ? 'active' : ''}`} 
                   onClick={() => {
                     setActivePlaylistId(pl.id);
@@ -5838,6 +6654,32 @@ function App() {
                   <div className="sidebar-title" style={{ fontSize: '12px' }}>{t('friendActivityTitle')}</div>
                   <div className="sidebar-subtitle" style={{ fontSize: '11px' }}>{t('friendActivitySubtitle')}</div>
                 </div>
+
+                {collabInvites.length > 0 && (
+                  <div className="join-requests-container" style={{ marginBottom: '12px', padding: '8px', backgroundColor: 'rgba(16, 185, 129, 0.1)', border: '1px solid rgba(16, 185, 129, 0.3)', borderRadius: '8px' }}>
+                    <div style={{ fontSize: '11px', color: '#10b981', fontWeight: 700, marginBottom: '8px' }}>Collab Invites</div>
+                    {collabInvites.map((invite: any) => (
+                      <div key={invite.id} style={{ display: 'flex', flexDirection: 'column', gap: '8px', marginBottom: '8px', paddingBottom: '8px', borderBottom: '1px solid rgba(255,255,255,0.05)' }}>
+                        <div style={{ fontSize: '12px', color: 'var(--text-primary)' }}>
+                          <strong>{invite.hostName}</strong> invited you to collaborate on <strong>{invite.playlistName}</strong>
+                        </div>
+                        <div style={{ display: 'flex', gap: '8px' }}>
+                          <button onClick={async () => {
+                            await (window as any).electronAPI.respondCollabInvite(invite.id, 'accepted');
+                            setCollabInvites(prev => prev.filter(i => i.id !== invite.id));
+                            fetchPlaylists();
+                            showToast(`Joined ${invite.playlistName}!`, 'success');
+                          }} style={{ flex: 1, padding: '4px 0', backgroundColor: '#23a559', color: 'white', border: 'none', borderRadius: '4px', cursor: 'pointer', fontSize: '11px', fontWeight: 600 }}>{t('accept') || 'Accept'}</button>
+
+                          <button onClick={async () => {
+                            await (window as any).electronAPI.respondCollabInvite(invite.id, 'rejected');
+                            setCollabInvites(prev => prev.filter(i => i.id !== invite.id));
+                          }} style={{ flex: 1, padding: '4px 0', backgroundColor: '#f23f43', color: 'white', border: 'none', borderRadius: '4px', cursor: 'pointer', fontSize: '11px', fontWeight: 600 }}>{t('reject') || 'Reject'}</button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
 
                 {joinRequests.incoming && joinRequests.incoming.length > 0 && (
                   <div className="join-requests-container" style={{ marginBottom: '12px', padding: '8px', backgroundColor: 'rgba(240, 178, 50, 0.1)', border: '1px solid rgba(240, 178, 50, 0.3)', borderRadius: '8px' }}>
@@ -6405,10 +7247,23 @@ function App() {
             </div>
           </div>
 
+
+
           {/* Page Router */}
           {activePage === 'home' && renderHomePage()}
           {activePage === 'artist' && renderArtistPage()}
           {activePage === 'profile' && renderProfilePage()}
+          {activePage === 'time-capsule' && (
+            <div className="main-scroll">{renderTimeCapsulePage()}</div>
+          )}
+          {activePage === 'sound-map' && (
+            <div className="main-scroll" style={{ padding: '24px' }}>
+              <SoundMap t={t} onPlaySong={startPlayingFromList} theme={settings.theme || 'default'} onCountrySelect={(alpha2, name) => {
+                setTrendingCountry({ code: alpha2, name });
+                fetchTrendingSongs(alpha2, name);
+              }} />
+            </div>
+          )}
           {activePage === 'library' && (
             <div className="main-scroll">{renderLibraryPage()}</div>
           )}
@@ -6428,23 +7283,39 @@ function App() {
               <div className="player-left">
                 {currentSong ? (
                   <>
-                    <img
-                      src={(getCleanThumbnail(currentSong.thumbnail) || getHighResImage(currentSong.cover))}
-                      className="player-cover"
-                      alt="cover"
-                      style={{
-                        animation: isPlaying ? 'spin 12s linear infinite' : 'none',
-                        borderRadius: '50%',
-                        border: '2px solid var(--surface-tertiary)',
-                        boxShadow: isPlaying ? '0 0 10px rgba(0, 255, 170, 0.2)' : 'none',
-                        transition: 'all 0.3s ease'
-                      }}
-                    />
+                    <div style={{ position: 'relative', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', marginRight: '16px' }}>
+                      <img
+                        src={(getCleanThumbnail(currentSong.thumbnail) || getHighResImage(currentSong.cover))}
+                        className="player-cover"
+                        alt="cover"
+                        style={{
+                          marginRight: 0,
+                          animation: isPlaying ? 'spin 12s linear infinite' : 'none',
+                          borderRadius: '50%',
+                          border: '2px solid var(--surface-tertiary)',
+                          boxShadow: isPlaying ? '0 0 10px rgba(0, 255, 170, 0.2)' : 'none',
+                          transition: 'all 0.3s ease'
+                        }}
+                      />
+                      {isFocusMode && (
+                        <div className="focus-timer-ring" title={`${Math.floor(focusTimeLeft / 60)}:${String(focusTimeLeft % 60).padStart(2, '0')}`} style={{ position: 'absolute', top: '50%', left: '50%', transform: 'translate(-50%, -50%)', pointerEvents: 'none' }}>
+                          <svg width="64" height="64" viewBox="0 0 64 64" style={{ display: 'block', overflow: 'visible' }}>
+                            <circle cx="32" cy="32" r="30" fill="none" stroke="rgba(var(--accent-primary-rgb, 0,195,255), 0.2)" strokeWidth="3" />
+                            <circle cx="32" cy="32" r="30" fill="none" stroke="var(--accent-primary)" strokeWidth="3" 
+                              strokeDasharray="188.49" 
+                              strokeDashoffset={188.49 - (focusTimeLeft / focusDuration) * 188.49} 
+                              strokeLinecap="round" 
+                              style={{ transition: 'stroke-dashoffset 1s linear', transform: 'rotate(-90deg)', transformOrigin: '50% 50%' }} 
+                            />
+                          </svg>
+                        </div>
+                      )}
+                    </div>
                     <div className="player-info">
                       <span className="player-title" title={currentSong.title}>{currentSong.title}</span>
                       <span className="player-artist" style={{ color: 'var(--text-secondary)', fontSize: '12px' }}>{currentSong.artist}</span>
                     </div>
-                    <button className={`chat-btn ${isLiked(currentSong.id) ? 'liked' : ''}`} style={{ color: isLiked(currentSong.id) ? '#ff6b9d' : 'var(--text-secondary)', marginLeft: '12px' }} onClick={() => toggleLike(currentSong)} title={isLiked(currentSong.id) ? t('btnUnlike') : t('btnLike')}>
+                    <button className={`chat-btn ${isLiked(currentSong.id) ? 'liked' : ''}`} style={{ color: isLiked(currentSong.id) ? 'var(--accent-primary)' : 'var(--text-secondary)', marginLeft: '12px' }} onClick={() => toggleLike(currentSong)} title={isLiked(currentSong.id) ? t('btnUnlike') : t('btnLike')}>
                       <Heart size={16} fill={isLiked(currentSong.id) ? 'currentColor' : 'none'} />
                     </button>
                   </>
@@ -6478,6 +7349,9 @@ function App() {
                     <PanelRight size={20} />
                   </button>
                 )}
+                <button className="chat-btn" onClick={() => setShowFocusSetup(true)} style={{ color: isFocusMode ? '#ff6b9d' : 'var(--text-secondary)' }} title={isFocusMode ? `${t('focusActive')} — ${Math.floor(focusTimeLeft / 60)}:${String(focusTimeLeft % 60).padStart(2, '0')}` : t('focusMode')}>
+                  <Timer size={16} />
+                </button>
                 <button className="chat-btn" onClick={() => setIsWidgetMode(true)} title={t('btnFullscreen')}><Maximize2 size={16} /></button>
                 <div className="player-volume-container" style={{ display: 'flex', alignItems: 'center', gap: '8px', marginLeft: '16px' }} title={t('btnVolume')}>
                   <button className="chat-btn" onClick={() => setIsMuted(!isMuted)} title={isMuted || volume === 0 ? t('btnVolume') : t('btnMute')}>
@@ -6511,6 +7385,32 @@ function App() {
                 <div className="sidebar-title" style={{ fontSize: '12px' }}>{t('friendActivityTitle')}</div>
                 <div className="sidebar-subtitle" style={{ fontSize: '11px' }}>{t('friendActivitySubtitle')}</div>
               </div>
+
+              {collabInvites.length > 0 && (
+                <div className="join-requests-container" style={{ marginBottom: '12px', padding: '8px', backgroundColor: 'rgba(16, 185, 129, 0.1)', border: '1px solid rgba(16, 185, 129, 0.3)', borderRadius: '8px' }}>
+                  <div style={{ fontSize: '11px', color: '#10b981', fontWeight: 700, marginBottom: '8px' }}>Collab Invites</div>
+                  {collabInvites.map((invite: any) => (
+                    <div key={invite.id} style={{ display: 'flex', flexDirection: 'column', gap: '8px', marginBottom: '8px', paddingBottom: '8px', borderBottom: '1px solid rgba(255,255,255,0.05)' }}>
+                      <div style={{ fontSize: '12px', color: 'var(--text-primary)' }}>
+                        <strong>{invite.hostName}</strong> invited you to collaborate on <strong>{invite.playlistName}</strong>
+                      </div>
+                      <div style={{ display: 'flex', gap: '8px' }}>
+                        <button onClick={async () => {
+                          await (window as any).electronAPI.respondCollabInvite(invite.id, 'accepted');
+                          setCollabInvites(prev => prev.filter(i => i.id !== invite.id));
+                          fetchPlaylists();
+                          showToast(`Joined ${invite.playlistName}!`, 'success');
+                        }} style={{ flex: 1, padding: '4px 0', backgroundColor: '#23a559', color: 'white', border: 'none', borderRadius: '4px', cursor: 'pointer', fontSize: '11px', fontWeight: 600 }}>{t('accept') || 'Accept'}</button>
+
+                        <button onClick={async () => {
+                          await (window as any).electronAPI.respondCollabInvite(invite.id, 'rejected');
+                          setCollabInvites(prev => prev.filter(i => i.id !== invite.id));
+                        }} style={{ flex: 1, padding: '4px 0', backgroundColor: '#f23f43', color: 'white', border: 'none', borderRadius: '4px', cursor: 'pointer', fontSize: '11px', fontWeight: 600 }}>{t('reject') || 'Reject'}</button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
 
               {joinRequests.incoming && joinRequests.incoming.length > 0 && (
                 <div className="join-requests-container" style={{ marginBottom: '12px', padding: '8px', backgroundColor: 'rgba(240, 178, 50, 0.1)', border: '1px solid rgba(240, 178, 50, 0.3)', borderRadius: '8px' }}>
@@ -6804,8 +7704,8 @@ function App() {
         )}
 
         {/* RIGHT SIDEBAR */}
-        <div className={`right-sidebar ${!isRightSidebarOpen && settings.theme !== 'minimalist' ? 'closed' : ''} ${settings.theme === 'minimalist' ? 'xbox-widget left-widget ' + (isRightSidebarOpen ? 'expanded' : 'collapsed') : ''}`} style={showLyrics && currentSong ? {
-          backgroundImage: `url(${currentSong.thumbnail})`,
+        <div className={`right-sidebar ${!isRightSidebarOpen && settings.theme !== 'minimalist' ? 'closed' : ''} ${settings.theme === 'minimalist' ? 'xbox-widget left-widget ' + (isRightSidebarOpen ? 'expanded' : 'collapsed') : ''}`} style={rightSidebarMode === 'lyrics' && currentSong ? {
+          backgroundImage: `url(${getCleanThumbnail(currentSong.thumbnail) || getHighResImage(currentSong.cover)})`,
           backgroundSize: 'cover',
           backgroundPosition: 'center',
           position: settings.theme === 'minimalist' ? 'fixed' : 'relative'
@@ -6813,14 +7713,14 @@ function App() {
           {settings.theme === 'minimalist' && (
             <div className="xbox-widget-header" onClick={() => setIsRightSidebarOpen(!isRightSidebarOpen)} style={{ position: 'relative', zIndex: 1, borderBottom: isRightSidebarOpen ? '1px solid rgba(255,255,255,0.05)' : 'none' }}>
               <div className="xbox-widget-header-info">
-                <div className="xbox-widget-title">{showLyrics ? t('lyricsPanel') : t('queue')}</div>
+                <div className="xbox-widget-title">{rightSidebarMode === 'lyrics' ? t('lyricsPanel') : rightSidebarMode === 'trending' ? t('soundMapTrendingIn') || 'Trending' : t('queue')}</div>
                 {currentSong && <div className="xbox-widget-subtitle">{currentSong.title}</div>}
               </div>
               <div className="xbox-widget-actions">
-                <button style={{ background: 'none', border: 'none', color: !showLyrics ? 'var(--accent-primary)' : 'var(--text-secondary)', cursor: 'pointer', marginRight: '8px' }} onClick={(e) => { e.stopPropagation(); setShowLyrics(false); }} title="Queue">
+                <button style={{ background: 'none', border: 'none', color: rightSidebarMode === 'queue' ? 'var(--accent-primary)' : 'var(--text-secondary)', cursor: 'pointer', marginRight: '8px' }} onClick={(e) => { e.stopPropagation(); setRightSidebarMode('queue'); }} title="Queue">
                   <ListMusic size={16} />
                 </button>
-                <button style={{ background: 'none', border: 'none', color: showLyrics ? 'var(--accent-primary)' : 'var(--text-secondary)', cursor: 'pointer', marginRight: '12px' }} onClick={(e) => { e.stopPropagation(); setShowLyrics(true); }} title="Lyrics">
+                <button style={{ background: 'none', border: 'none', color: rightSidebarMode === 'lyrics' ? 'var(--accent-primary)' : 'var(--text-secondary)', cursor: 'pointer', marginRight: '8px' }} onClick={(e) => { e.stopPropagation(); setRightSidebarMode('lyrics'); }} title="Lyrics">
                   <Mic2 size={16} />
                 </button>
                 {isRightSidebarOpen ? <ChevronDown size={20} /> : <ChevronUp size={20} />}
@@ -6828,7 +7728,7 @@ function App() {
             </div>
           )}
 
-          {showLyrics && currentSong && (
+          {rightSidebarMode === 'lyrics' && currentSong && (
             <div className="right-sidebar-overlay" style={{
               position: 'absolute',
               top: 0, left: 0, right: 0, bottom: 0,
@@ -6840,17 +7740,22 @@ function App() {
           )}
           {settings.theme !== 'minimalist' && (
             <div className="sidebar-header" style={{ position: 'relative', zIndex: 1 }}>
-              <div>
-                <div className="sidebar-title">{showLyrics ? t('lyricsPanel') : t('queue')}</div>
-                <div className="sidebar-subtitle">
-                  {showLyrics ? (currentSong ? currentSong.title : 'No song') : `${Math.max(0, queue.length - Math.max(0, currentIndex))} ${t('songs')} • ${formatTime(queue.slice(Math.max(0, currentIndex)).reduce((acc, s) => acc + (s.duration || 0), 0))}`}
+              <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                {rightSidebarMode === 'trending' && trendingCountry && (
+                  <img src={`https://flagcdn.com/w40/${trendingCountry.code.toLowerCase()}.png`} alt="Flag" style={{ width: '32px', borderRadius: '4px', boxShadow: '0 2px 6px rgba(0,0,0,0.2)' }} />
+                )}
+                <div>
+                  <div className="sidebar-title">{rightSidebarMode === 'lyrics' ? t('lyricsPanel') : rightSidebarMode === 'trending' ? t('soundMapTrendingIn') || 'Trending in' : t('queue')}</div>
+                  <div className="sidebar-subtitle">
+                    {rightSidebarMode === 'lyrics' ? (currentSong ? currentSong.title : 'No song') : rightSidebarMode === 'trending' ? (trendingCountry ? trendingCountry.name : 'Select a country') : `${Math.max(0, queue.length - Math.max(0, currentIndex))} ${t('songs')} • ${formatTime(queue.slice(Math.max(0, currentIndex)).reduce((acc, s) => acc + (s.duration || 0), 0))}`}
+                  </div>
                 </div>
               </div>
               <div className="sidebar-actions">
-                <button style={{ background: 'none', border: 'none', color: !showLyrics ? 'var(--accent-primary)' : 'var(--text-secondary)', cursor: 'pointer' }} onClick={() => setShowLyrics(false)} title="Queue">
+                <button style={{ background: 'none', border: 'none', color: rightSidebarMode === 'queue' ? 'var(--accent-primary)' : 'var(--text-secondary)', cursor: 'pointer' }} onClick={() => setRightSidebarMode('queue')} title="Queue">
                   <ListMusic size={18} />
                 </button>
-                <button style={{ background: 'none', border: 'none', color: showLyrics ? 'var(--accent-primary)' : 'var(--text-secondary)', cursor: 'pointer' }} onClick={() => setShowLyrics(true)} title="Lyrics">
+                <button style={{ background: 'none', border: 'none', color: rightSidebarMode === 'lyrics' ? 'var(--accent-primary)' : 'var(--text-secondary)', cursor: 'pointer' }} onClick={() => setRightSidebarMode('lyrics')} title="Lyrics">
                   <Mic2 size={18} />
                 </button>
                 <button style={{ background: 'none', border: 'none', color: 'var(--text-secondary)', cursor: 'pointer', marginLeft: '8px' }} onClick={() => setIsRightSidebarOpen(false)} title="Tutup">
@@ -6860,7 +7765,7 @@ function App() {
             </div>
           )}
 
-          {showLyrics ? (
+          {rightSidebarMode === 'lyrics' ? (
             <div className="lyrics-mode" style={{ position: 'relative', zIndex: 1 }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
@@ -6910,6 +7815,69 @@ function App() {
                   <div style={{ textAlign: 'center', color: 'var(--text-secondary)', marginTop: '40px', fontSize: '14px' }}>{plainLyrics}</div>
                 )}
               </div>
+            </div>
+          ) : rightSidebarMode === 'trending' ? (
+            <div className="queue-list" style={{ overflowY: 'auto', padding: '16px' }}>
+              {isTrendingLoading ? (
+                <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: '100%', color: 'var(--text-secondary)' }}>
+                  <Loader2 size={32} className="spinning" style={{ marginBottom: '16px', color: 'var(--accent-primary)' }} />
+                  <p>{t('soundMapLoading')}</p>
+                </div>
+              ) : trendingError ? (
+                <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: '100%', color: 'var(--text-secondary)', textAlign: 'center' }}>
+                  <Music size={48} style={{ opacity: 0.2, marginBottom: '16px' }} />
+                  <p>{trendingError}</p>
+                </div>
+              ) : trendingSongs.length > 0 ? (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                  <div style={{ marginBottom: '8px' }}>
+                    <button 
+                      className="btn-primary pop-in-anim" 
+                      style={{ width: '100%', padding: '10px 16px', fontSize: '13px', borderRadius: '12px', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px', background: 'var(--accent-primary)', color: 'white', border: 'none', cursor: 'pointer', fontWeight: 600, boxShadow: '0 4px 12px rgba(0,0,0,0.2)' }}
+                      onClick={() => startPlayingFromList(trendingSongs, 0)}
+                    >
+                      <Play size={14} fill="currentColor" /> {t('playAll')}
+                    </button>
+                  </div>
+                  {trendingSongs.map((song, i) => (
+                    <div 
+                      key={i} 
+                      className={`suggestion-item pop-in-anim`} 
+                      onClick={() => playSingleSong(song)}
+                      onContextMenu={(e) => handleContextMenu(e, song)}
+                      draggable={true} 
+                      onDragStart={(e) => { setDraggedGlobalSong(song); applyDragGhost(e, song); }} 
+                      onDragEnd={(e) => { setDraggedGlobalSong(null); (e.currentTarget as HTMLElement).classList.remove('dragging-origin'); }}
+                      style={{ 
+                        borderRadius: '8px', 
+                        padding: '8px 12px', 
+                        background: 'rgba(255,255,255,0.03)',
+                        animationDelay: `${(i + 1) * 0.05}s`
+                      }}
+                    >
+                      <div style={{ width: '24px', textAlign: 'center', fontSize: '12px', fontWeight: 600, color: 'var(--text-muted)' }}>
+                        {i + 1}
+                      </div>
+                      <div className="suggestion-thumb">
+                        <img src={song.cover} alt={song.title} />
+                      </div>
+                      <div className="suggestion-info">
+                        <div className="suggestion-title">{song.title}</div>
+                        <div className="suggestion-artist">{song.artist}</div>
+                      </div>
+                      <div className="suggestion-actions" style={{ display: 'flex' }}>
+                        <button className="suggestion-btn" style={{ opacity: 1 }}>
+                          <Play size={14} fill="currentColor" />
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <div style={{ textAlign: 'center', color: 'var(--text-secondary)', marginTop: '40px', fontSize: '14px' }}>
+                  {t('soundMapSelectCountry')}
+                </div>
+              )}
             </div>
           ) : (
             <div className="queue-list"
@@ -7091,7 +8059,7 @@ function App() {
           <div className="fs-background">
             <img
               key={currentSong?.id || 'bg'}
-              src={getHighResImage(currentSong?.thumbnail)}
+              src={(getCleanThumbnail(currentSong?.thumbnail) || getHighResImage(currentSong?.cover))}
               onError={(e) => {
                 const target = e.currentTarget as HTMLImageElement;
                 const fallback = 'https://images.unsplash.com/photo-1614680376573-df3480f0c6ff?auto=format&fit=crop&w=500&q=80';
@@ -7112,7 +8080,7 @@ function App() {
               <div className="fs-art-container" onMouseEnter={() => setShowWidgetOverlay(true)} onMouseLeave={() => setShowWidgetOverlay(false)}>
                 <img
                   key={currentSong?.id || 'art'}
-                  src={getHighResImage(currentSong?.thumbnail)}
+                  src={(getCleanThumbnail(currentSong?.thumbnail) || getHighResImage(currentSong?.cover))}
                   onError={(e) => {
                     const target = e.currentTarget as HTMLImageElement;
                     const fallback = 'https://images.unsplash.com/photo-1614680376573-df3480f0c6ff?auto=format&fit=crop&w=500&q=80';
@@ -7241,6 +8209,13 @@ function App() {
           }}>
             <FolderPlus size={16} /> {t('addToPlaylist')}
           </div>
+          <div className="context-menu-item" onClick={() => {
+            setNewCapsule(prev => ({ ...prev, songs: [...prev.songs, contextMenu.song] }));
+            setShowTimeCapsuleModal(true);
+            setContextMenu(null);
+          }}>
+            <Hourglass size={16} /> {t('timeCapsule')}
+          </div>
           {!contextMenu.song.isPodcast && (
             <div className="context-menu-item" onClick={() => {
               if ((window as any).electronAPI?.cacheAudio) {
@@ -7308,7 +8283,7 @@ function App() {
         <div style={{
           position: 'fixed',
           bottom: currentSong ? '100px' : '20px',
-          left: '20px',
+          right: '24px',
           background: 'var(--bg-card)',
           border: '1px solid var(--border-color)',
           borderRadius: '12px',
@@ -7322,7 +8297,7 @@ function App() {
         }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
             <span style={{ fontSize: '13px', fontWeight: 'bold', color: 'var(--text-primary)' }}>
-              Mengunduh {Object.keys(activeDownloads).length} lagu...
+              {t('downloadingCount').replace('{0}', String(Object.keys(activeDownloads).length))}
             </span>
             <DownloadCloud size={16} color="var(--accent-primary)" />
           </div>

@@ -398,6 +398,76 @@ type TranslationKeys = {
   storyFinalWrap: string;
   playYourTopSongs: string;
   viewYourStory: string;
+
+  // Focus Mode / Pomodoro
+  focusMode: string;
+  focusModeDesc: string;
+  focusStart: string;
+  focusStop: string;
+  focusDuration: string;
+  focusRecap: string;
+  focusSongsPlayed: string;
+  focusTotalTime: string;
+  focusSessionComplete: string;
+  focusSetup25: string;
+  focusSetup45: string;
+  focusSetup60: string;
+  focusCustom: string;
+  focusActive: string;
+  focusMinutes: string;
+  focusSessionHistory: string;
+  focusNoSessions: string;
+  focusTotalSessions: string;
+  focusTotalFocusTime: string;
+  focusAvgSession: string;
+  focusClose: string;
+  downloadingCount: string;
+
+  // Time Capsule
+  timeCapsule: string;
+  moodCanvas: string;
+  modeLinearGradients: string;
+  modeWaveFills: string;
+
+  modeGradientBars: string;
+  modePolarCoordinates: string;
+  modeRadialGradients: string;
+  modeParticlesSystems: string;
+
+  createCapsule: string;
+  myCapsules: string;
+  capsuleTitle: string;
+  capsuleMessage: string;
+  capsuleUnlockDate: string;
+  capsuleUnlockDateDesc: string;
+  capsuleSeal: string;
+  capsuleLocked: string;
+  capsuleUnlocked: string;
+  capsuleNoSongs: string;
+  capsuleAddCurrentSong: string;
+  capsuleEmpty: string;
+  capsuleSuccess: string;
+  capsuleOpened: string;
+  capsuleDelete: string;
+  capsules: string;
+  capsuleDesc: string;
+  locked: string;
+  waitingToBeOpened: string;
+  sealYourMemories: string;
+  sealYourMemoriesDesc: string;
+  noCapsules: string;
+  noCapsulesDesc: string;
+  unlocked: string;
+  edit: string;
+
+  // Sound Map
+  soundMap: string;
+  soundMapSubtitle: string;
+  soundMapInstruction: string;
+  soundMapTrendingIn: string;
+  soundMapNoData: string;
+  soundMapSelectCountry: string;
+  soundMapLoading: string;
 };
 
 const translations: Record<Language, TranslationKeys> = {
@@ -796,7 +866,77 @@ const translations: Record<Language, TranslationKeys> = {
     storyTopArtistsList: 'Top 5 Artis Favoritmu',
     storyFinalWrap: 'Kilas Balik Musikmu',
     playYourTopSongs: 'Putar Lagu Teratas',
-    viewYourStory: 'Lihat Ceritamu'
+    viewYourStory: 'Lihat Ceritamu',
+
+    // Focus Mode / Pomodoro
+    focusMode: 'Mode Fokus',
+    focusModeDesc: 'Masuk mode fokus dengan timer Pomodoro',
+    focusStart: 'Mulai Fokus',
+    focusStop: 'Hentikan Fokus',
+    focusDuration: 'Durasi',
+    focusRecap: 'Rangkuman Fokus',
+    focusSongsPlayed: 'lagu diputar',
+    focusTotalTime: 'Total waktu fokus',
+    focusSessionComplete: 'Sesi fokus selesai! 🎉',
+    focusSetup25: '25 menit',
+    focusSetup45: '45 menit',
+    focusSetup60: '60 menit',
+    focusCustom: 'Custom',
+    focusActive: 'Mode Fokus Aktif',
+    focusMinutes: 'menit',
+    focusSessionHistory: 'Riwayat Sesi',
+    focusNoSessions: 'Belum ada sesi fokus',
+    focusTotalSessions: 'Total Sesi',
+    focusTotalFocusTime: 'Total Jam Fokus',
+    focusAvgSession: 'Rata-rata Sesi',
+    focusClose: 'Tutup',
+    downloadingCount: 'Mengunduh {0} lagu...',
+
+    // Time Capsule
+    timeCapsule: 'Kapsul Waktu',
+    moodCanvas: 'Kanvas Mood',
+    modeLinearGradients: 'Gradien Linear',
+    modeWaveFills: 'Ombak Padat',
+
+    modeGradientBars: 'Balok Gradasi',
+    modePolarCoordinates: 'Koordinat Polar',
+    modeRadialGradients: 'Gradien Radial',
+    modeParticlesSystems: 'Sistem Partikel',
+
+    createCapsule: 'Buat Kapsul',
+    myCapsules: 'Kapsul Saya',
+    capsuleTitle: 'Judul Kapsul',
+    capsuleMessage: 'Pesan untuk Masa Depan',
+    capsuleUnlockDate: 'Tanggal Buka',
+    capsuleUnlockDateDesc: 'Pilih tanggal di masa depan untuk membuka kapsul ini',
+    capsuleSeal: 'Segel Kapsul Waktu',
+    capsuleLocked: 'Terkunci',
+    capsuleUnlocked: 'Terbuka',
+    capsuleNoSongs: 'Belum ada lagu',
+    capsuleAddCurrentSong: 'Tambahkan Lagu Saat Ini',
+    capsuleEmpty: 'Belum ada kapsul waktu. Buat satu untuk masa depan!',
+    capsuleSuccess: 'Kapsul waktu berhasil disegel!',
+    capsuleOpened: 'Kapsul Waktu Terbuka',
+    capsuleDelete: 'Hapus Kapsul',
+    capsules: 'kapsul',
+    capsuleDesc: 'Kenangan musik yang tersegel',
+    locked: 'Terkunci',
+    waitingToBeOpened: 'Menunggu untuk dibuka',
+    sealYourMemories: 'Segel Kenangan\nAnda',
+    sealYourMemoriesDesc: 'Kunci playlist dan pesan hingga waktu yang ditentukan di masa depan.',
+    noCapsules: 'Belum ada kapsul',
+    noCapsulesDesc: 'Buat kapsul waktu pertamamu!',
+    unlocked: 'Terbuka',
+    edit: 'Edit',
+
+    // Sound Map
+    soundMap: 'Sound Map',
+    soundMapSubtitle: 'Eksplorasi Musik Dunia',
+    soundMapInstruction: 'Pilih negara di peta untuk melihat lagu yang sedang trending!',
+    soundMapTrendingIn: 'Trending di',
+    soundMapNoData: 'Belum ada data musik trending untuk negara ini.',
+    soundMapSelectCountry: 'Pilih sebuah negara di Sound Map untuk melihat daftar lagunya.',
+    soundMapLoading: 'Menjelajahi tangga lagu...',
   },
 
   en: {
@@ -1194,7 +1334,77 @@ const translations: Record<Language, TranslationKeys> = {
     storyTopArtistsList: 'Your Top 5 Artists',
     storyFinalWrap: 'Your Final Wrapped',
     playYourTopSongs: 'Play Top Songs',
-    viewYourStory: 'Your Story'
+    viewYourStory: 'Your Story',
+
+    // Focus Mode / Pomodoro
+    focusMode: 'Focus Mode',
+    focusModeDesc: 'Enter focus mode with Pomodoro timer',
+    focusStart: 'Start Focus',
+    focusStop: 'Stop Focus',
+    focusDuration: 'Duration',
+    focusRecap: 'Focus Recap',
+    focusSongsPlayed: 'songs played',
+    focusTotalTime: 'Total focus time',
+    focusSessionComplete: 'Focus session complete! 🎉',
+    focusSetup25: '25 minutes',
+    focusSetup45: '45 minutes',
+    focusSetup60: '60 minutes',
+    focusCustom: 'Custom',
+    focusActive: 'Focus Mode Active',
+    focusMinutes: 'minutes',
+    focusSessionHistory: 'Session History',
+    focusNoSessions: 'No focus sessions yet',
+    focusTotalSessions: 'Total Sessions',
+    focusTotalFocusTime: 'Total Focus Hours',
+    focusAvgSession: 'Avg. Session',
+    focusClose: 'Close',
+    downloadingCount: 'Downloading {0} song(s)...',
+
+    // Time Capsule
+    timeCapsule: 'Time Capsule',
+    moodCanvas: 'Mood Canvas',
+    modeLinearGradients: 'Linear Gradients',
+    modeWaveFills: 'Wave Fills',
+
+    modeGradientBars: 'Gradient Bars',
+    modePolarCoordinates: 'Polar Coordinates',
+    modeRadialGradients: 'Radial Gradients',
+    modeParticlesSystems: 'Particles Systems',
+
+    createCapsule: 'Create Capsule',
+    myCapsules: 'My Capsules',
+    capsuleTitle: 'Capsule Title',
+    capsuleMessage: 'Message for the Future',
+    capsuleUnlockDate: 'Unlock Date',
+    capsuleUnlockDateDesc: 'Select a future date to unlock this capsule',
+    capsuleSeal: 'Seal Time Capsule',
+    capsuleLocked: 'Locked',
+    capsuleUnlocked: 'Unlocked',
+    capsuleNoSongs: 'No songs yet',
+    capsuleAddCurrentSong: 'Add Current Song',
+    capsuleEmpty: 'No time capsules yet. Create one for the future!',
+    capsuleSuccess: 'Time capsule sealed successfully!',
+    capsuleOpened: 'Time Capsule Opened',
+    capsuleDelete: 'Delete Capsule',
+    capsules: 'capsules',
+    capsuleDesc: 'Sealed musical memories',
+    locked: 'Locked',
+    waitingToBeOpened: 'Waiting to be opened',
+    sealYourMemories: 'Seal Your\nMemories',
+    sealYourMemoriesDesc: 'Lock a playlist and message until a future date.',
+    noCapsules: 'No capsules yet',
+    noCapsulesDesc: 'Create your first time capsule!',
+    unlocked: 'Unlocked',
+    edit: 'Edit',
+
+    // Sound Map
+    soundMap: 'Sound Map',
+    soundMapSubtitle: 'World Music Exploration',
+    soundMapInstruction: 'Select a country on the map to see trending songs!',
+    soundMapTrendingIn: 'Trending in',
+    soundMapNoData: 'No trending music data available for this country yet.',
+    soundMapSelectCountry: 'Select a country on the Sound Map to view its tracklist.',
+    soundMapLoading: 'Exploring the charts...',
   },
 
   ja: {
@@ -1592,7 +1802,77 @@ const translations: Record<Language, TranslationKeys> = {
     storyTopArtistsList: 'トップ5アーティスト',
     storyFinalWrap: '最終まとめ',
     playYourTopSongs: 'トップソングを再生',
-    viewYourStory: 'あなたのストーリー'
+    viewYourStory: 'あなたのストーリー',
+
+    // Focus Mode / Pomodoro
+    focusMode: 'フォーカスモード',
+    focusModeDesc: 'ポモドーロタイマーでフォーカスモードに入る',
+    focusStart: 'フォーカス開始',
+    focusStop: 'フォーカス停止',
+    focusDuration: '時間',
+    focusRecap: 'フォーカスまとめ',
+    focusSongsPlayed: '曲再生',
+    focusTotalTime: '合計フォーカス時間',
+    focusSessionComplete: 'フォーカスセッション完了！🎉',
+    focusSetup25: '25分',
+    focusSetup45: '45分',
+    focusSetup60: '60分',
+    focusCustom: 'カスタム',
+    focusActive: 'フォーカスモード',
+    focusMinutes: '分',
+    focusSessionHistory: 'セッション履歴',
+    focusNoSessions: 'まだセッションがありません',
+    focusTotalSessions: '合計セッション',
+    focusTotalFocusTime: '合計フォーカス時間',
+    focusAvgSession: '平均セッション',
+    focusClose: '閉じる',
+    downloadingCount: '{0}曲をダウンロード中...',
+
+    // Time Capsule
+    timeCapsule: 'タイムカプセル',
+    moodCanvas: 'ムードキャンバス',
+    modeLinearGradients: 'リニアグラデーション',
+    modeWaveFills: 'ウェーブフィル',
+
+    modeGradientBars: 'グラデーションバー',
+    modePolarCoordinates: '極座標',
+    modeRadialGradients: '放射状グラデーション',
+    modeParticlesSystems: 'パーティクルシステム',
+
+    createCapsule: 'カプセルを作成',
+    myCapsules: 'マイカプセル',
+    capsuleTitle: 'カプセルのタイトル',
+    capsuleMessage: '未来へのメッセージ',
+    capsuleUnlockDate: '解錠日',
+    capsuleUnlockDateDesc: 'このカプセルを開く未来の日付を選択',
+    capsuleSeal: 'タイムカプセルを封印',
+    capsuleLocked: 'ロック',
+    capsuleUnlocked: 'ロック解除',
+    capsuleNoSongs: '曲がありません',
+    capsuleAddCurrentSong: '現在の曲を追加',
+    capsuleEmpty: 'タイムカプセルがありません。未来のために作成してください！',
+    capsuleSuccess: 'タイムカプセルを封印しました！',
+    capsuleOpened: 'タイムカプセルが開きました',
+    capsuleDelete: 'カプセルを削除',
+    capsules: 'カプセル',
+    capsuleDesc: '封印された音楽の思い出',
+    locked: 'ロック済み',
+    waitingToBeOpened: '開封待ち',
+    sealYourMemories: '思い出を\n封印',
+    sealYourMemoriesDesc: '指定した未来の日付までプレイリストとメッセージをロックします。',
+    noCapsules: 'カプセルがありません',
+    noCapsulesDesc: '最初のタイムカプセルを作成しましょう！',
+    unlocked: 'ロック解除',
+    edit: '編集',
+
+    // Sound Map
+    soundMap: 'サウンドマップ',
+    soundMapSubtitle: '世界の音楽探索',
+    soundMapInstruction: '地図上の国を選択して、トレンドの曲を表示します！',
+    soundMapTrendingIn: 'トレンド - ',
+    soundMapNoData: 'トレンドデータが見つかりませんでした。',
+    soundMapSelectCountry: '地図から国を選択してトレンド曲を表示してください。',
+    soundMapLoading: '読み込み中...',
   },
 
   ko: {
@@ -1991,7 +2271,77 @@ const translations: Record<Language, TranslationKeys> = {
     storyTopArtistsList: '최고의 아티스트 Top 5',
     storyFinalWrap: '나의 요약',
     playYourTopSongs: '인기 곡 재생',
-    viewYourStory: '당신의 이야기'
+    viewYourStory: '당신의 이야기',
+
+    // Focus Mode / Pomodoro
+    focusMode: '집중 모드',
+    focusModeDesc: '포모도로 타이머로 집중 모드 시작',
+    focusStart: '집중 시작',
+    focusStop: '집중 중지',
+    focusDuration: '시간',
+    focusRecap: '집중 요약',
+    focusSongsPlayed: '곡 재생',
+    focusTotalTime: '총 집중 시간',
+    focusSessionComplete: '집중 세션 완료! 🎉',
+    focusSetup25: '25분',
+    focusSetup45: '45분',
+    focusSetup60: '60분',
+    focusCustom: '사용자 지정',
+    focusActive: '집중 모드 활성',
+    focusMinutes: '분',
+    focusSessionHistory: '세션 기록',
+    focusNoSessions: '아직 세션이 없습니다',
+    focusTotalSessions: '총 세션',
+    focusTotalFocusTime: '총 집중 시간',
+    focusAvgSession: '평균 세션',
+    focusClose: '닫기',
+    downloadingCount: '{0}곡 다운로드 중...',
+
+    // Time Capsule
+    timeCapsule: '타임캡슐',
+    moodCanvas: '무드 캔버스',
+    modeLinearGradients: '선형 그라데이션',
+    modeWaveFills: '웨이브 채우기',
+
+    modeGradientBars: '그라데이션 바',
+    modePolarCoordinates: '극좌표',
+    modeRadialGradients: '방사형 그라데이션',
+    modeParticlesSystems: '파티클 시스템',
+
+    createCapsule: '캡슐 만들기',
+    myCapsules: '내 캡슐',
+    capsuleTitle: '캡슐 제목',
+    capsuleMessage: '미래를 위한 메시지',
+    capsuleUnlockDate: '열리는 날짜',
+    capsuleUnlockDateDesc: '이 캡슐을 열 미래 날짜 선택',
+    capsuleSeal: '타임캡슐 봉인',
+    capsuleLocked: '잠김',
+    capsuleUnlocked: '열림',
+    capsuleNoSongs: '노래 없음',
+    capsuleAddCurrentSong: '현재 노래 추가',
+    capsuleEmpty: '타임캡슐이 없습니다. 미래를 위해 하나 만드세요!',
+    capsuleSuccess: '타임캡슐 봉인 완료!',
+    capsuleOpened: '타임 캡슐 열림',
+    capsuleDelete: '캡슐 삭제',
+    capsules: '캡슐',
+    capsuleDesc: '봉인된 음악적 추억',
+    locked: '잠김',
+    waitingToBeOpened: '열리기를 기다리는 중',
+    sealYourMemories: '추억을\n봉인하세요',
+    sealYourMemoriesDesc: '미래의 지정된 날짜까지 플레이리스트와 메시지를 잠급니다.',
+    noCapsules: '타임캡슐이 없습니다',
+    noCapsulesDesc: '첫 번째 타임캡슐을 만드세요!',
+    unlocked: '잠금 해제됨',
+    edit: '편집',
+
+    // Sound Map
+    soundMap: '사운드 맵',
+    soundMapSubtitle: '세계 음악 탐색',
+    soundMapInstruction: '지도에서 국가를 선택하여 트렌드 곡을 확인하세요!',
+    soundMapTrendingIn: '트렌드 - ',
+    soundMapNoData: '데이터를 찾을 수 없습니다.',
+    soundMapSelectCountry: '지도에서 국가를 선택하여 트렌드 곡을 확인하세요.',
+    soundMapLoading: '로드 중...',
   }
 };
 

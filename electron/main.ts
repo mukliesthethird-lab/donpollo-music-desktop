@@ -251,6 +251,10 @@ async function initDB() {
     } catch (e: any) { }
 
     try {
+      await db.execute("ALTER TABLE playlists ADD COLUMN collaborators LONGTEXT");
+    } catch (e: any) { }
+
+    try {
       await db.execute("ALTER TABLE user_profiles ADD COLUMN banner_url VARCHAR(1000)");
     } catch (e: any) { }
 
@@ -295,6 +299,31 @@ async function initDB() {
         playlist_data LONGTEXT NOT NULL,
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
         expires_at TIMESTAMP NOT NULL
+      )
+    `);
+
+    await db.execute(`
+      CREATE TABLE IF NOT EXISTS collab_invites (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        playlist_id VARCHAR(255) NOT NULL,
+        playlist_name VARCHAR(255) NOT NULL,
+        host_id VARCHAR(255) NOT NULL,
+        host_name VARCHAR(255) NOT NULL,
+        guest_id VARCHAR(255) NOT NULL,
+        status VARCHAR(20) DEFAULT 'pending',
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      )
+    `);
+
+    await db.execute(`
+      CREATE TABLE IF NOT EXISTS time_capsules (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        discord_id VARCHAR(255) NOT NULL,
+        title VARCHAR(255),
+        message LONGTEXT,
+        songs LONGTEXT,
+        unlock_date TIMESTAMP NOT NULL,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
       )
     `);
     console.log('MySQL connected and table initialized');
@@ -497,8 +526,8 @@ ipcMain.handle('get-playlists', async (event, discordId) => {
       SELECT p.*, u.username as author_name, u.avatar_url as author_avatar
       FROM playlists p 
       LEFT JOIN user_profiles u ON p.discord_id = u.discord_id 
-      WHERE p.discord_id = ? OR p.discord_id IS NULL OR p.discord_id = "" OR p.is_private = 0
-    `, [discordId || '']);
+      WHERE p.discord_id = ? OR p.discord_id IS NULL OR p.discord_id = "" OR p.is_private = 0 OR p.collaborators LIKE ?
+    `, [discordId || '', `%${discordId}%`]);
     const playlists = await Promise.all((rows as any[]).map(async row => {
       const [saveRows] = await db!.execute('SELECT COUNT(*) as count FROM user_profiles WHERE saved_playlists LIKE ?', [`%"${row.id}"%`]);
       return {
@@ -510,7 +539,8 @@ ipcMain.handle('get-playlists', async (event, discordId) => {
         authorName: row.author_name,
         authorAvatar: row.author_avatar,
         saveCount: (saveRows as any[])[0].count,
-        isPrivate: row.is_private === 1
+        isPrivate: row.is_private === 1,
+        collaborators: JSON.parse(row.collaborators || '[]')
       };
     }));
     return playlists;
@@ -524,9 +554,10 @@ ipcMain.handle('save-playlist', async (event, pl) => {
   if (!db) return false;
   try {
     const isPrivate = pl.isPrivate ? 1 : 0;
+    const collaboratorsStr = JSON.stringify(pl.collaborators || []);
     await db.execute(
-      'INSERT INTO playlists (id, name, avatar, songs, discord_id, is_private) VALUES (?, ?, ?, ?, ?, ?) ON DUPLICATE KEY UPDATE name = ?, avatar = ?, songs = ?, discord_id = ?, is_private = ?',
-      [pl.id, pl.name, pl.avatar || '', JSON.stringify(pl.songs), pl.discordId || '', isPrivate, pl.name, pl.avatar || '', JSON.stringify(pl.songs), pl.discordId || '', isPrivate]
+      'INSERT INTO playlists (id, name, avatar, songs, discord_id, is_private, collaborators) VALUES (?, ?, ?, ?, ?, ?, ?) ON DUPLICATE KEY UPDATE name = ?, avatar = ?, songs = ?, discord_id = ?, is_private = ?, collaborators = ?',
+      [pl.id, pl.name, pl.avatar || '', JSON.stringify(pl.songs), pl.discordId || '', isPrivate, collaboratorsStr, pl.name, pl.avatar || '', JSON.stringify(pl.songs), pl.discordId || '', isPrivate, collaboratorsStr]
     );
     return true;
   } catch (error) {
@@ -594,6 +625,65 @@ ipcMain.handle('update-banner', async (event, discordId, bannerUrl) => {
     return true;
   } catch (error) {
     console.error('update-banner error:', error);
+    return false;
+  }
+});
+
+// ─── TIME CAPSULE IPC ──────────────────────────────────────────────────────
+ipcMain.handle('create-time-capsule', async (event, data) => {
+  if (!db) return false;
+  try {
+    await db.execute(
+      'INSERT INTO time_capsules (discord_id, title, message, songs, unlock_date) VALUES (?, ?, ?, ?, ?)',
+      [data.discordId, data.title || '', data.message || '', JSON.stringify(data.songs || []), new Date(data.unlockDate)]
+    );
+    return true;
+  } catch (error) {
+    console.error('create-time-capsule error:', error);
+    return false;
+  }
+});
+
+ipcMain.handle('get-time-capsules', async (event, discordId) => {
+  if (!db) return [];
+  try {
+    const [rows] = await db.execute('SELECT * FROM time_capsules WHERE discord_id = ? ORDER BY created_at DESC', [discordId]);
+    return (rows as any[]).map(r => ({
+      id: r.id,
+      discordId: r.discord_id,
+      title: r.title,
+      message: r.message,
+      songs: JSON.parse(r.songs || '[]'),
+      unlockDate: r.unlock_date.toISOString(),
+      createdAt: r.created_at.toISOString()
+    }));
+  } catch (error) {
+    console.error('get-time-capsules error:', error);
+    return [];
+  }
+});
+
+ipcMain.handle('delete-time-capsule', async (event, id) => {
+  if (!db) return false;
+  try {
+    await db.execute('DELETE FROM time_capsules WHERE id = ?', [id]);
+    return true;
+  } catch (error) {
+    console.error('delete-time-capsule error:', error);
+    return false;
+  }
+});
+
+ipcMain.handle('update-time-capsule', async (event, data) => {
+  if (!db) return false;
+  try {
+    await db.execute(
+      'UPDATE time_capsules SET title = ?, message = ?, songs = ?, unlock_date = ? WHERE id = ?',
+      [data.title, data.message, JSON.stringify(data.songs || []), new Date(data.unlockDate), data.id]
+    );
+    return true;
+  } catch (error) {
+    console.error('update-time-capsule error:', error);
     return false;
   }
 });
@@ -911,6 +1001,72 @@ ipcMain.handle('respond-join-request', async (event, requestId, status) => {
   try {
     await db.execute('UPDATE join_requests SET status = ? WHERE id = ?', [status, requestId]);
     return true;
+  } catch (error) {
+    console.error(error);
+    return false;
+  }
+});
+
+ipcMain.handle('send-collab-invite', async (event, playlistId, playlistName, hostId, hostName, guestId) => {
+  if (!db) return false;
+  try {
+    const [existing] = await db.execute('SELECT id FROM collab_invites WHERE playlist_id = ? AND guest_id = ? AND status = "pending"', [playlistId, guestId]);
+    if ((existing as any[]).length > 0) return true;
+
+    await db.execute(
+      'INSERT INTO collab_invites (playlist_id, playlist_name, host_id, host_name, guest_id) VALUES (?, ?, ?, ?, ?)',
+      [playlistId, playlistName, hostId, hostName, guestId]
+    );
+    return true;
+  } catch (error) {
+    console.error(error);
+    return false;
+  }
+});
+
+ipcMain.handle('poll-collab-invites', async (event, userId) => {
+  if (!db) return [];
+  try {
+    const [rows] = await db.execute('SELECT * FROM collab_invites WHERE guest_id = ? AND status = "pending"', [userId]);
+    return (rows as any[]).map(row => ({
+      id: row.id,
+      playlistId: row.playlist_id,
+      playlistName: row.playlist_name,
+      hostId: row.host_id,
+      hostName: row.host_name,
+      guestId: row.guest_id,
+      status: row.status
+    }));
+  } catch (error) {
+    console.error(error);
+    return [];
+  }
+});
+
+ipcMain.handle('respond-collab-invite', async (event, inviteId, status) => {
+  if (!db) return false;
+  try {
+    const [inviteRows] = await db.execute('SELECT * FROM collab_invites WHERE id = ?', [inviteId]);
+    if ((inviteRows as any[]).length > 0) {
+      const invite = (inviteRows as any[])[0];
+      if (status === 'accepted') {
+        const [playlistRows] = await db.execute('SELECT * FROM playlists WHERE id = ?', [invite.playlist_id]);
+        if ((playlistRows as any[]).length > 0) {
+          const playlist = (playlistRows as any[])[0];
+          let collaborators = [];
+          try {
+            collaborators = JSON.parse(playlist.collaborators || '[]');
+          } catch (e) {}
+          if (!collaborators.includes(invite.guest_id)) {
+            collaborators.push(invite.guest_id);
+            await db.execute('UPDATE playlists SET collaborators = ? WHERE id = ?', [JSON.stringify(collaborators), invite.playlist_id]);
+          }
+        }
+      }
+      await db.execute('DELETE FROM collab_invites WHERE id = ?', [inviteId]);
+      return true;
+    }
+    return false;
   } catch (error) {
     console.error(error);
     return false;

@@ -74,8 +74,15 @@ contextBridge.exposeInMainWorld('electronAPI', {
   toggleFollow: (discordId: string, targetId: string) => ipcRenderer.invoke('toggle-follow', discordId, targetId),
   toggleSavePlaylist: (discordId: string, playlistId: string) => ipcRenderer.invoke('toggle-save-playlist', discordId, playlistId),
   updateBanner: (discordId: string, bannerUrl: string) => ipcRenderer.invoke('update-banner', discordId, bannerUrl),
+  createTimeCapsule: (data: any) => ipcRenderer.invoke('create-time-capsule', data),
+  getTimeCapsules: (discordId: string) => ipcRenderer.invoke('get-time-capsules', discordId),
+  updateTimeCapsule: (data: any) => ipcRenderer.invoke('update-time-capsule', data),
+  deleteTimeCapsule: (id: number) => ipcRenderer.invoke('delete-time-capsule', id),
   createShareCode: (playlist: any) => ipcRenderer.invoke('create-share-code', playlist),
   resolveShareCode: (code: string) => ipcRenderer.invoke('resolve-share-code', code),
+  sendCollabInvite: (playlistId: string, playlistName: string, hostId: string, hostName: string, guestId: string) => ipcRenderer.invoke('send-collab-invite', playlistId, playlistName, hostId, hostName, guestId),
+  pollCollabInvites: (userId: string) => ipcRenderer.invoke('poll-collab-invites', userId),
+  respondCollabInvite: (inviteId: number, status: string) => ipcRenderer.invoke('respond-collab-invite', inviteId, status),
   getCachePath: () => ipcRenderer.invoke('get-cache-path'),
   onDownloadCacheProgress: (callback: (event: any, data: any) => void) => {
     ipcRenderer.on('download-cache-progress', callback);
