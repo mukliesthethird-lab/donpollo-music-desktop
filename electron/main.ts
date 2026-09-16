@@ -1,4 +1,4 @@
-import { app, BrowserWindow, ipcMain, Menu, protocol, globalShortcut, Tray, nativeImage, dialog } from 'electron';
+import { app, BrowserWindow, ipcMain, Menu, protocol, globalShortcut, Tray, nativeImage, dialog, session } from 'electron';
 import * as path from 'path';
 import * as fs from 'fs';
 import * as https from 'https';
@@ -1206,7 +1206,19 @@ ipcMain.on('clear-activity', () => {
   }
 });
 
-ipcMain.handle('fetch-url', async (event, url: string) => { try { const res = await fetch(url, { headers: { 'User-Agent': 'DonPollo/1.0' } }); return await res.json(); } catch (err: any) { throw err; } });
+ipcMain.handle('fetch-url', async (event, url: string) => {
+  try {
+    const res = await fetch(url, { headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36' } });
+    const text = await res.text();
+    try {
+      return JSON.parse(text);
+    } catch {
+      return text;
+    }
+  } catch (err: any) {
+    throw err;
+  }
+});
 ipcMain.handle('fetch-text', async (event, url: string) => { try { const res = await fetch(url, { headers: { 'User-Agent': 'DonPollo/1.0' } }); return await res.text(); } catch (err: any) { throw err; } });
 // ROMANIZATION IPC
 let kuroshiroInstance: any = null;
@@ -1625,6 +1637,15 @@ if (!gotTheLock && !isDev) {
   });
 
   app.whenReady().then(async () => {
+    session.defaultSession.setPermissionCheckHandler((_webContents, permission) => {
+      if (permission === 'media') return true;
+      return false;
+    });
+    session.defaultSession.setPermissionRequestHandler((_webContents, permission, callback) => {
+      if (permission === 'media') return callback(true);
+      callback(false);
+    });
+
     setMainWindowGetter(() => mainWindow);
     setupUpdater();
 

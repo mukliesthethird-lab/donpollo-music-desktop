@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react';
-import { Home, Library, Plus, Mic2, Settings, Play, Pause, SkipBack, SkipForward, Repeat, Shuffle, Volume2, VolumeX, ListMusic, UserCircle, ChevronRight, Search, AlertCircle, Headset, Loader2, Maximize2, X, ChevronLeft, ChevronUp, ChevronDown, Music, PanelRight, Trash2, Heart, LogIn, LogOut, Check, FolderPlus, Globe, Headphones, Download, DownloadCloud, Database, WifiOff, CheckCircle2, Paintbrush, Clock, Trophy, Zap, Radio, Timer, Repeat1, MinusCircle, PlusCircle, Edit3, Share2, Copy, Smartphone, Hourglass, Lock, Map as MapIcon, Users } from 'lucide-react';
+import { Home, Library, Plus, Mic2, Settings, Play, Pause, SkipBack, SkipForward, Repeat, Shuffle, Volume2, VolumeX, ListMusic, UserCircle, ChevronRight, Search, AlertCircle, Headset, Loader2, Maximize2, X, ChevronLeft, ChevronUp, ChevronDown, Music, PanelRight, Trash2, Heart, LogIn, LogOut, Check, FolderPlus, Globe, Headphones, Download, DownloadCloud, Database, WifiOff, CheckCircle2, Paintbrush, Clock, Trophy, Zap, Radio, Timer, Repeat1, MinusCircle, PlusCircle, Edit3, Share2, Copy, Smartphone, Hourglass, Lock, Map as MapIcon, Users, RotateCcw, FileText, Film } from 'lucide-react';
 import './index.css';
 import './themes.css';
 import { createTranslator } from './translations';
@@ -7,6 +7,7 @@ import type { Language } from './translations';
 
 const API_BASE_URL = 'http://179.41.4.182:7097';
 import { SoundMap } from './components/SoundMap';
+import { rankAudioResults, buildSmartSearchQuery, getAudioBadge, searchItunesTracks } from './utils/audioRanking';
 // ⚠️ Ganti dengan Client ID dari Discord Developer Portal Anda
 const DISCORD_CLIENT_ID = import.meta.env.VITE_DISCORD_CLIENT_ID || '';
 // Redirect URI: otomatis pilih localhost (dev) atau Vercel (installed app)
@@ -207,6 +208,23 @@ function App() {
   const [isLatinExpanded, setIsLatinExpanded] = useState(false);
   const [isLocalExpanded, setIsLocalExpanded] = useState(false);
   const [isFriendsOpen, setIsFriendsOpen] = useState(false);
+
+  // ─── Settings ────────────────────────────────────────────────
+  const [settings, setSettings] = useState<any>(() => {
+    try {
+      const saved = JSON.parse(localStorage.getItem('donpollo_settings') || '{}');
+      return {
+        theme: 'default',
+        layoutMode: 'left',
+        fontFamily: 'Inter',
+        borderRadiusMode: 'rounded',
+        audioOutputDeviceId: 'default',
+        prioritizeOfficialAudio: true,
+        ...saved
+      };
+    } catch { return { theme: 'default', audioOutputDeviceId: 'default', prioritizeOfficialAudio: true }; }
+  });
+
   // ─── Search ─────────────────────────────────────────────────
   const [searchQuery, setSearchQuery] = useState('');
   const [searchResults, setSearchResults] = useState<any[]>([]);
@@ -269,8 +287,9 @@ function App() {
       return;
     }
 
-    if (searchCacheRef.current[searchQuery]) {
-      setSuggestions(searchCacheRef.current[searchQuery]);
+    const cacheKey = `${searchQuery}_${homeMode}_${settings?.prioritizeOfficialAudio !== false}`;
+    if (searchCacheRef.current[cacheKey]) {
+      setSuggestions(searchCacheRef.current[cacheKey]);
       return;
     }
 
@@ -278,21 +297,58 @@ function App() {
     const handler = setTimeout(async () => {
       setIsFetchingSuggestions(true);
       try {
-        // In podcast mode: append 'podcast' to get relevant results & filter by duration
-        const effectiveQuery = homeMode === 'podcast'
-          ? `${searchQuery} podcast`
-          : searchQuery;
-        const res = await fetch(`${API_BASE_URL}/api/search?q=${encodeURIComponent(effectiveQuery)}`, { signal: controller.signal });
-        const data = await res.json();
-        let results = data.results?.slice(0, 8) || [];
-        if (homeMode === 'podcast') {
-          // Filter to only longer content (podcast episodes)
-          results = results.filter((r: any) => r.duration >= 120).slice(0, 5);
+        const isPodcast = homeMode === 'podcast';
+        const preferAudio = settings?.prioritizeOfficialAudio !== false;
+        let results: any[] = [];
+
+        if (isPodcast) {
+          // In podcast mode: append 'podcast' to get relevant results & filter by duration
+          const effectiveQuery = `${searchQuery} podcast`;
+          const res = await fetch(`${API_BASE_URL}/api/search?q=${encodeURIComponent(effectiveQuery)}`, { signal: controller.signal });
+          const data = await res.json();
+          results = (data.results || []).filter((r: any) => r.duration >= 120).slice(0, 5);
         } else {
-          results = results.filter((r: any) => r.duration > 0).slice(0, 5);
+          // Music mode: Search official catalog from iTunes/Apple Music first (clean title, clean artist, square HD cover)
+          if (preferAudio) {
+            try {
+              const itunesResults = await searchItunesTracks(
+                searchQuery,
+                6,
+                (window as any).electronAPI?.fetchUrl
+              );
+              if (itunesResults && itunesResults.length > 0) {
+                results = itunesResults;
+              }
+            } catch (err) {
+              console.error('iTunes search error:', err);
+            }
+          }
+
+          // Fallback to YouTube Audio if iTunes yielded no results or if preferAudio is disabled
+          if (results.length === 0) {
+            const effectiveQuery = preferAudio ? buildSmartSearchQuery(searchQuery) : searchQuery;
+            let res = await fetch(`${API_BASE_URL}/api/search?q=${encodeURIComponent(effectiveQuery)}`, { signal: controller.signal });
+            let data = await res.json();
+            results = data.results || [];
+
+            // Fallback to plain query if audio query yielded zero results
+            if (results.length === 0 && effectiveQuery !== searchQuery) {
+              try {
+                const fallbackRes = await fetch(`${API_BASE_URL}/api/search?q=${encodeURIComponent(searchQuery)}`, { signal: controller.signal });
+                const fallbackData = await fallbackRes.json();
+                results = fallbackData.results || [];
+              } catch { }
+            }
+
+            if (preferAudio) {
+              results = rankAudioResults(results, searchQuery);
+            }
+            results = results.filter((r: any) => r.duration > 0).slice(0, 5);
+          }
         }
+
         setSuggestions(results);
-        searchCacheRef.current[searchQuery] = results;
+        searchCacheRef.current[cacheKey] = results;
       } catch (e: any) {
         if (e.name !== 'AbortError') {
           setSuggestions([]);
@@ -307,7 +363,7 @@ function App() {
       clearTimeout(handler);
       controller.abort();
     };
-  }, [searchQuery, homeMode]);
+  }, [searchQuery, homeMode, settings?.prioritizeOfficialAudio]);
 
   // ─── Updater State ──────────────────────────────────────────
   const [updateStatus, setUpdateStatus] = useState<'none' | 'available' | 'downloading' | 'downloaded' | 'error'>('none');
@@ -470,9 +526,30 @@ function App() {
     }
     const handler = setTimeout(async () => {
       try {
-        const res = await fetch(`${API_BASE_URL}/api/search?q=${encodeURIComponent(capsuleSearchQuery)}`);
-        const data = await res.json();
-        setCapsuleSearchResults((data.results || []).filter((r: any) => r.duration > 0).slice(0, 5));
+        const preferAudio = settings?.prioritizeOfficialAudio !== false;
+        let results: any[] = [];
+        if (preferAudio) {
+          try {
+            const itunesResults = await searchItunesTracks(
+              capsuleSearchQuery,
+              5,
+              (window as any).electronAPI?.fetchUrl
+            );
+            if (itunesResults && itunesResults.length > 0) {
+              results = itunesResults;
+            }
+          } catch (err) { }
+        }
+        if (results.length === 0) {
+          const q = preferAudio ? buildSmartSearchQuery(capsuleSearchQuery) : capsuleSearchQuery;
+          const res = await fetch(`${API_BASE_URL}/api/search?q=${encodeURIComponent(q)}`);
+          const data = await res.json();
+          results = (data.results || []).filter((r: any) => r.duration > 0);
+          if (preferAudio) {
+            results = rankAudioResults(results, capsuleSearchQuery);
+          }
+        }
+        setCapsuleSearchResults(results.slice(0, 5));
       } catch (e) {
         console.error(e);
       }
@@ -556,7 +633,9 @@ function App() {
                     : await (await fetch(url)).json();
 
                   if (data && data.results) {
-                    const validYt = data.results.find((item: any) => item.duration >= 60 && item.duration <= 480);
+                    let candidates = data.results.filter((item: any) => item.duration >= 50 && item.duration <= 720);
+                    candidates = rankAudioResults(candidates, song.title || '', song.duration || 0);
+                    const validYt = candidates[0] || data.results.find((item: any) => item.duration >= 60 && item.duration <= 480);
                     if (validYt) {
                       setter(prev => {
                         const next = [...prev];
@@ -811,19 +890,10 @@ function App() {
     localStorage.setItem('donpollo_language', language);
   }, [language]);
 
-  // ─── Settings ────────────────────────────────────────────────
-  const [settings, setSettings] = useState<any>(() => {
-    try {
-      const saved = JSON.parse(localStorage.getItem('donpollo_settings') || '{}');
-      return {
-        theme: 'default',
-        layoutMode: 'left',
-        fontFamily: 'Inter',
-        borderRadiusMode: 'rounded',
-        ...saved
-      };
-    } catch { return { theme: 'default' }; }
-  });
+  // ─── Audio Output & System Settings ─────────────────────────
+
+  const [audioOutputDevices, setAudioOutputDevices] = useState<MediaDeviceInfo[]>([]);
+  const [isRefreshingAudioDevices, setIsRefreshingAudioDevices] = useState(false);
 
   useEffect(() => {
     if ((window as any).electronAPI) {
@@ -1461,10 +1531,88 @@ function App() {
       filtersRef.current.forEach((f, i) => {
         f.gain.value = isEqEnabled ? bands[i] : 0;
       });
+
+      if (settings.audioOutputDeviceId && typeof (ctx as any).setSinkId === 'function') {
+        const targetId = settings.audioOutputDeviceId === 'default' ? '' : settings.audioOutputDeviceId;
+        (ctx as any).setSinkId(targetId).catch((err: any) => console.warn('setSinkId ctx failed', err));
+      }
     } catch (e) {
       console.error('AudioContext setup failed', e);
     }
   };
+
+  const applyAudioOutputDevice = useCallback(async (deviceId?: string) => {
+    const targetId = (!deviceId || deviceId === 'default') ? '' : deviceId;
+
+    if (audioRef.current && typeof (audioRef.current as any).setSinkId === 'function') {
+      try {
+        await (audioRef.current as any).setSinkId(targetId);
+      } catch (err) {
+        console.warn('Failed to setSinkId on audio element:', err);
+      }
+    }
+
+    if (audioContextRef.current && typeof (audioContextRef.current as any).setSinkId === 'function') {
+      try {
+        await (audioContextRef.current as any).setSinkId(targetId);
+      } catch (err) {
+        console.warn('Failed to setSinkId on AudioContext:', err);
+      }
+    }
+  }, []);
+
+  const loadAudioOutputDevices = useCallback(async () => {
+    if (typeof navigator === 'undefined' || !navigator.mediaDevices?.enumerateDevices) return;
+    try {
+      setIsRefreshingAudioDevices(true);
+      const devices = await navigator.mediaDevices.enumerateDevices();
+      const audioOutputs = devices.filter(d => d.kind === 'audiooutput');
+
+      // Deduplicate by deviceId
+      const uniqueOutputs = audioOutputs.filter((dev, idx, arr) =>
+        arr.findIndex(d => d.deviceId === dev.deviceId) === idx
+      );
+      setAudioOutputDevices(uniqueOutputs);
+
+      // Check if selected device still exists
+      const savedDeviceId = settings.audioOutputDeviceId;
+      if (savedDeviceId && savedDeviceId !== 'default') {
+        const stillConnected = uniqueOutputs.some(d => d.deviceId === savedDeviceId);
+        if (!stillConnected) {
+          setSettings((prev: any) => {
+            const updated = { ...prev, audioOutputDeviceId: 'default' };
+            localStorage.setItem('donpollo_settings', JSON.stringify(updated));
+            return updated;
+          });
+          applyAudioOutputDevice('default');
+        }
+      }
+    } catch (err) {
+      console.warn('Failed to enumerate audio devices:', err);
+    } finally {
+      setIsRefreshingAudioDevices(false);
+    }
+  }, [settings.audioOutputDeviceId, applyAudioOutputDevice]);
+
+  useEffect(() => {
+    loadAudioOutputDevices();
+
+    if (typeof navigator !== 'undefined' && navigator.mediaDevices?.addEventListener) {
+      const handleDeviceChange = () => {
+        loadAudioOutputDevices();
+      };
+      navigator.mediaDevices.addEventListener('devicechange', handleDeviceChange);
+      return () => {
+        navigator.mediaDevices.removeEventListener('devicechange', handleDeviceChange);
+      };
+    }
+  }, [loadAudioOutputDevices]);
+
+  useEffect(() => {
+    if (settings.audioOutputDeviceId !== undefined) {
+      applyAudioOutputDevice(settings.audioOutputDeviceId);
+    }
+  }, [settings.audioOutputDeviceId, applyAudioOutputDevice]);
   const recentScrollRef = useRef<HTMLDivElement>(null);
   const recsScrollRef = useRef<HTMLDivElement>(null);
 
@@ -1741,6 +1889,11 @@ function App() {
     audio.loop = false;
     audio.dataset.isPodcast = isPodcast ? 'true' : 'false';
 
+    if (settings.audioOutputDeviceId && typeof (audio as any).setSinkId === 'function') {
+      const targetId = settings.audioOutputDeviceId === 'default' ? '' : settings.audioOutputDeviceId;
+      (audio as any).setSinkId(targetId).catch((err: any) => console.warn('setSinkId audio failed', err));
+    }
+
     audioRef.current = audio;
     if (!isPodcast) {
       setupAudioContext(audio);
@@ -1942,20 +2095,24 @@ function App() {
     return t('goodEvening');
   };
 
-  const isLiked = (songId: string) => likedSongs.some(s => s.id === songId);
+  const isLiked = (songOrId: any) => {
+    if (!songOrId) return false;
+    if (typeof songOrId === 'string') {
+      return likedSongs.some(s => s.id === songOrId);
+    }
+    return likedSongs.some(s => (songOrId.id && s.id === songOrId.id) || (s.title && s.title === songOrId.title && s.artist === songOrId.artist));
+  };
 
   const toggleLike = (song: any) => {
-    const isCurrentlyLiked = likedSongs.some(s => s.id === song.id);
+    if (!song) return;
+    const isCurrentlyLiked = likedSongs.some(s => (song.id && s.id === song.id) || (s.title && s.title === song.title && s.artist === song.artist));
     if (isCurrentlyLiked) {
       showToast(t('toastUnliked') || 'Dihapus dari Disukai');
+      setLikedSongs(prev => prev.filter(s => !((song.id && s.id === song.id) || (s.title && s.title === song.title && s.artist === song.artist))));
     } else {
       showToast(t('toastLiked') || 'Ditambahkan ke Disukai');
+      setLikedSongs(prev => [song, ...prev]);
     }
-    setLikedSongs(prev =>
-      prev.some(s => s.id === song.id)
-        ? prev.filter(s => s.id !== song.id)
-        : [song, ...prev]
-    );
   };
 
   // ─── Playlist Functions ──────────────────────────────────────
@@ -2008,7 +2165,8 @@ function App() {
       setAddToPlaylistSong(null);
       return;
     }
-    if (pl.songs.some(s => s.id === song.id)) {
+    const isAlreadyIn = pl.songs.some(s => (song.id && s.id === song.id) || (s.title === song.title && s.artist === song.artist));
+    if (isAlreadyIn) {
       setAddToPlaylistSong(null);
       showToast(t('toastAlreadyInPlaylist'), 'error');
       return;
@@ -2027,14 +2185,29 @@ function App() {
 
     setPlaylists(prev => prev.map(p => p.id === playlistId ? updated : p));
     setAddToPlaylistSong(null);
-    showToast(t('toastAddedToPlaylist'), 'playlist');
+    showToast(t('toastAddedToPlaylist', { playlist: pl.name }), 'playlist');
   };
 
-  const removeSongFromPlaylist = async (playlistId: string, songId: string) => {
+  const removeSongFromPlaylist = async (playlistId: string, songToRemove: any, index?: number) => {
     const pl = playlists.find(p => p.id === playlistId);
     if (!pl) return;
 
-    const updated = { ...pl, songs: pl.songs.filter(s => s.id !== songId) };
+    let updatedSongs: any[];
+    if (typeof index === 'number' && index >= 0 && index < pl.songs.length) {
+      updatedSongs = pl.songs.filter((_, idx) => idx !== index);
+    } else {
+      const targetId = typeof songToRemove === 'string' ? songToRemove : songToRemove?.id;
+      const targetTitle = typeof songToRemove === 'object' ? songToRemove?.title : null;
+      const targetArtist = typeof songToRemove === 'object' ? songToRemove?.artist : null;
+
+      updatedSongs = pl.songs.filter(s => {
+        if (targetId && s.id === targetId) return false;
+        if (targetTitle && targetArtist && s.title === targetTitle && s.artist === targetArtist) return false;
+        return true;
+      });
+    }
+
+    const updated = { ...pl, songs: updatedSongs };
     if ((window as any).electronAPI) await (window as any).electronAPI.savePlaylist(updated);
 
     setPlaylists(prev => prev.map(p => p.id === playlistId ? updated : p));
@@ -2256,9 +2429,43 @@ function App() {
     if (!playlistSearchQuery.trim()) return;
     setIsPlaylistSearching(true);
     try {
-      const response = await fetch(`${API_BASE_URL}/api/search?q=${encodeURIComponent(playlistSearchQuery + ' official audio')}`);
-      const data = await response.json();
-      if (data.results) setPlaylistSearchResults(data.results);
+      const preferAudio = settings?.prioritizeOfficialAudio !== false;
+      let results: any[] = [];
+      if (preferAudio) {
+        try {
+          const itunesResults = await searchItunesTracks(
+            playlistSearchQuery,
+            15,
+            (window as any).electronAPI?.fetchUrl
+          );
+          if (itunesResults && itunesResults.length > 0) {
+            results = itunesResults;
+          }
+        } catch (err) {
+          console.error('iTunes playlist search error:', err);
+        }
+      }
+
+      if (results.length === 0) {
+        const q = preferAudio ? buildSmartSearchQuery(playlistSearchQuery) : playlistSearchQuery;
+        const response = await fetch(`${API_BASE_URL}/api/search?q=${encodeURIComponent(q)}`);
+        const data = await response.json();
+        let ytResults = data.results || [];
+        if (ytResults.length === 0 && q !== playlistSearchQuery) {
+          try {
+            const fallbackRes = await fetch(`${API_BASE_URL}/api/search?q=${encodeURIComponent(playlistSearchQuery)}`);
+            const fallbackData = await fallbackRes.json();
+            ytResults = fallbackData.results || [];
+          } catch {}
+        }
+        if (preferAudio) {
+          results = rankAudioResults(ytResults, playlistSearchQuery);
+        } else {
+          results = ytResults;
+        }
+      }
+
+      setPlaylistSearchResults(results);
     } catch (err) {
       console.error(err);
       showToast(t('toastSearchFail'), 'error');
@@ -2517,7 +2724,8 @@ function App() {
           if (rightSidebarMode !== 'lyrics') {
             setRightSidebarMode('lyrics');
           }
-          query = song.originalQuery || (`${song.artist} ${song.title}`);
+          const baseQuery = song.originalQuery || (`${song.artist} ${song.title}`);
+          query = settings?.prioritizeOfficialAudio !== false ? buildSmartSearchQuery(baseQuery) : baseQuery;
         }
         let url = `${API_BASE_URL}/api/search?q=${encodeURIComponent(query)}`;
         try {
@@ -2545,7 +2753,11 @@ function App() {
                 ? scored[0].item
                 : resData.results.find((item: any) => item.duration >= 120) || resData.results[0];
             } else {
-              validYt = resData.results.find((item: any) => item.duration >= 60 && item.duration <= 480) || resData.results[0];
+              let candidates = resData.results.filter((item: any) => item.duration >= 50 && item.duration <= 720);
+              if (settings?.prioritizeOfficialAudio !== false) {
+                candidates = rankAudioResults(candidates, song.title || query, song.duration || 0);
+              }
+              validYt = candidates[0] || resData.results.find((item: any) => item.duration >= 60 && item.duration <= 480) || resData.results[0];
             }
 
             if (validYt) {
@@ -3148,11 +3360,13 @@ function App() {
                   ? await (window as any).electronAPI.fetchUrl(url)
                   : await (await fetch(url)).json();
                 if (data && data.results && data.results.length > 0) {
-                  const validYt = data.results.find((item: any) => item.duration >= 60 && item.duration <= 480);
+                  let candidates = data.results.filter((item: any) => item.duration >= 50 && item.duration <= 720);
+                  candidates = rankAudioResults(candidates, song.title || '', song.duration || 0);
+                  const validYt = candidates[0] || data.results.find((item: any) => item.duration >= 60 && item.duration <= 480);
                   if (validYt) {
                     setArtistSongs(prev => {
                       const next = [...prev];
-                      if (next[idx] && next[idx].title === song.title) next[idx] = { ...next[idx], id: validYt.id };
+                      if (next[idx] && next[idx].title === song.title) next[idx] = { ...next[idx], id: validYt.id, duration: validYt.duration };
                       return next;
                     });
                   }
@@ -3171,8 +3385,8 @@ function App() {
       // Fallback if iTunes fails
       if (queries.length === 0) {
         queries = filter === 'popular'
-          ? [`${artist} popular songs`, `${artist} hit songs`, `${artist} best songs`, `${artist} top hits`]
-          : [`${artist} newest songs 2024`, `${artist} new release`, `${artist} comeback`, `${artist} latest mv`];
+          ? [`${artist} official audio popular`, `${artist} hit songs audio`, `${artist} best songs`, `${artist} top hits`]
+          : [`${artist} new release audio`, `${artist} newest songs`, `${artist} latest audio`, `${artist} new songs`];
       }
 
       // Progressive loading for fallback
@@ -3183,7 +3397,8 @@ function App() {
           .then(res => res.json())
           .then(data => {
             if (data.results) {
-              const validSong = data.results.find((item: any) => item.duration >= 60 && item.duration <= 480);
+              const candidates = rankAudioResults(data.results.filter((item: any) => item.duration >= 60 && item.duration <= 480), artist);
+              const validSong = candidates[0] || data.results.find((item: any) => item.duration >= 60 && item.duration <= 480);
 
               if (validSong) {
                 if (!firstBatchLoaded) {
@@ -3639,15 +3854,15 @@ function App() {
                     <button
                       className="library-item-action"
                       onClick={(e) => { e.stopPropagation(); toggleLike(song); }}
-                      style={{ color: isLiked(song.id) ? '#ff6b9d' : 'var(--text-secondary)' }}
+                      style={{ color: isLiked(song) ? '#ff6b9d' : 'var(--text-secondary)' }}
                       title="Like"
                     >
-                      <Heart size={16} fill={isLiked(song.id) ? 'currentColor' : 'none'} />
+                      <Heart size={16} fill={isLiked(song) ? 'currentColor' : 'none'} />
                     </button>
                     {canEditSongs && (
                       <button
                         className="library-item-action"
-                        onClick={(e) => { e.stopPropagation(); removeSongFromPlaylist(pl.id, song.id); }}
+                        onClick={(e) => { e.stopPropagation(); removeSongFromPlaylist(pl.id, song, i); }}
                         title="Hapus dari playlist"
                       >
                         <Trash2 size={16} />
@@ -3685,29 +3900,60 @@ function App() {
 
               {playlistSearchResults.length > 0 && (
                 <div className="library-list">
-                  {playlistSearchResults.map((song, i) => (
-                    <div key={i} className="library-item"
-                      draggable={true}
-                      onDragStart={(e) => { setDraggedGlobalSong(song); applyDragGhost(e, song); }}
-                      onDragEnd={(e) => { setDraggedGlobalSong(null); (e.currentTarget as HTMLElement).classList.remove('dragging-origin'); }}
-                    >
-                      <div className="library-item-art">
-                        <img src={(getCleanThumbnail(song.thumbnail) || getHighResImage(song.cover))} alt={song.title} />
-                      </div>
-                      <div className="library-item-info">
-                        <div className="library-item-title" title={song.title}>{song.title}</div>
-                        <div className="library-item-artist">{song.artist}</div>
-                      </div>
-                      <div className="library-item-duration">{formatTime(song.duration)}</div>
-                      <button
-                        className="btn-secondary"
-                        onClick={() => addSongToPlaylist(pl.id, song)}
-                        disabled={pl.songs.some(s => s.id === song.id)}
+                  {playlistSearchResults.map((song, i) => {
+                    const isAdded = pl.songs.some(s => (song.id && s.id === song.id) || (s.title === song.title && s.artist === song.artist));
+                    const badge = getAudioBadge(song);
+                    return (
+                      <div key={i} className="library-item"
+                        draggable={true}
+                        onDragStart={(e) => { setDraggedGlobalSong(song); applyDragGhost(e, song); }}
+                        onDragEnd={(e) => { setDraggedGlobalSong(null); (e.currentTarget as HTMLElement).classList.remove('dragging-origin'); }}
                       >
-                        {pl.songs.some(s => s.id === song.id) ? t('toastAddedToPlaylist') : t('addSongs')}
-                      </button>
-                    </div>
-                  ))}
+                        <div
+                          className="library-item-art"
+                          onClick={() => playSingleSong(song)}
+                          title={t('playSong')}
+                          style={{ cursor: 'pointer' }}
+                        >
+                          <img src={(getCleanThumbnail(song.thumbnail) || getHighResImage(song.cover))} alt={song.title} />
+                          <div className="library-item-play"><Play size={16} fill="currentColor" /></div>
+                        </div>
+                        <div className="library-item-info">
+                          <div className="library-item-title" title={song.title}>{song.title}</div>
+                          <div className="library-item-artist" style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                            <span>{song.artist}</span>
+                            {badge && (
+                              <span className={`suggestion-badge badge-${badge.type}`}>
+                                {badge.type === 'audio' && <Music size={10} strokeWidth={2.4} />}
+                                {badge.type === 'lyrics' && <FileText size={10} strokeWidth={2.4} />}
+                                {badge.type === 'video' && <Film size={10} strokeWidth={2.4} />}
+                                <span>{badge.type === 'audio' ? t('badgeAudio') : badge.type === 'lyrics' ? t('badgeLyrics') : t('badgeVideo')}</span>
+                              </span>
+                            )}
+                          </div>
+                        </div>
+                        <div className="library-item-duration">{formatTime(song.duration)}</div>
+                        <button
+                          className={isAdded ? "btn-secondary" : "btn-primary"}
+                          onClick={() => addSongToPlaylist(pl.id, song)}
+                          disabled={isAdded}
+                          style={{ display: 'flex', alignItems: 'center', gap: '6px' }}
+                        >
+                          {isAdded ? (
+                            <>
+                              <Check size={14} />
+                              <span>{t('addedToPlaylist')}</span>
+                            </>
+                          ) : (
+                            <>
+                              <Plus size={14} />
+                              <span>{t('addSongs')}</span>
+                            </>
+                          )}
+                        </button>
+                      </div>
+                    );
+                  })}
                 </div>
               )}
             </div>
@@ -4268,6 +4514,61 @@ function App() {
         <div className="settings-section-title" style={{ display: 'flex', alignItems: 'center', gap: '8px' }}><Volume2 size={20} color="var(--accent-primary)" /> {t('audioSection')}</div>
         <div className="settings-row">
           <div>
+            <div className="settings-label">{t('audioOutputDevice')}</div>
+            <div className="settings-desc">{t('audioOutputDeviceDesc')}</div>
+          </div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <select
+              className="settings-select"
+              style={{ maxWidth: '240px', textOverflow: 'ellipsis' }}
+              value={settings.audioOutputDeviceId || 'default'}
+              onChange={e => {
+                const newId = e.target.value;
+                setSettings((p: any) => {
+                  const updated = { ...p, audioOutputDeviceId: newId };
+                  localStorage.setItem('donpollo_settings', JSON.stringify(updated));
+                  return updated;
+                });
+                applyAudioOutputDevice(newId);
+              }}
+            >
+              <option value="default">{t('defaultAudioDevice')}</option>
+              {audioOutputDevices
+                .filter(dev => dev.deviceId !== 'default' && dev.deviceId !== 'communications')
+                .map(dev => (
+                  <option key={dev.deviceId} value={dev.deviceId} title={dev.label}>
+                    {dev.label || `Audio Device (${dev.deviceId.slice(0, 8)}...)`}
+                  </option>
+                ))}
+            </select>
+            <button
+              className="chat-btn"
+              style={{
+                padding: '6px',
+                borderRadius: '8px',
+                border: '1px solid var(--border-color)',
+                background: 'rgba(255,255,255,0.05)',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                cursor: isRefreshingAudioDevices ? 'not-allowed' : 'pointer'
+              }}
+              onClick={() => loadAudioOutputDevices()}
+              title={t('refreshAudioDevices')}
+              disabled={isRefreshingAudioDevices}
+            >
+              <RotateCcw
+                size={14}
+                style={{
+                  animation: isRefreshingAudioDevices ? 'spin 1s linear infinite' : 'none',
+                  color: 'var(--text-secondary)'
+                }}
+              />
+            </button>
+          </div>
+        </div>
+        <div className="settings-row">
+          <div>
             <div className="settings-label">{t('defaultVolume')}</div>
             <div className="settings-desc">{t('defaultVolumeDesc')}</div>
           </div>
@@ -4303,6 +4604,21 @@ function App() {
               localStorage.setItem('donpollo_settings', JSON.stringify({ ...settings, normalizeAudio: newVal }));
             }}>
             {settings.normalizeAudio && <Check size={14} />}
+          </button>
+        </div>
+        <div className="settings-row">
+          <div>
+            <div className="settings-label">{t('prioritizeOfficialAudio')}</div>
+            <div className="settings-desc">{t('prioritizeOfficialAudioDesc')}</div>
+          </div>
+          <button className={`settings-toggle ${settings.prioritizeOfficialAudio !== false ? 'on' : ''}`}
+            onClick={() => {
+              const newVal = !(settings.prioritizeOfficialAudio !== false);
+              setSettings((p: any) => ({ ...p, prioritizeOfficialAudio: newVal }));
+              localStorage.setItem('donpollo_settings', JSON.stringify({ ...settings, prioritizeOfficialAudio: newVal }));
+              searchCacheRef.current = {};
+            }}>
+            {settings.prioritizeOfficialAudio !== false && <Check size={14} />}
           </button>
         </div>
         <div className="settings-row">
@@ -6141,7 +6457,7 @@ function App() {
                     await (window as any).electronAPI.updateTimeCapsule({ ...updated, discordId: discordUser?.id });
                     fetchTimeCapsules();
                     setAddToCapsuleSong(null);
-                    showToast(t('toastAddedToPlaylist') || 'Berhasil', 'success');
+                    showToast(t('toastAddedToPlaylist', { playlist: cap.title }) || 'Berhasil', 'success');
                   }}>
                     <div className="modal-playlist-art" style={{ background: 'var(--bg-card-hover)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                       <Hourglass size={16} color="var(--text-muted)" />
@@ -7097,10 +7413,10 @@ function App() {
                   {isFetchingSuggestions ? (
                     <div className="suggestion-loading">
                       <Loader2 size={14} className="spin-icon" />
-                      <span>Mencari...</span>
+                      <span>{t('searching')}</span>
                     </div>
                   ) : suggestions.length === 0 ? (
-                    <div className="suggestion-empty">Tidak ada hasil untuk "{searchQuery}"</div>
+                    <div className="suggestion-empty">{t('noResults')} "{searchQuery}"</div>
                   ) : (
                     <>
                       {suggestions.map((song, i) => (
@@ -7108,13 +7424,32 @@ function App() {
                           key={i}
                           className="suggestion-item no-hover-play"
                           onMouseDown={e => e.preventDefault()}
+                          onClick={() => {
+                            playSingleSong(song);
+                            setSearchQuery(song.title);
+                            setShowSuggestions(false);
+                          }}
                         >
                           <div className="suggestion-thumb">
                             <img src={(getCleanThumbnail(song.thumbnail) || getHighResImage(song.cover))} alt={song.title} />
                           </div>
                           <div className="suggestion-info">
                             <div className="suggestion-title">{song.title}</div>
-                            <div className="suggestion-artist">{song.artist}</div>
+                            <div className="suggestion-artist-row">
+                              <span className="suggestion-artist">{song.artist}</span>
+                              {homeMode !== 'podcast' && (() => {
+                                const badge = getAudioBadge(song);
+                                if (!badge) return null;
+                                return (
+                                  <span className={`suggestion-badge badge-${badge.type}`}>
+                                    {badge.type === 'audio' && <Music size={10} strokeWidth={2.4} />}
+                                    {badge.type === 'lyrics' && <FileText size={10} strokeWidth={2.4} />}
+                                    {badge.type === 'video' && <Film size={10} strokeWidth={2.4} />}
+                                    <span>{badge.type === 'audio' ? t('badgeAudio') : badge.type === 'lyrics' ? t('badgeLyrics') : t('badgeVideo')}</span>
+                                  </span>
+                                );
+                              })()}
+                            </div>
                           </div>
                           <div className="suggestion-actions">
                             <button
@@ -7130,14 +7465,14 @@ function App() {
                               <Play size={15} fill="currentColor" />
                             </button>
                             <button
-                              className={`suggestion-btn ${isLiked(song.id) ? 'liked' : ''}`}
-                              title={isLiked(song.id) ? t('unlikeSong') : t('likeSong')}
+                              className={`suggestion-btn ${isLiked(song) ? 'liked' : ''}`}
+                              title={isLiked(song) ? t('unlikeSong') : t('likeSong')}
                               onClick={(e) => {
                                 e.stopPropagation();
                                 toggleLike(song);
                               }}
                             >
-                              <Heart size={15} fill={isLiked(song.id) ? 'currentColor' : 'none'} />
+                              <Heart size={15} fill={isLiked(song) ? 'currentColor' : 'none'} />
                             </button>
                             <button
                               className="suggestion-btn"
@@ -7181,15 +7516,39 @@ function App() {
                               <button
                                 className="suggestion-btn"
                                 title={t('downloadSong')}
-                                onClick={(e) => {
+                                onClick={async (e) => {
                                   e.stopPropagation();
                                   if ((window as any).electronAPI) {
-                                    let streamUrl = `${API_BASE_URL}/api/stream?id=${song.id}`;
-                                    if (settings.audioQuality && settings.audioQuality !== 'auto') {
-                                      streamUrl += `&quality=${settings.audioQuality}`;
+                                    let songToCache = { ...song };
+                                    if (!songToCache.id) {
+                                      showToast('Menyiapkan audio...', 'music');
+                                      try {
+                                        const q = songToCache.originalQuery || `${songToCache.artist} ${songToCache.title} official audio`;
+                                        const url = `${API_BASE_URL}/api/search?q=${encodeURIComponent(q)}`;
+                                        const data = (window as any).electronAPI
+                                          ? await (window as any).electronAPI.fetchUrl(url)
+                                          : await (await fetch(url)).json();
+                                        const resData = typeof data === 'string' ? JSON.parse(data) : data;
+                                        if (resData && resData.results && resData.results.length > 0) {
+                                          let candidates = resData.results.filter((item: any) => item.duration >= 50 && item.duration <= 720);
+                                          candidates = rankAudioResults(candidates, songToCache.title, songToCache.duration || 0);
+                                          const validYt = candidates[0] || resData.results[0];
+                                          if (validYt) {
+                                            songToCache.id = validYt.id;
+                                          }
+                                        }
+                                      } catch (err) { }
                                     }
-                                    (window as any).electronAPI.cacheAudio(song, streamUrl);
-                                    showToast(`${t('toastDownloadStarted')} "${song.title}"...`, 'success');
+                                    if (songToCache.id) {
+                                      let streamUrl = `${API_BASE_URL}/api/stream?id=${songToCache.id}`;
+                                      if (settings.audioQuality && settings.audioQuality !== 'auto') {
+                                        streamUrl += `&quality=${settings.audioQuality}`;
+                                      }
+                                      (window as any).electronAPI.cacheAudio(songToCache, streamUrl);
+                                      showToast(`${t('toastDownloadStarted')} "${songToCache.title}"...`, 'success');
+                                    } else {
+                                      showToast('Gagal menemukan audio untuk diunduh.', 'error');
+                                    }
                                   }
                                   setShowSuggestions(false);
                                 }}

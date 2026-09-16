@@ -68,6 +68,10 @@ type TranslationKeys = {
   filterPopular: string;
   filterNewest: string;
   loadingSongs: string;
+  badgeAudio: string;
+  badgeLyrics: string;
+  badgeVideo: string;
+  searching: string;
 
   // Library / Playlist
   myLibrary: string;
@@ -131,6 +135,8 @@ type TranslationKeys = {
   loadingPleaseWait: string;
   normalizeAudio: string;
   normalizeAudioDesc: string;
+  prioritizeOfficialAudio: string;
+  prioritizeOfficialAudioDesc: string;
   lyricsPanel: string;
   noLyrics: string;
   offsetLabel: string;
@@ -146,6 +152,10 @@ type TranslationKeys = {
   discordActivity: string;
   discordActivityDesc: string;
   audioSection: string;
+  audioOutputDevice: string;
+  audioOutputDeviceDesc: string;
+  defaultAudioDevice: string;
+  refreshAudioDevices: string;
   defaultVolume: string;
   defaultVolumeDesc: string;
   audioQuality: string;
@@ -323,6 +333,7 @@ type TranslationKeys = {
   toastPlaylistCreated: string;
   toastImportSuccess: string;
   toastAddedToPlaylist: string;
+  addedToPlaylist: string;
   toastRemovedFromPlaylist: string;
   toastAlreadyInPlaylist: string;
   toastLiked: string;
@@ -552,6 +563,10 @@ const translations: Record<Language, TranslationKeys> = {
     filterPopular: 'Terpopuler',
     filterNewest: 'Terbaru',
     loadingSongs: 'Memuat lagu...',
+    badgeAudio: 'Audio',
+    badgeLyrics: 'Lirik',
+    badgeVideo: 'MV',
+    searching: 'Mencari...',
 
     // Library / Playlist
     myLibrary: 'Koleksi Saya',
@@ -600,6 +615,8 @@ const translations: Record<Language, TranslationKeys> = {
     loadingPleaseWait: 'Memuat, mohon tunggu...',
     normalizeAudio: 'Normalisasi Audio',
     normalizeAudioDesc: 'Sesuaikan volume semua lagu agar terdengar setara',
+    prioritizeOfficialAudio: 'Prioritaskan Official Audio',
+    prioritizeOfficialAudioDesc: 'Utamakan versi audio resmi/album studio agar lirik dan durasi lagu selalu akurat dan tersinkronisasi',
     lyricsPanel: 'Lirik',
     noLyrics: 'Tidak ada lirik tersedia.',
     offsetLabel: 'Offset',
@@ -615,6 +632,10 @@ const translations: Record<Language, TranslationKeys> = {
     discordActivity: 'Status Aktivitas Discord',
     discordActivityDesc: 'Tampilkan lagu yang sedang didengar di profil Discord Anda',
     audioSection: 'Audio',
+    audioOutputDevice: 'Perangkat Output Audio',
+    audioOutputDeviceDesc: 'Pilih perangkat speaker atau headphone untuk pemutaran musik',
+    defaultAudioDevice: 'Default Sistem',
+    refreshAudioDevices: 'Segarkan daftar perangkat audio',
     defaultVolume: 'Volume Default',
     defaultVolumeDesc: 'Volume yang digunakan saat aplikasi pertama dibuka',
     audioQuality: 'Kualitas Audio',
@@ -792,6 +813,7 @@ const translations: Record<Language, TranslationKeys> = {
     toastPlaylistCreated: 'berhasil dibuat!',
     toastImportSuccess: 'berhasil diimpor!',
     toastAddedToPlaylist: 'Lagu ditambahkan ke {playlist}!',
+    addedToPlaylist: 'Ditambahkan ke Playlist',
     toastRemovedFromPlaylist: 'Lagu dihapus dari playlist!',
     toastAlreadyInPlaylist: 'Lagu sudah ada di playlist ini.',
     toastLiked: 'Ditambahkan ke Disukai',
@@ -1020,6 +1042,10 @@ const translations: Record<Language, TranslationKeys> = {
     filterPopular: 'Popular',
     filterNewest: 'Newest',
     loadingSongs: 'Loading songs...',
+    badgeAudio: 'Audio',
+    badgeLyrics: 'Lyrics',
+    badgeVideo: 'MV',
+    searching: 'Searching...',
 
     // Library / Playlist
     myLibrary: 'My Library',
@@ -1068,6 +1094,8 @@ const translations: Record<Language, TranslationKeys> = {
     loadingPleaseWait: 'Loading, please wait...',
     normalizeAudio: 'Audio Normalization',
     normalizeAudioDesc: 'Adjust volume of all songs to be equal',
+    prioritizeOfficialAudio: 'Prioritize Official Audio',
+    prioritizeOfficialAudioDesc: 'Prioritize official studio album audio so lyrics and track duration remain accurate and synced',
     lyricsPanel: 'Lyrics',
     noLyrics: 'No lyrics available.',
     offsetLabel: 'Offset',
@@ -1083,6 +1111,10 @@ const translations: Record<Language, TranslationKeys> = {
     discordActivity: 'Discord Activity Status',
     discordActivityDesc: 'Show the song you are currently listening to on your Discord profile',
     audioSection: 'Audio',
+    audioOutputDevice: 'Audio Output Device',
+    audioOutputDeviceDesc: 'Select speaker or headphone device for music playback',
+    defaultAudioDevice: 'System Default',
+    refreshAudioDevices: 'Refresh audio device list',
     defaultVolume: 'Default Volume',
     defaultVolumeDesc: 'Volume used when the app first opens',
     audioQuality: 'Audio Quality',
@@ -1260,6 +1292,7 @@ const translations: Record<Language, TranslationKeys> = {
     toastPlaylistCreated: 'created successfully!',
     toastImportSuccess: 'imported successfully!',
     toastAddedToPlaylist: 'Song added to {playlist}!',
+    addedToPlaylist: 'Added to Playlist',
     toastRemovedFromPlaylist: 'Song removed from playlist!',
     toastAlreadyInPlaylist: 'Song is already in this playlist.',
     toastLiked: 'Added to Liked Songs',
@@ -1488,6 +1521,10 @@ const translations: Record<Language, TranslationKeys> = {
     filterPopular: '人気',
     filterNewest: '最新',
     loadingSongs: '曲を読み込み中...',
+    badgeAudio: '音源',
+    badgeLyrics: '歌詞',
+    badgeVideo: 'MV',
+    searching: '検索中...',
 
     // Library / Playlist
     myLibrary: 'マイライブラリ',
@@ -1536,6 +1573,8 @@ const translations: Record<Language, TranslationKeys> = {
     loadingPleaseWait: '読み込み中、お待ちください...',
     normalizeAudio: 'オーディオの正規化',
     normalizeAudioDesc: 'すべての曲の音量が同じになるように調整します',
+    prioritizeOfficialAudio: '公式オーディオを優先',
+    prioritizeOfficialAudioDesc: '歌詞と曲の長さを正確に同期させるため、スタジオ公式音源を優先します',
     lyricsPanel: '歌詞',
     noLyrics: '歌詞はありません。',
     offsetLabel: 'オフセット',
@@ -1551,6 +1590,10 @@ const translations: Record<Language, TranslationKeys> = {
     discordActivity: 'Discord アクティビティステータス',
     discordActivityDesc: '現在聴いている曲をDiscordのプロフィールに表示します',
     audioSection: 'オーディオ',
+    audioOutputDevice: 'オーディオ出力デバイス',
+    audioOutputDeviceDesc: '音楽再生に使用するスピーカーまたはヘッドフォンを選択します',
+    defaultAudioDevice: 'システム既定',
+    refreshAudioDevices: 'オーディオデバイス一覧を更新',
     defaultVolume: 'デフォルト音量',
     defaultVolumeDesc: 'アプリを起動したときの音量',
     audioQuality: '音質',
@@ -1728,6 +1771,7 @@ const translations: Record<Language, TranslationKeys> = {
     toastPlaylistCreated: 'を作成しました！',
     toastImportSuccess: 'を正常にインポートしました！',
     toastAddedToPlaylist: '{playlist}に追加しました！',
+    addedToPlaylist: 'プレイリストに追加済み',
     toastRemovedFromPlaylist: 'プレイリストから削除しました！',
     toastAlreadyInPlaylist: 'この曲はすでにプレイリストに含まれています。',
     toastLiked: 'お気に入りに追加しました',
@@ -1957,6 +2001,10 @@ const translations: Record<Language, TranslationKeys> = {
     filterPopular: '인기순',
     filterNewest: '최신순',
     loadingSongs: '곡 불러오는 중...',
+    badgeAudio: '오디오',
+    badgeLyrics: '가사',
+    badgeVideo: 'MV',
+    searching: '검색 중...',
 
     // Library / Playlist
     myLibrary: '내 라이브러리',
@@ -2005,6 +2053,8 @@ const translations: Record<Language, TranslationKeys> = {
     loadingPleaseWait: '로드 중, 잠시만 기다려주세요...',
     normalizeAudio: '오디오 정규화',
     normalizeAudioDesc: '모든 노래의 볼륨이 같도록 조정합니다',
+    prioritizeOfficialAudio: '공식 오디오 우선',
+    prioritizeOfficialAudioDesc: '가사와 노래 길이가 정확하게 동기화되도록 공식 스튜디오 음원을 우선합니다',
     lyricsPanel: '가사',
     noLyrics: '가사가 없습니다.',
     offsetLabel: '오프셋',
@@ -2020,6 +2070,10 @@ const translations: Record<Language, TranslationKeys> = {
     discordActivity: 'Discord 활동 상태',
     discordActivityDesc: '현재 듣고 있는 노래를 Discord 프로필에 표시합니다',
     audioSection: '오디오',
+    audioOutputDevice: '오디오 출력 장치',
+    audioOutputDeviceDesc: '음악 재생에 사용할 스피커 또는 헤드폰 장치를 선택하세요',
+    defaultAudioDevice: '시스템 기본값',
+    refreshAudioDevices: '오디오 장치 목록 새로고침',
     defaultVolume: '기본 볼륨',
     defaultVolumeDesc: '앱이 처음 열릴 때 사용되는 볼륨',
     audioQuality: '음질',
@@ -2197,6 +2251,7 @@ const translations: Record<Language, TranslationKeys> = {
     toastPlaylistCreated: '이(가) 생성되었습니다!',
     toastImportSuccess: '을(를) 성공적으로 가져왔습니다!',
     toastAddedToPlaylist: '{playlist}에 곡을 추가했습니다!',
+    addedToPlaylist: '플레이리스트에 추가됨',
     toastRemovedFromPlaylist: '플레이리스트에서 곡을 제거했습니다!',
     toastAlreadyInPlaylist: '이 곡은 이미 플레이리스트에 있습니다.',
     toastLiked: '좋아요한 곡에 추가됨',
@@ -2352,6 +2407,16 @@ export function createTranslator(lang: Language) {
       for (const [k, v] of Object.entries(params)) {
         text = text.replace(new RegExp(`\\{${k}\\}`, 'g'), () => v);
       }
+    }
+    // Fallback cleanup if {playlist} placeholder was not provided in params
+    if (text.includes('{playlist}')) {
+      const defaultPlaylistWord: Record<Language, string> = {
+        id: 'playlist',
+        en: 'playlist',
+        ja: 'プレイリスト',
+        ko: '플레이리스트'
+      };
+      text = text.replace(/\{playlist\}/g, defaultPlaylistWord[lang] || 'playlist');
     }
     return text;
   };
