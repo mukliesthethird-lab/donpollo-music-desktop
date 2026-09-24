@@ -579,7 +579,13 @@ ipcMain.handle('get-profile', async (event, discordId) => {
     ]);
 
     const username = (rows as any[]).length > 0 ? (rows as any[])[0].username : '';
-    const avatarUrl = (rows as any[]).length > 0 ? (rows as any[])[0].avatar_url : '';
+    let avatarUrl = (rows as any[]).length > 0 ? (rows as any[])[0].avatar_url : '';
+    if (process.env.DISCORD_TOKEN && discordId) {
+      const live = await fetchDiscordUserLive(discordId);
+      if (live && live.avatarUrl) {
+        avatarUrl = live.avatarUrl;
+      }
+    }
     const followers = (followerRows as any[]).map(r => r.discord_id);
 
     const playlists = (playlistRows as any[]).map(r => ({
@@ -599,7 +605,7 @@ ipcMain.handle('get-profile', async (event, discordId) => {
       return {
         discordId: p.discord_id,
         username: p.username,
-        avatarUrl: p.avatar_url,
+        avatarUrl: avatarUrl || p.avatar_url,
         likedSongs: p.liked_songs ? JSON.parse(p.liked_songs) : [],
         stats: p.stats ? JSON.parse(p.stats) : { playHistory: [] },
         privacySettings: p.privacy_settings ? JSON.parse(p.privacy_settings) : { publicLikedSongs: true, publicStats: true },
@@ -850,6 +856,66 @@ ipcMain.handle('update-presence', async (event, data) => {
   }
 });
 
+const discordAvatarCache = new Map<string, { avatarUrl: string, username?: string, globalName?: string, timestamp: number }>();
+
+async function fetchDiscordUserLive(discordId: string): Promise<{ avatarUrl: string, username?: string, globalName?: string } | null> {
+  const token = process.env.DISCORD_TOKEN;
+  if (!token || !discordId) return null;
+
+  const cached = discordAvatarCache.get(discordId);
+  if (cached && (Date.now() - cached.timestamp < 15 * 60 * 1000)) {
+    return cached;
+  }
+
+  // Pre-set cache to avoid parallel thundering herd fetches from rapid polling
+  discordAvatarCache.set(discordId, {
+    avatarUrl: cached?.avatarUrl || '',
+    username: cached?.username,
+    globalName: cached?.globalName,
+    timestamp: Date.now()
+  });
+
+  try {
+    const res = await fetch(`https://discord.com/api/v10/users/${discordId}`, {
+      headers: { Authorization: `Bot ${token}` }
+    });
+    if (res.ok) {
+      const data: any = await res.json();
+      const avatarUrl = data.avatar 
+        ? `https://cdn.discordapp.com/avatars/${data.id}/${data.avatar}.png`
+        : `https://cdn.discordapp.com/embed/avatars/${Number((BigInt(data.id) >> 22n) % 6n)}.png`;
+      
+      const entry = {
+        avatarUrl,
+        username: data.username,
+        globalName: data.global_name,
+        timestamp: Date.now()
+      };
+      discordAvatarCache.set(discordId, entry);
+
+      if (db && avatarUrl) {
+        db.execute('UPDATE online_users SET avatar_url = ? WHERE discord_id = ? AND avatar_url != ?', [avatarUrl, discordId, avatarUrl]).catch(() => {});
+        db.execute('UPDATE user_profiles SET avatar_url = ? WHERE discord_id = ? AND avatar_url != ?', [avatarUrl, discordId, avatarUrl]).catch(() => {});
+      }
+      return entry;
+    }
+  } catch (e) {
+    console.error(`Failed to fetch Discord user live for ${discordId}:`, e);
+  }
+  return cached || null;
+}
+
+ipcMain.handle('get-live-discord-avatar', async (event, discordId) => {
+  if (!discordId) return null;
+  const live = await fetchDiscordUserLive(discordId);
+  return live ? live.avatarUrl : null;
+});
+
+ipcMain.handle('get-live-discord-user', async (event, discordId) => {
+  if (!discordId) return null;
+  return await fetchDiscordUserLive(discordId);
+});
+
 ipcMain.handle('get-online-users', async (event, currentUserId) => {
   if (!db) return [];
   try {
@@ -859,16 +925,26 @@ ipcMain.handle('get-online-users', async (event, currentUserId) => {
     }
 
     const [rows] = await db.execute('SELECT * FROM online_users WHERE discord_id != ?', [currentUserId || '']);
-    return (rows as any[]).map(row => ({
-      discordId: row.discord_id,
-      username: row.username,
-      avatarUrl: row.avatar_url,
-      currentSong: row.current_song ? JSON.parse(row.current_song) : null,
-      partyId: row.party_id,
-      status: row.status,
-      queue: row.queue ? JSON.parse(row.queue) : [],
-      platform: row.platform || 'desktop'
-    }));
+    return (rows as any[]).map(row => {
+      let avatarUrl = row.avatar_url;
+      const cached = discordAvatarCache.get(row.discord_id);
+      if (cached && cached.avatarUrl) {
+        avatarUrl = cached.avatarUrl;
+      } else if (process.env.DISCORD_TOKEN && row.discord_id && !cached) {
+        fetchDiscordUserLive(row.discord_id).catch(() => {});
+      }
+
+      return {
+        discordId: row.discord_id,
+        username: row.username,
+        avatarUrl: avatarUrl,
+        currentSong: row.current_song ? JSON.parse(row.current_song) : null,
+        partyId: row.party_id,
+        status: row.status,
+        queue: row.queue ? JSON.parse(row.queue) : [],
+        platform: row.platform || 'desktop'
+      };
+    });
   } catch (error) {
     console.error(error);
     return [];

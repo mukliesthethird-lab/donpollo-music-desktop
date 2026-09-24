@@ -393,6 +393,19 @@ type TranslationKeys = {
   moodSad: string;
   moodChill: string;
   moodEnergetic: string;
+  moodSaved: string;
+  vibeGenerating: string;
+  vibeMixReady: string;
+  playVibeMix: string;
+  saveAsPlaylist: string;
+  vibeMixSaved: string;
+  vibeRadar: string;
+  vibeRadarSubtitle: string;
+  vibeSettingTitle: string;
+  vibeSettingDesc: string;
+  vibeInterval: string;
+  vibeIntervalSongs: string;
+  vibeIntervalManual: string;
   topSongs: string;
   topMood: string;
   totalListenTime: string;
@@ -479,6 +492,98 @@ type TranslationKeys = {
   soundMapNoData: string;
   soundMapSelectCountry: string;
   soundMapLoading: string;
+
+  // Search & Audio Preferences
+  searchStorefront: string;
+  searchStorefrontDesc: string;
+  storefrontAuto: string;
+  storefrontId: string;
+  storefrontUs: string;
+  storefrontJp: string;
+  storefrontKr: string;
+
+  // Vibe & Made For You Shelf
+  madeForYou: string;
+  madeForYouDesc: string;
+  vibeMoodChill: string;
+  vibeMoodHappy: string;
+  vibeMoodEnergetic: string;
+  vibeMoodSad: string;
+  vibeTaglineChill: string;
+  vibeTaglineHappy: string;
+  vibeTaglineEnergetic: string;
+  vibeTaglineSad: string;
+  mixMoodSelected: string;
+  vibeChillMixDesc: string;
+  vibeHappyMixDesc: string;
+  vibeEnergeticMixDesc: string;
+  vibeSadMixDesc: string;
+  discoverWeekly: string;
+  discoverWeeklyDesc: string;
+  dailyMixTitle: string;
+  dailyMixDesc: string;
+  releaseRadar: string;
+  releaseRadarDesc: string;
+  weeklyUpdateBadge: string;
+  dailyUpdateBadge: string;
+  newReleaseBadge: string;
+  readyToPlay: string;
+  andOthers: string;
+  mixSongsCount: string;
+  tracklistPreview: string;
+  playAllSongs: string;
+  remixVibe: string;
+  remixVibeTooltip: string;
+  openMix: string;
+  openMixTooltip: string;
+  loadingMixRecommendation: string;
+  emptyMixPrompt: string;
+
+  // Daily Featured Highlights
+  dailyMixShelfTitle: string;
+  dailyMixShelfDesc: string;
+  tagJumpBackIn: string;
+  tagTopPick: string;
+  tagFavorite: string;
+  tagSuggested: string;
+  tagRecentlyPlayed: string;
+  tagTrending: string;
+  nowPlayingStatus: string;
+  playSongBtn: string;
+
+  // Playlist Actions & Modals
+  chooseFile: string;
+  noFileChosen: string;
+  fileChosen: string;
+  changeFile: string;
+  importPlaylistHint: string;
+  downloadAll: string;
+  collabButton: string;
+  share: string;
+  temporaryMix: string;
+  saveToPlaylist: string;
+  remixing: string;
+  allSongsDownloaded: string;
+  startDownloadingSongs: string;
+  playlistSavedToLibrary: string;
+  collabModalTitle: string;
+  collabModalDesc: string;
+  currentCollabsLabel: string;
+  noCollabsYet: string;
+  removeCollab: string;
+  inviteFriendsLabel: string;
+  close: string;
+  collaboratorRemoved: string;
+  inviteSent: string;
+  sendInvite: string;
+  sharePlaylistTitle: string;
+  sharePlaylistDesc: string;
+  sharePlaylistHint: string;
+  copyCode: string;
+  codeCopied: string;
+  shareCodeError: string;
+  syncProfile: string;
+  profileUpdated: string;
 };
 
 const translations: Record<Language, TranslationKeys> = {
@@ -602,7 +707,7 @@ const translations: Record<Language, TranslationKeys> = {
     back: 'Kembali',
     save: 'Simpan',
     importPlaylist: 'Impor Playlist YouTube',
-    importPlaylistPlaceholder: 'URL Playlist YouTube...',
+    importPlaylistPlaceholder: 'Link YouTube atau kode DP-XXXXXX...',
     importing: 'Sedang Mengimpor...',
 
     // Player
@@ -869,10 +974,23 @@ const translations: Record<Language, TranslationKeys> = {
     wrappedEditorialP4: ' lagu yang menemani harimu.',
     vibeCheckTitle: 'Vibe Check!',
     vibeCheckPrompt: 'Gimana vibe kamu hari ini?',
-    moodHappy: '☀️ Senang',
-    moodSad: '🌧️ Sedih',
-    moodChill: '☕ Chill',
-    moodEnergetic: '⚡ Semangat',
+    moodHappy: 'Senang',
+    moodSad: 'Sedih',
+    moodChill: 'Chill',
+    moodEnergetic: 'Semangat',
+    moodSaved: 'Mood tersimpan!',
+    vibeGenerating: 'Meracik lagu sesuai seleramu...',
+    vibeMixReady: 'Vibe Mix Siap Diputar!',
+    playVibeMix: 'Putar Sekarang',
+    saveAsPlaylist: 'Simpan ke Playlist',
+    vibeMixSaved: 'Vibe Mix berhasil disimpan ke Playlist!',
+    vibeRadar: 'Vibe Radar',
+    vibeRadarSubtitle: 'Temukan lagu yang pas dengan suasana hatimu',
+    vibeSettingTitle: 'Vibe Check & Rekomendasi Cerdas',
+    vibeSettingDesc: 'Rekomendasi lagu otomatis sesuai suasana hati saat memutar musik',
+    vibeInterval: 'Frekuensi Pop-up Vibe Check',
+    vibeIntervalSongs: 'Setiap {0} lagu',
+    vibeIntervalManual: 'Manual Saja (Nonaktif)',
     topSongs: 'Lagu Teratas',
     topMood: 'Mood Dominan',
     totalListenTime: 'Total Waktu Mendengarkan',
@@ -959,6 +1077,98 @@ const translations: Record<Language, TranslationKeys> = {
     soundMapNoData: 'Belum ada data musik trending untuk negara ini.',
     soundMapSelectCountry: 'Pilih sebuah negara di Sound Map untuk melihat daftar lagunya.',
     soundMapLoading: 'Menjelajahi tangga lagu...',
+
+    // Search & Audio Preferences
+    searchStorefront: 'Wilayah Etalase Pencarian (Storefront)',
+    searchStorefrontDesc: 'Pilih katalog negara Apple Music/iTunes untuk hasil pencarian yang relevan',
+    storefrontAuto: 'Otomatis (Sesuai Bahasa/Lokasi)',
+    storefrontId: '🇮🇩 Indonesia (ID) — Rekomendasi',
+    storefrontUs: '🌐 Global / Amerika Serikat (US)',
+    storefrontJp: '🇯🇵 Jepang (JP)',
+    storefrontKr: '🇰🇷 Korea Selatan (KR)',
+
+    // Vibe & Made For You Shelf
+    madeForYou: 'Dibuat Untuk Kamu',
+    madeForYouDesc: 'Playlist yang dipersonalisasi dari riwayat putar dan artis favoritmu',
+    vibeMoodChill: 'Santai',
+    vibeMoodHappy: 'Ceria',
+    vibeMoodEnergetic: 'Semangat',
+    vibeMoodSad: 'Melankolis',
+    vibeTaglineChill: 'Smooth lo-fi, melodi santai & nuansa hangat',
+    vibeTaglineHappy: 'Lagu-lagu menyenangkan & irama ceria cerah',
+    vibeTaglineEnergetic: 'Adrenalin tinggi, penyemangat olahraga & ketukan cepat',
+    vibeTaglineSad: 'Melankolis mendalam, balada emosional & soul lembut',
+    mixMoodSelected: 'Mix Mood Pilihan',
+    vibeChillMixDesc: 'Musik santai, lo-fi & melodi lembut untuk menemani suasana hatimu.',
+    vibeHappyMixDesc: 'Lagu-lagu ceria, bersemangat dan positif untuk meningkatkan mood-mu.',
+    vibeEnergeticMixDesc: 'Irama bertempo cepat, memacu adrenalin dan penuh energi.',
+    vibeSadMixDesc: 'Lagu-lagu melankolis dan ballad emosional yang menyentuh hati.',
+    discoverWeekly: 'Discover Weekly',
+    discoverWeeklyDesc: 'Penemuan lagu baru tiap minggu yang disesuaikan dengan seleramu.',
+    dailyMixTitle: 'Yang Mungkin Kamu Suka',
+    dailyMixDesc: 'Kombinasi lagu favorit dan rekomendasi spesial berdasarkan riwayat putarmu.',
+    releaseRadar: 'Release Radar',
+    releaseRadarDesc: 'Rilisan musik terbaru dari artis yang sering kamu dengarkan.',
+    weeklyUpdateBadge: 'Update Mingguan',
+    dailyUpdateBadge: 'Mix Harian',
+    newReleaseBadge: 'Rilisan Baru',
+    readyToPlay: 'Siap diputar',
+    andOthers: 'dan lainnya',
+    mixSongsCount: '{0} lagu tersedia',
+    tracklistPreview: 'Pratinjau Lagu',
+    playAllSongs: 'Putar ({0} Lagu)',
+    remixVibe: 'Acak Ulang',
+    remixVibeTooltip: 'Racik ulang lagu untuk mood ini',
+    openMix: 'Buka',
+    openMixTooltip: 'Lihat daftar lengkap',
+    loadingMixRecommendation: 'Sedang menyiapkan rekomendasi lagu...',
+    emptyMixPrompt: 'Belum ada lagu yang dimuat. Klik "Putar" untuk memulai.',
+
+    // Daily Featured Highlights
+    dailyMixShelfTitle: 'Mix Unggulan Hari Ini',
+    dailyMixShelfDesc: 'Kombinasi lagu favorit, riwayat putar, dan rekomendasi yang dipersonalisasi',
+    tagJumpBackIn: 'Putar Kembali',
+    tagTopPick: 'Pilihan Utama',
+    tagFavorite: 'Lagu Favorit',
+    tagSuggested: 'Rekomendasi',
+    tagRecentlyPlayed: 'Baru Diputar',
+    tagTrending: 'Sedang Tren',
+    nowPlayingStatus: 'Sedang Diputar',
+    playSongBtn: 'Putar Lagu',
+
+    // Playlist Actions & Modals
+    chooseFile: 'Pilih File',
+    noFileChosen: 'Belum ada file dipilih',
+    fileChosen: 'File dipilih',
+    changeFile: 'Ganti File',
+    importPlaylistHint: 'Masukkan link playlist YouTube atau kode share (contoh: DP-XXXXXX)',
+    downloadAll: 'Unduh Semua',
+    collabButton: 'Kolaborasi ({0})',
+    share: 'Bagikan',
+    temporaryMix: 'Mix Sementara',
+    saveToPlaylist: 'Simpan ke Playlist',
+    remixing: 'Meracik...',
+    allSongsDownloaded: 'Semua lagu sudah diunduh',
+    startDownloadingSongs: 'Mulai mengunduh {0} lagu...',
+    playlistSavedToLibrary: 'Playlist berhasil disimpan ke Library kamu!',
+    collabModalTitle: 'Playlist Kolaborasi',
+    collabModalDesc: 'Kelola kolaborator untuk {0}. Kolaborator dapat menambah, menghapus, dan mengatur urutan lagu.',
+    currentCollabsLabel: 'Kolaborator Saat Ini ({0})',
+    noCollabsYet: 'Belum ada kolaborator.',
+    removeCollab: 'Hapus',
+    inviteFriendsLabel: 'Undang Teman Online',
+    close: 'Tutup',
+    collaboratorRemoved: 'Kolaborator dihapus',
+    inviteSent: 'Undangan kolaborasi terkirim!',
+    sendInvite: 'Undang',
+    sharePlaylistTitle: 'Bagikan Playlist',
+    sharePlaylistDesc: 'Bagikan kode ini ke teman. Kode aktif selama 7 hari.',
+    sharePlaylistHint: 'Teman cukup tempel kode ini di tombol Import Playlist',
+    copyCode: 'Salin kode',
+    codeCopied: 'Kode berhasil disalin ke clipboard!',
+    shareCodeError: 'Gagal membuat kode share',
+    syncProfile: 'Perbarui Profil',
+    profileUpdated: 'Profil Discord berhasil diperbarui!',
   },
 
   en: {
@@ -1081,7 +1291,7 @@ const translations: Record<Language, TranslationKeys> = {
     back: 'Back',
     save: 'Save',
     importPlaylist: 'Import YouTube Playlist',
-    importPlaylistPlaceholder: 'YouTube Playlist URL...',
+    importPlaylistPlaceholder: 'YouTube link or DP-XXXXXX code...',
     importing: 'Importing...',
 
     // Player
@@ -1348,10 +1558,23 @@ const translations: Record<Language, TranslationKeys> = {
     wrappedEditorialP4: ' songs that accompanied your days.',
     vibeCheckTitle: 'Vibe Check!',
     vibeCheckPrompt: 'How are you feeling today?',
-    moodHappy: '☀️ Happy',
-    moodSad: '🌧️ Sad',
-    moodChill: '☕ Chill',
-    moodEnergetic: '⚡ Energetic',
+    moodHappy: 'Happy',
+    moodSad: 'Sad',
+    moodChill: 'Chill',
+    moodEnergetic: 'Energetic',
+    moodSaved: 'Mood saved!',
+    vibeGenerating: 'Curating tracks matching your taste...',
+    vibeMixReady: 'Your Vibe Mix is Ready!',
+    playVibeMix: 'Play Now',
+    saveAsPlaylist: 'Save to Playlist',
+    vibeMixSaved: 'Vibe Mix saved to your Playlists!',
+    vibeRadar: 'Vibe Radar',
+    vibeRadarSubtitle: 'Discover songs perfectly matching your mood',
+    vibeSettingTitle: 'Vibe Check & Smart Discovery',
+    vibeSettingDesc: 'Automatically suggest songs matching your mood while listening',
+    vibeInterval: 'Vibe Check Frequency',
+    vibeIntervalSongs: 'Every {0} songs',
+    vibeIntervalManual: 'Manual Only (Off)',
     topSongs: 'Top Songs',
     topMood: 'Top Mood',
     totalListenTime: 'Total Listening Time',
@@ -1438,6 +1661,98 @@ const translations: Record<Language, TranslationKeys> = {
     soundMapNoData: 'No trending music data available for this country yet.',
     soundMapSelectCountry: 'Select a country on the Sound Map to view its tracklist.',
     soundMapLoading: 'Exploring the charts...',
+
+    // Search & Audio Preferences
+    searchStorefront: 'Search Storefront Region',
+    searchStorefrontDesc: 'Select Apple Music/iTunes catalog region for relevant search results',
+    storefrontAuto: 'Automatic (Based on Language/Location)',
+    storefrontId: '🇮🇩 Indonesia (ID) — Recommended',
+    storefrontUs: '🌐 Global / United States (US)',
+    storefrontJp: '🇯🇵 Japan (JP)',
+    storefrontKr: '🇰🇷 South Korea (KR)',
+
+    // Vibe & Made For You Shelf
+    madeForYou: 'Made For You',
+    madeForYouDesc: 'Personalized playlists based on your listening history and favorite artists',
+    vibeMoodChill: 'Chill',
+    vibeMoodHappy: 'Happy',
+    vibeMoodEnergetic: 'Energetic',
+    vibeMoodSad: 'Melancholy',
+    vibeTaglineChill: 'Smooth lo-fi, relaxing melodies & cozy vibes',
+    vibeTaglineHappy: 'Feel-good anthems & upbeat sunny rhythms',
+    vibeTaglineEnergetic: 'High octane adrenaline, workout hype & fast beats',
+    vibeTaglineSad: 'Deep melancholy, slow emotional ballads & soft soul',
+    mixMoodSelected: 'Featured Mood Mix',
+    vibeChillMixDesc: 'Smooth lo-fi, relaxing melodies & gentle vibes to soothe your mood.',
+    vibeHappyMixDesc: 'Uplifting, cheerful, and positive anthems to boost your day.',
+    vibeEnergeticMixDesc: 'Fast-paced rhythms, adrenaline-pumping beats full of energy.',
+    vibeSadMixDesc: 'Heartfelt ballads and deep emotional tracks.',
+    discoverWeekly: 'Discover Weekly',
+    discoverWeeklyDesc: 'Your weekly mixtape of fresh music tailored to your taste.',
+    dailyMixTitle: 'Daily Mix',
+    dailyMixDesc: 'A blend of your favorites and fresh tracks from your listening history.',
+    releaseRadar: 'Release Radar',
+    releaseRadarDesc: 'Catch all the newest music from artists you follow and love.',
+    weeklyUpdateBadge: 'Weekly Update',
+    dailyUpdateBadge: 'Daily Mix',
+    newReleaseBadge: 'New Release',
+    readyToPlay: 'Ready to play',
+    andOthers: 'and more',
+    mixSongsCount: '{0} songs available',
+    tracklistPreview: 'Track Preview',
+    playAllSongs: 'Play ({0} Songs)',
+    remixVibe: 'Reshuffle',
+    remixVibeTooltip: 'Reshuffle tracks for this mood',
+    openMix: 'Open',
+    openMixTooltip: 'View full tracklist',
+    loadingMixRecommendation: 'Preparing song recommendations...',
+    emptyMixPrompt: 'No songs loaded yet. Click "Play" to start.',
+
+    // Daily Featured Highlights
+    dailyMixShelfTitle: "Today's Featured Mix",
+    dailyMixShelfDesc: 'A personalized blend of your favorites, history, and fresh picks',
+    tagJumpBackIn: 'Jump Back In',
+    tagTopPick: 'Top Pick',
+    tagFavorite: 'Favorite',
+    tagSuggested: 'Recommended',
+    tagRecentlyPlayed: 'Recently Played',
+    tagTrending: 'Trending',
+    nowPlayingStatus: 'Now Playing',
+    playSongBtn: 'Play Song',
+
+    // Playlist Actions & Modals
+    chooseFile: 'Choose File',
+    noFileChosen: 'No file chosen',
+    fileChosen: 'File selected',
+    changeFile: 'Change File',
+    importPlaylistHint: 'Enter YouTube playlist link or share code (e.g. DP-XXXXXX)',
+    downloadAll: 'Download All',
+    collabButton: 'Collab ({0})',
+    share: 'Share',
+    temporaryMix: 'Temporary Mix',
+    saveToPlaylist: 'Save to Playlist',
+    remixing: 'Remixing...',
+    allSongsDownloaded: 'All songs already downloaded',
+    startDownloadingSongs: 'Starting download of {0} songs...',
+    playlistSavedToLibrary: 'Playlist successfully saved to your Library!',
+    collabModalTitle: 'Collaborative Playlist',
+    collabModalDesc: 'Manage collaborators for {0}. Collaborators can add, delete, and reorder songs.',
+    currentCollabsLabel: 'Current Collaborators ({0})',
+    noCollabsYet: 'No collaborators yet.',
+    removeCollab: 'Remove',
+    inviteFriendsLabel: 'Invite Online Friends',
+    close: 'Close',
+    collaboratorRemoved: 'Collaborator removed',
+    inviteSent: 'Collab invite sent!',
+    sendInvite: 'Invite',
+    sharePlaylistTitle: 'Share Playlist',
+    sharePlaylistDesc: 'Share this code with friends. The code is active for 7 days.',
+    sharePlaylistHint: 'Friends can paste this code using the Import Playlist button',
+    copyCode: 'Copy code',
+    codeCopied: 'Code copied to clipboard!',
+    shareCodeError: 'Failed to create share code',
+    syncProfile: 'Sync Profile',
+    profileUpdated: 'Discord profile updated successfully!',
   },
 
   ja: {
@@ -1560,7 +1875,7 @@ const translations: Record<Language, TranslationKeys> = {
     back: '戻る',
     save: '保存',
     importPlaylist: 'YouTubeプレイリストをインポート',
-    importPlaylistPlaceholder: 'YouTubeプレイリストのURL...',
+    importPlaylistPlaceholder: 'YouTubeリンクまたはDP-XXXXXXコード...',
     importing: 'インポート中...',
 
     // Player
@@ -1827,10 +2142,23 @@ const translations: Record<Language, TranslationKeys> = {
     wrappedEditorialP4: ' 曲があなたの日々に寄り添いました。',
     vibeCheckTitle: 'Vibe Check!',
     vibeCheckPrompt: '今日の気分はどうですか？',
-    moodHappy: '☀️ 楽しい',
-    moodSad: '🌧️ 悲しい',
-    moodChill: '☕ 落ち着く',
-    moodEnergetic: '⚡ 元気',
+    moodHappy: '楽しい',
+    moodSad: '悲しい',
+    moodChill: '落ち着く',
+    moodEnergetic: '元気',
+    moodSaved: '気分を保存しました！',
+    vibeGenerating: '好みに合わせた選曲をキュレーション中...',
+    vibeMixReady: 'バイブミックス完成！',
+    playVibeMix: '今すぐ再生',
+    saveAsPlaylist: 'プレイリストに保存',
+    vibeMixSaved: 'プレイリストに保存しました！',
+    vibeRadar: 'バイブレーダー',
+    vibeRadarSubtitle: '気分にぴったりの曲を見つけましょう',
+    vibeSettingTitle: 'バイブチェック & おすすめ機能',
+    vibeSettingDesc: '音楽再生中に気分に合わせた曲を自動提案します',
+    vibeInterval: 'バイブチェックの頻度',
+    vibeIntervalSongs: '{0}曲ごと',
+    vibeIntervalManual: '手動のみ（オフ）',
     topSongs: 'トップソング',
     topMood: '主な気分',
     totalListenTime: '合計再生時間',
@@ -1917,6 +2245,98 @@ const translations: Record<Language, TranslationKeys> = {
     soundMapNoData: 'トレンドデータが見つかりませんでした。',
     soundMapSelectCountry: '地図から国を選択してトレンド曲を表示してください。',
     soundMapLoading: '読み込み中...',
+
+    // Search & Audio Preferences
+    searchStorefront: '検索ストアフロント地域',
+    searchStorefrontDesc: '関連性の高い検索結果を得るためにApple Music/iTunesのカタログ地域を選択',
+    storefrontAuto: '自動（言語・地域に応じる）',
+    storefrontId: '🇮🇩 インドネシア (ID)',
+    storefrontUs: '🌐 グローバル / 米国 (US)',
+    storefrontJp: '🇯🇵 日本 (JP)',
+    storefrontKr: '🇰🇷 韓国 (KR)',
+
+    // Vibe & Made For You Shelf
+    madeForYou: 'あなたのための特別ミックス',
+    madeForYouDesc: '再生履歴とお気に入りのアーティストに基づいたパーソナライズプレイリスト',
+    vibeMoodChill: '落ち着く',
+    vibeMoodHappy: '明るい',
+    vibeMoodEnergetic: '元気',
+    vibeMoodSad: '切ない',
+    vibeTaglineChill: '心地よいLo-Fi、リラックスできるメロディと温かな雰囲気',
+    vibeTaglineHappy: '気分が上がるアンセムと明るく爽快なリズム',
+    vibeTaglineEnergetic: '高揚感あふれるアドレナリン、ワークアウト向けハイテンションビート',
+    vibeTaglineSad: '深い哀愁、感情豊かなスローバラードと切ないソウル',
+    mixMoodSelected: '注目のムードミックス',
+    vibeChillMixDesc: 'リラックス音楽、Lo-Fi、気分を穏やかにする優しいメロディ。',
+    vibeHappyMixDesc: '気分を高める明るくポジティブで元気な楽曲。',
+    vibeEnergeticMixDesc: 'アップテンポでアドレナリンが湧き出るエネルギッシュなビート。',
+    vibeSadMixDesc: '心に響く切ないバラードと感動的なトラック。',
+    discoverWeekly: 'ディスカバー・ウィークリー',
+    discoverWeeklyDesc: 'あなたの好みに合わせて毎週更新される新しい音楽の発見。',
+    dailyMixTitle: 'デイリーミックス',
+    dailyMixDesc: 'お気に入りの曲と試聴履歴に基づいたおすすめのミックス。',
+    releaseRadar: 'リリース・レーダー',
+    releaseRadarDesc: 'よく聴くお気に入りアーティストからの最新リリース。',
+    weeklyUpdateBadge: '毎週更新',
+    dailyUpdateBadge: 'デイリーミックス',
+    newReleaseBadge: '新着リリース',
+    readyToPlay: '再生準備完了',
+    andOthers: 'ほか',
+    mixSongsCount: '{0}曲が利用可能',
+    tracklistPreview: '曲のプレビュー',
+    playAllSongs: '再生 ({0}曲)',
+    remixVibe: '再シャッフル',
+    remixVibeTooltip: 'このムードの曲を再シャッフル',
+    openMix: '開く',
+    openMixTooltip: '完全なリストを表示',
+    loadingMixRecommendation: 'おすすめの曲を準備中...',
+    emptyMixPrompt: 'まだ曲が読み込まれていません。「再生」をクリックして開始してください。',
+
+    // Daily Featured Highlights
+    dailyMixShelfTitle: '今日の注目ミックス',
+    dailyMixShelfDesc: 'お気に入り、再生履歴、パーソナライズされたおすすめの組み合わせ',
+    tagJumpBackIn: 'もう一度聴く',
+    tagTopPick: 'トップピック',
+    tagFavorite: 'お気に入り',
+    tagSuggested: 'おすすめ',
+    tagRecentlyPlayed: '最近再生',
+    tagTrending: 'トレンド',
+    nowPlayingStatus: '再生中',
+    playSongBtn: '曲を再生',
+
+    // Playlist Actions & Modals
+    chooseFile: 'ファイルを選択',
+    noFileChosen: 'ファイルが選択されていません',
+    fileChosen: '選択されたファイル',
+    changeFile: 'ファイルを変更',
+    importPlaylistHint: 'YouTubeプレイリストのリンクまたは共有コードを入力してください (例: DP-XXXXXX)',
+    downloadAll: 'すべてダウンロード',
+    collabButton: 'コラボ ({0})',
+    share: '共有',
+    temporaryMix: '一時的なミックス',
+    saveToPlaylist: 'プレイリストに保存',
+    remixing: '生成中...',
+    allSongsDownloaded: 'すべての曲はすでにダウンロードされています',
+    startDownloadingSongs: '{0}曲のダウンロードを開始しています...',
+    playlistSavedToLibrary: 'プレイリストがライブラリに保存されました！',
+    collabModalTitle: 'コラボレーション・プレイリスト',
+    collabModalDesc: '{0} の共同作業者を管理します。共同作業者は曲の追加、削除、並び替えができます。',
+    currentCollabsLabel: '現在の共同作業者 ({0})',
+    noCollabsYet: '共同作業者はまだいません。',
+    removeCollab: '削除',
+    inviteFriendsLabel: 'オンラインのフレンドを招待',
+    close: '閉じる',
+    collaboratorRemoved: '共同作業者を解除しました',
+    inviteSent: 'コラボ招待を送信しました！',
+    sendInvite: '招待',
+    sharePlaylistTitle: 'プレイリストを共有',
+    sharePlaylistDesc: 'このコードをフレンドに共有してください。コードは7日間有効です。',
+    sharePlaylistHint: 'フレンドはこのコードを「プレイリストをインポート」ボタンに貼り付けるだけで読み込めます',
+    copyCode: 'コードをコピー',
+    codeCopied: 'コードをクリップボードにコピーしました！',
+    shareCodeError: '共有コードの作成に失敗しました',
+    syncProfile: 'プロフィールを同期',
+    profileUpdated: 'Discordプロフィールが正常に更新されました！',
   },
 
   ko: {
@@ -2040,7 +2460,7 @@ const translations: Record<Language, TranslationKeys> = {
     back: '뒤로',
     save: '저장',
     importPlaylist: 'YouTube 플레이리스트 가져오기',
-    importPlaylistPlaceholder: 'YouTube 플레이리스트 URL...',
+    importPlaylistPlaceholder: 'YouTube 링크 또는 DP-XXXXXX 코드...',
     importing: '가져오는 중...',
 
     // Player
@@ -2307,10 +2727,23 @@ const translations: Record<Language, TranslationKeys> = {
     wrappedEditorialP4: '곡이 당신의 하루와 함께했습니다.',
     vibeCheckTitle: 'Vibe Check!',
     vibeCheckPrompt: '오늘 기분이 어떠신가요?',
-    moodHappy: '☀️ 행복함',
-    moodSad: '🌧️ 슬픔',
-    moodChill: '☕ 차분함',
-    moodEnergetic: '⚡ 활기참',
+    moodHappy: '행복함',
+    moodSad: '슬픔',
+    moodChill: '차분함',
+    moodEnergetic: '활기참',
+    moodSaved: '기분이 저장되었습니다!',
+    vibeGenerating: '취향에 맞춘 곡을 큐레이션 중...',
+    vibeMixReady: '바이브 믹스 준비 완료!',
+    playVibeMix: '지금 재생',
+    saveAsPlaylist: '플레이리스트에 저장',
+    vibeMixSaved: '플레이리스트에 저장되었습니다!',
+    vibeRadar: '바이브 레이더',
+    vibeRadarSubtitle: '기분에 맞는 맞춤 곡을 발견하세요',
+    vibeSettingTitle: '바이브 체크 & 스마트 추천',
+    vibeSettingDesc: '음악 감상 중 기분에 맞는 곡을 자동으로 추천합니다',
+    vibeInterval: '바이브 체크 주기',
+    vibeIntervalSongs: '{0}곡마다',
+    vibeIntervalManual: '수동 전용 (끄기)',
     topSongs: '인기 곡',
     topMood: '주요 기분',
     totalListenTime: '총 재생 시간',
@@ -2397,6 +2830,98 @@ const translations: Record<Language, TranslationKeys> = {
     soundMapNoData: '데이터를 찾을 수 없습니다.',
     soundMapSelectCountry: '지도에서 국가를 선택하여 트렌드 곡을 확인하세요.',
     soundMapLoading: '로드 중...',
+
+    // Search & Audio Preferences
+    searchStorefront: '검색 스토어 지역',
+    searchStorefrontDesc: '관련성 높은 검색 결과를 위해 Apple Music/iTunes 카탈로그 지역을 선택하세요',
+    storefrontAuto: '자동 (언어/위치 기준)',
+    storefrontId: '🇮🇩 인도네시아 (ID)',
+    storefrontUs: '🌐 글로벌 / 미국 (US)',
+    storefrontJp: '🇯🇵 일본 (JP)',
+    storefrontKr: '🇰🇷 대한민국 (KR)',
+
+    // Vibe & Made For You Shelf
+    madeForYou: '당신을 위한 추천',
+    madeForYouDesc: '감상 기록과 좋아하는 아티스트를 기반으로 한 맞춤 플레이리스트',
+    vibeMoodChill: '차분함',
+    vibeMoodHappy: '경쾌함',
+    vibeMoodEnergetic: '활기참',
+    vibeMoodSad: '감성・우울',
+    vibeTaglineChill: '편안한 로파이, 힐링 멜로디와 포근한 분위기',
+    vibeTaglineHappy: '기분 좋은 노래와 경쾌하고 밝은 리듬',
+    vibeTaglineEnergetic: '넘치는 아드레날린, 운동용 에너지와 빠른 비트',
+    vibeTaglineSad: '깊은 멜랑콜리, 느리고 감성적인 발라드와 소울',
+    mixMoodSelected: '오늘의 무드 믹스',
+    vibeChillMixDesc: '편안한 로파이와 기분을 달래주는 부드러운 멜로디.',
+    vibeHappyMixDesc: '기분을 북돋아주는 밝고 긍정적인 노래.',
+    vibeEnergeticMixDesc: '빠른 템포, 아드레날린을 자극하는 에너지 넘치는 비트.',
+    vibeSadMixDesc: '마음을 울리는 감성적인 발라드와 멜랑콜리 음악.',
+    discoverWeekly: '디스커버 위클리',
+    discoverWeeklyDesc: '취향에 맞추어 매주 새롭게 추천되는 음악 믹스.',
+    dailyMixTitle: '데일리 믹스',
+    dailyMixDesc: '자주 듣는 곡과 감상 기록 기반의 특별 추천 믹스.',
+    releaseRadar: '릴리즈 레이더',
+    releaseRadarDesc: '자주 듣는 아티스트들의 따끈따끈한 최신 발매곡.',
+    weeklyUpdateBadge: '매주 업데이트',
+    dailyUpdateBadge: '일간 믹스',
+    newReleaseBadge: '신규 릴리즈',
+    readyToPlay: '재생 준비 완료',
+    andOthers: '외 다수',
+    mixSongsCount: '{0}곡 이용 가능',
+    tracklistPreview: '곡 미리보기',
+    playAllSongs: '재생 ({0}곡)',
+    remixVibe: '다시 섞기',
+    remixVibeTooltip: '이 무드의 곡 다시 추천받기',
+    openMix: '열기',
+    openMixTooltip: '전체 목록 보기',
+    loadingMixRecommendation: '추천 곡을 준비하는 중...',
+    emptyMixPrompt: '아직 로드된 곡이 없습니다. "재생"을 눌러 시작하세요.',
+
+    // Daily Featured Highlights
+    dailyMixShelfTitle: '오늘의 추천 믹스',
+    dailyMixShelfDesc: '좋아하는 곡, 감상 기록, 맞춤 추천이 조화롭게 어우러진 믹스',
+    tagJumpBackIn: '다시 듣기',
+    tagTopPick: '오늘의 픽',
+    tagFavorite: '좋아요한 곡',
+    tagSuggested: '추천곡',
+    tagRecentlyPlayed: '최근 재생',
+    tagTrending: '인기 급상승',
+    nowPlayingStatus: '현재 재생 중',
+    playSongBtn: '곡 재생',
+
+    // Playlist Actions & Modals
+    chooseFile: '파일 선택',
+    noFileChosen: '선택된 파일 없음',
+    fileChosen: '선택된 파일',
+    changeFile: '파일 변경',
+    importPlaylistHint: 'YouTube 재생목록 링크 또는 공유 코드를 입력하세요 (예: DP-XXXXXX)',
+    downloadAll: '모두 다운로드',
+    collabButton: '공동 작업 ({0})',
+    share: '공유',
+    temporaryMix: '맞춤 믹스',
+    saveToPlaylist: '재생목록에 저장',
+    remixing: '믹스 중...',
+    allSongsDownloaded: '모든 곡이 이미 다운로드되었습니다',
+    startDownloadingSongs: '{0}곡 다운로드를 시작합니다...',
+    playlistSavedToLibrary: '재생목록이 라이브러리에 저장되었습니다!',
+    collabModalTitle: '공동 작업 재생목록',
+    collabModalDesc: '{0}의 공동 작업자를 관리합니다. 공동 작업자는 곡을 추가, 삭제 및 순서를 변경할 수 있습니다.',
+    currentCollabsLabel: '현재 공동 작업자 ({0})',
+    noCollabsYet: '아직 공동 작업자가 없습니다.',
+    removeCollab: '삭제',
+    inviteFriendsLabel: '온라인 친구 초대',
+    close: '닫기',
+    collaboratorRemoved: '공동 작업자가 삭제되었습니다',
+    inviteSent: '공동 작업 초대가 전송되었습니다!',
+    sendInvite: '초대',
+    sharePlaylistTitle: '플레이리스트 공유',
+    sharePlaylistDesc: '이 코드를 친구와 공유하세요. 코드는 7일 동안 유효합니다.',
+    sharePlaylistHint: '친구는 "플레이리스트 가져오기" 버튼에 이 코드를 붙여넣기만 하면 됩니다',
+    copyCode: '코드 복사',
+    codeCopied: '코드가 클립보드에 복사되었습니다!',
+    shareCodeError: '공유 코드 생성에 실패했습니다',
+    syncProfile: '프로필 동기화',
+    profileUpdated: 'Discord 프로필이 성공적으로 업데이트되었습니다!',
   }
 };
 

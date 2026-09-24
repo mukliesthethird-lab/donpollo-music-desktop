@@ -1,5 +1,5 @@
-import React, { useState, useRef, useEffect, useCallback } from 'react';
-import { Home, Library, Plus, Mic2, Settings, Play, Pause, SkipBack, SkipForward, Repeat, Shuffle, Volume2, VolumeX, ListMusic, UserCircle, ChevronRight, Search, AlertCircle, Headset, Loader2, Maximize2, X, ChevronLeft, ChevronUp, ChevronDown, Music, PanelRight, Trash2, Heart, LogIn, LogOut, Check, FolderPlus, Globe, Headphones, Download, DownloadCloud, Database, WifiOff, CheckCircle2, Paintbrush, Clock, Trophy, Zap, Radio, Timer, Repeat1, MinusCircle, PlusCircle, Edit3, Share2, Copy, Smartphone, Hourglass, Lock, Map as MapIcon, Users, RotateCcw, FileText, Film } from 'lucide-react';
+import React, { useState, useRef, useEffect, useCallback, useMemo } from 'react';
+import { Home, Library, Plus, Mic2, Settings, Play, Pause, SkipBack, SkipForward, Repeat, Shuffle, Volume2, VolumeX, ListMusic, UserCircle, ChevronRight, Search, AlertCircle, Headset, Loader2, Maximize2, X, ChevronLeft, ChevronUp, ChevronDown, Music, PanelRight, Trash2, Heart, LogIn, LogOut, Check, FolderPlus, Globe, Headphones, Download, DownloadCloud, Database, WifiOff, CheckCircle2, Paintbrush, Clock, Trophy, Zap, Radio, Timer, Repeat1, MinusCircle, PlusCircle, Edit3, Share2, Copy, Smartphone, Hourglass, Lock, Map as MapIcon, Users, RotateCcw, FileText, Film, Sparkles, RefreshCw, Coffee, Sun, CloudRain, Compass, Flame, Upload } from 'lucide-react';
 import './index.css';
 import './themes.css';
 import { createTranslator } from './translations';
@@ -7,7 +7,11 @@ import type { Language } from './translations';
 
 const API_BASE_URL = 'http://179.41.4.182:7097';
 import { SoundMap } from './components/SoundMap';
-import { rankAudioResults, buildSmartSearchQuery, getAudioBadge, searchItunesTracks } from './utils/audioRanking';
+import { rankAudioResults, buildSmartSearchQuery, getAudioBadge, searchItunesTracks, formatTrackLikeSpotify, isUnwantedTrackVariant, userExplicitlyWantsAcoustic, userExplicitlyWantsRemix, userExplicitlyWantsLive, deduplicateTracks, cleanBaseSongTitle } from './utils/audioRanking';
+import { generateAlgorithmicMix, DEFAULT_MADE_FOR_YOU_PLAYLISTS, VIBE_CONFIGS, extractTopArtists } from './utils/vibeRecommendation';
+import type { VibeType, MixType } from './utils/vibeRecommendation';
+import { getMixPlaylistCover, isMixPlaylist } from './utils/spotifyMixCover';
+import { FEATURE_FLAGS } from './config/features';
 // ⚠️ Ganti dengan Client ID dari Discord Developer Portal Anda
 const DISCORD_CLIENT_ID = import.meta.env.VITE_DISCORD_CLIENT_ID || '';
 // Redirect URI: otomatis pilih localhost (dev) atau Vercel (installed app)
@@ -26,6 +30,13 @@ interface Playlist {
   discordId?: string;
   privacy?: string;
   collaborators?: string[];
+  isTemporary?: boolean;
+  mood?: VibeType;
+  mixType?: MixType;
+  description?: string;
+  tagline?: string;
+  gradient?: string;
+  iconName?: string;
 }
 
 interface DiscordUser {
@@ -35,6 +46,27 @@ interface DiscordUser {
   avatar: string | null;
   global_name: string | null;
 }
+
+const renderMixIcon = (iconName?: string, size = 20, className = '') => {
+  switch (iconName) {
+    case 'coffee':
+      return <Coffee size={size} className={className} />;
+    case 'sun':
+      return <Sun size={size} className={className} />;
+    case 'zap':
+      return <Zap size={size} className={className} />;
+    case 'cloud-rain':
+      return <CloudRain size={size} className={className} />;
+    case 'compass':
+      return <Compass size={size} className={className} />;
+    case 'headphones':
+      return <Headphones size={size} className={className} />;
+    case 'flame':
+      return <Flame size={size} className={className} />;
+    default:
+      return <Music size={size} className={className} />;
+  }
+};
 
 const getHighResImage = (url: string | undefined) => {
   if (!url) return 'https://images.unsplash.com/photo-1614680376573-df3480f0c6ff?auto=format&fit=crop&w=500&q=80';
@@ -200,7 +232,6 @@ function App() {
   const [artistFilter, setArtistFilter] = useState<'popular' | 'newest'>('popular');
   const [isArtistLoading, setIsArtistLoading] = useState(false);
   const [isRecentExpanded, setIsRecentExpanded] = useState(false);
-  const [isRecsExpanded, setIsRecsExpanded] = useState(false);
   const [isIntExpanded, setIsIntExpanded] = useState(false);
   const [isIdExpanded, setIsIdExpanded] = useState(false);
   const [isJpExpanded, setIsJpExpanded] = useState(false);
@@ -219,10 +250,13 @@ function App() {
         fontFamily: 'Inter',
         borderRadiusMode: 'rounded',
         audioOutputDeviceId: 'default',
+        searchCountry: 'auto',
         prioritizeOfficialAudio: true,
+        vibeCheckEnabled: true,
+        vibeCheckInterval: 15,
         ...saved
       };
-    } catch { return { theme: 'default', audioOutputDeviceId: 'default', prioritizeOfficialAudio: true }; }
+    } catch { return { theme: 'default', audioOutputDeviceId: 'default', searchCountry: 'auto', prioritizeOfficialAudio: true, vibeCheckEnabled: true, vibeCheckInterval: 15 }; }
   });
 
   // ─── Search ─────────────────────────────────────────────────
@@ -252,8 +286,18 @@ function App() {
         setToastData({ msg: 'Pembaruan siap diinstal!', type: 'success', icon: <CheckCircle2 size={20} /> });
       });
       unbind4 = (window as any).electronAPI.onUpdateError((_e: any, err: string) => {
-        setUpdateInfo(prev => ({ ...prev, error: err, downloading: false }));
-        setToastData({ msg: `Update Error: ${err}`, type: 'error', icon: <AlertCircle size={20} /> });
+        console.warn('Updater background error:', err);
+        let cleanErr = err;
+        if (typeof err === 'string') {
+          if (err.includes('500') || err.includes('Server Error')) {
+            cleanErr = 'Server pembaruan sedang sibuk (HTTP 500). Silakan coba lagi nanti.';
+          } else if (err.includes('<!DOCTYPE') || err.includes('<html')) {
+            cleanErr = 'Respon server tidak valid.';
+          } else if (err.length > 100) {
+            cleanErr = err.slice(0, 100) + '...';
+          }
+        }
+        setUpdateInfo(prev => ({ ...prev, error: cleanErr, downloading: false }));
       });
     }
     return () => {
@@ -287,7 +331,7 @@ function App() {
       return;
     }
 
-    const cacheKey = `${searchQuery}_${homeMode}_${settings?.prioritizeOfficialAudio !== false}`;
+    const cacheKey = `${searchQuery}_${homeMode}_${settings?.prioritizeOfficialAudio !== false}_${settings?.searchCountry || 'auto'}`;
     if (searchCacheRef.current[cacheKey]) {
       setSuggestions(searchCacheRef.current[cacheKey]);
       return;
@@ -308,42 +352,52 @@ function App() {
           const data = await res.json();
           results = (data.results || []).filter((r: any) => r.duration >= 120).slice(0, 5);
         } else {
-          // Music mode: Search official catalog from iTunes/Apple Music first (clean title, clean artist, square HD cover)
+          // Music mode: Search official YouTube Music audio directly, formatted like Spotify
+          const effectiveQuery = preferAudio ? buildSmartSearchQuery(searchQuery) : searchQuery;
+          let res = await fetch(`${API_BASE_URL}/api/search?q=${encodeURIComponent(effectiveQuery)}`, { signal: controller.signal });
+          let data = await res.json();
+          results = data.results || [];
+
+          // Fallback to plain query if audio query yielded zero results
+          if (results.length === 0 && effectiveQuery !== searchQuery) {
+            try {
+              const fallbackRes = await fetch(`${API_BASE_URL}/api/search?q=${encodeURIComponent(searchQuery)}`, { signal: controller.signal });
+              const fallbackData = await fallbackRes.json();
+              results = fallbackData.results || [];
+            } catch { }
+          }
+
           if (preferAudio) {
+            results = rankAudioResults(results, searchQuery);
+          }
+
+          // Format clean like Spotify: clean title, real artist, direct playable ID
+          const wantsVariant = userExplicitlyWantsAcoustic(searchQuery) || userExplicitlyWantsRemix(searchQuery) || userExplicitlyWantsLive(searchQuery);
+          let cleanedResults = results
+            .filter((r: any) => r.duration > 0)
+            .map((r: any) => formatTrackLikeSpotify(r, searchQuery));
+
+          if (!wantsVariant) {
+            const studioOnly = cleanedResults.filter((r: any) => !isUnwantedTrackVariant(r.title, r.artist));
+            if (studioOnly.length > 0) {
+              cleanedResults = studioOnly;
+            }
+          }
+          results = cleanedResults.slice(0, 5);
+
+          // Fallback to iTunes only if YouTube returned 0 results
+          if (results.length === 0 && preferAudio) {
             try {
               const itunesResults = await searchItunesTracks(
                 searchQuery,
-                6,
-                (window as any).electronAPI?.fetchUrl
+                5,
+                (window as any).electronAPI?.fetchUrl,
+                settings?.searchCountry === 'auto' ? undefined : settings?.searchCountry
               );
               if (itunesResults && itunesResults.length > 0) {
                 results = itunesResults;
               }
-            } catch (err) {
-              console.error('iTunes search error:', err);
-            }
-          }
-
-          // Fallback to YouTube Audio if iTunes yielded no results or if preferAudio is disabled
-          if (results.length === 0) {
-            const effectiveQuery = preferAudio ? buildSmartSearchQuery(searchQuery) : searchQuery;
-            let res = await fetch(`${API_BASE_URL}/api/search?q=${encodeURIComponent(effectiveQuery)}`, { signal: controller.signal });
-            let data = await res.json();
-            results = data.results || [];
-
-            // Fallback to plain query if audio query yielded zero results
-            if (results.length === 0 && effectiveQuery !== searchQuery) {
-              try {
-                const fallbackRes = await fetch(`${API_BASE_URL}/api/search?q=${encodeURIComponent(searchQuery)}`, { signal: controller.signal });
-                const fallbackData = await fallbackRes.json();
-                results = fallbackData.results || [];
-              } catch { }
-            }
-
-            if (preferAudio) {
-              results = rankAudioResults(results, searchQuery);
-            }
-            results = results.filter((r: any) => r.duration > 0).slice(0, 5);
+            } catch (err) {}
           }
         }
 
@@ -363,7 +417,7 @@ function App() {
       clearTimeout(handler);
       controller.abort();
     };
-  }, [searchQuery, homeMode, settings?.prioritizeOfficialAudio]);
+  }, [searchQuery, homeMode, settings?.prioritizeOfficialAudio, settings?.searchCountry]);
 
   // ─── Updater State ──────────────────────────────────────────
   const [updateStatus, setUpdateStatus] = useState<'none' | 'available' | 'downloading' | 'downloaded' | 'error'>('none');
@@ -507,17 +561,16 @@ function App() {
   const [capsuleToDelete, setCapsuleToDelete] = useState<number | null>(null);
 
   const fetchTimeCapsules = useCallback(async () => {
-    if (!discordUser || !(window as any).electronAPI?.getTimeCapsules) return;
+    if (!discordUser?.id || !(window as any).electronAPI?.getTimeCapsules) return;
     const caps = await (window as any).electronAPI.getTimeCapsules(discordUser.id);
     setTimeCapsules(caps);
-  }, [discordUser]);
-
+  }, [discordUser?.id]);
 
   useEffect(() => {
-    if (discordUser && activePage === 'time-capsule') {
+    if (discordUser?.id && activePage === 'time-capsule') {
       fetchTimeCapsules();
     }
-  }, [discordUser, activePage, fetchTimeCapsules]);
+  }, [discordUser?.id, activePage, fetchTimeCapsules]);
 
   useEffect(() => {
     if (capsuleSearchQuery.length < 2) {
@@ -527,29 +580,20 @@ function App() {
     const handler = setTimeout(async () => {
       try {
         const preferAudio = settings?.prioritizeOfficialAudio !== false;
-        let results: any[] = [];
+        const q = preferAudio ? buildSmartSearchQuery(capsuleSearchQuery) : capsuleSearchQuery;
+        const res = await fetch(`${API_BASE_URL}/api/search?q=${encodeURIComponent(q)}`);
+        const data = await res.json();
+        let results = (data.results || []).filter((r: any) => r.duration > 0);
         if (preferAudio) {
-          try {
-            const itunesResults = await searchItunesTracks(
-              capsuleSearchQuery,
-              5,
-              (window as any).electronAPI?.fetchUrl
-            );
-            if (itunesResults && itunesResults.length > 0) {
-              results = itunesResults;
-            }
-          } catch (err) { }
+          results = rankAudioResults(results, capsuleSearchQuery);
         }
-        if (results.length === 0) {
-          const q = preferAudio ? buildSmartSearchQuery(capsuleSearchQuery) : capsuleSearchQuery;
-          const res = await fetch(`${API_BASE_URL}/api/search?q=${encodeURIComponent(q)}`);
-          const data = await res.json();
-          results = (data.results || []).filter((r: any) => r.duration > 0);
-          if (preferAudio) {
-            results = rankAudioResults(results, capsuleSearchQuery);
-          }
+        const wantsVariant = userExplicitlyWantsAcoustic(capsuleSearchQuery) || userExplicitlyWantsRemix(capsuleSearchQuery) || userExplicitlyWantsLive(capsuleSearchQuery);
+        let cleaned = results.map((r: any) => formatTrackLikeSpotify(r, capsuleSearchQuery));
+        if (!wantsVariant) {
+          const studioOnly = cleaned.filter((r: any) => !isUnwantedTrackVariant(r.title, r.artist));
+          if (studioOnly.length > 0) cleaned = studioOnly;
         }
-        setCapsuleSearchResults(results.slice(0, 5));
+        setCapsuleSearchResults(cleaned.slice(0, 5));
       } catch (e) {
         console.error(e);
       }
@@ -573,6 +617,41 @@ function App() {
       return [];
     } catch { return []; }
   });
+
+  const [selectedVibeMood, setSelectedVibeMood] = useState<VibeType>(() => {
+    try {
+      return (localStorage.getItem('donpollo_current_vibe') as VibeType) || 'chill';
+    } catch {
+      return 'chill';
+    }
+  });
+
+  const [madeForYouPlaylists, setMadeForYouPlaylists] = useState<Playlist[]>(() => {
+    if (!FEATURE_FLAGS.ENABLE_PLAYLIST_MIX) {
+      return [];
+    }
+    try {
+      const saved = localStorage.getItem('donpollo_made_for_you');
+      if (saved) {
+        const parsed: Playlist[] = JSON.parse(saved);
+        return DEFAULT_MADE_FOR_YOU_PLAYLISTS.map(def => {
+          const found = parsed.find(p => p.id === def.id);
+          if (found) {
+            const songs = Array.isArray(found.songs)
+              ? deduplicateTracks(found.songs.map((s: any) => formatTrackLikeSpotify(s)), 4, 50)
+              : [];
+            const avatar = getMixPlaylistCover({ ...(def as any), ...found, songs });
+            return { ...(def as any), ...found, avatar, songs };
+          }
+          return { ...(def as any), avatar: getMixPlaylistCover(def) };
+        });
+      }
+      return DEFAULT_MADE_FOR_YOU_PLAYLISTS as any[];
+    } catch {
+      return DEFAULT_MADE_FOR_YOU_PLAYLISTS as any[];
+    }
+  });
+  const [isMixGeneratingId, setIsMixGeneratingId] = useState<string | null>(null);
   const [hitsInternational, setHitsInternational] = useState<any[]>([]);
   const [hitsIndonesia, setHitsIndonesia] = useState<any[]>([]);
   const [hitsJapan, setHitsJapan] = useState<any[]>([]);
@@ -603,14 +682,16 @@ function App() {
             }
 
             if (feedData && feedData.feed && feedData.feed.results) {
-              const songs = feedData.feed.results.map((t: any) => ({
-                id: null,
-                title: t.name,
-                artist: t.artistName,
-                thumbnail: t.artworkUrl100 ? t.artworkUrl100.replace('100x100bb.jpg', '500x500bb.jpg') : '',
-                duration: 0,
-                originalQuery: `${t.artistName} ${t.name} official audio`
-              }));
+              const songs = feedData.feed.results
+                .filter((t: any) => !isUnwantedTrackVariant(t.name, t.artistName))
+                .map((t: any) => ({
+                  id: null,
+                  title: t.name,
+                  artist: t.artistName,
+                  thumbnail: t.artworkUrl100 ? t.artworkUrl100.replace('100x100bb.jpg', '500x500bb.jpg') : '',
+                  duration: 0,
+                  originalQuery: `${t.artistName} ${t.name} official audio`
+                }));
               return songs;
             }
           } catch (e) { console.error('RSS fetch failed', e); }
@@ -622,37 +703,40 @@ function App() {
           if (songs.length > 0) {
             setter(songs);
 
-            // Background Mapping for YouTube ID (Sequentially to prevent congestion)
-            (async () => {
-              for (let idx = 0; idx < songs.length; idx++) {
-                const song = songs[idx];
-                const url = `${API_BASE_URL}/api/search?q=${encodeURIComponent(song.originalQuery)}`;
-                try {
-                  const data = (window as any).electronAPI
-                    ? await (window as any).electronAPI.fetchUrl(url)
-                    : await (await fetch(url)).json();
+            // Background Mapping for YouTube ID (Disabled by default to prevent startup RAM spikes & server overload)
+            if (FEATURE_FLAGS.ENABLE_BACKGROUND_HITS_MAPPING) {
+              (async () => {
+                for (let idx = 0; idx < songs.length; idx++) {
+                  const song = songs[idx];
+                  const url = `${API_BASE_URL}/api/search?q=${encodeURIComponent(song.originalQuery)}`;
+                  try {
+                    const data = (window as any).electronAPI
+                      ? await (window as any).electronAPI.fetchUrl(url)
+                      : await (await fetch(url)).json();
 
-                  if (data && data.results) {
-                    let candidates = data.results.filter((item: any) => item.duration >= 50 && item.duration <= 720);
-                    candidates = rankAudioResults(candidates, song.title || '', song.duration || 0);
-                    const validYt = candidates[0] || data.results.find((item: any) => item.duration >= 60 && item.duration <= 480);
-                    if (validYt) {
-                      setter(prev => {
-                        const next = [...prev];
-                        if (next[idx] && next[idx].title === song.title) {
-                          next[idx] = { ...next[idx], id: validYt.id, duration: validYt.duration };
-                        }
-                        return next;
-                      });
+                    if (data && data.results) {
+                      let candidates = data.results.filter((item: any) => item.duration >= 50 && item.duration <= 720);
+                      candidates = rankAudioResults(candidates, song.title || '', song.duration || 0);
+                      const studioCandidates = candidates.filter((item: any) => !isUnwantedTrackVariant(item.title, item.artist));
+                      const validYt = studioCandidates[0] || candidates[0] || data.results.find((item: any) => item.duration >= 60 && item.duration <= 480);
+                      if (validYt) {
+                        setter(prev => {
+                          const next = [...prev];
+                          if (next[idx] && next[idx].title === song.title) {
+                            next[idx] = { ...next[idx], id: validYt.id, duration: validYt.duration };
+                          }
+                          return next;
+                        });
+                      }
                     }
+                  } catch (e) {
+                    console.error('BG mapping error:', e);
                   }
-                } catch (e) {
-                  console.error('BG mapping error:', e);
+                  // Yield to allow on-the-fly requests to take priority
+                  await new Promise(resolve => setTimeout(resolve, 300));
                 }
-                // Yield to allow on-the-fly requests to take priority
-                await new Promise(resolve => setTimeout(resolve, 300));
-              }
-            })();
+              })();
+            }
           }
         };
 
@@ -884,7 +968,7 @@ function App() {
   const [language, setLanguage] = useState<Language>(() => {
     return (localStorage.getItem('donpollo_language') as Language) || 'id';
   });
-  const t = createTranslator(language);
+  const t = useMemo(() => createTranslator(language), [language]);
 
   useEffect(() => {
     localStorage.setItem('donpollo_language', language);
@@ -1393,7 +1477,7 @@ function App() {
     };
 
     syncPresence();
-    const intervalMs = 1000;
+    const intervalMs = (isGuest || activePartyId) ? 1500 : 5000;
     const presenceInterval = setInterval(syncPresence, intervalMs);
     return () => clearInterval(presenceInterval);
   }, [discordUser, currentSong, activePartyId, userStatus, isGuest, queue, settings.discordActivityEnabled]);
@@ -1457,6 +1541,8 @@ function App() {
   const autoGainNodeRef = useRef<GainNode | null>(null);
   const analyserNodeRef = useRef<AnalyserNode | null>(null);
   const toastTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const settingsRef = useRef<any>(settings);
+  settingsRef.current = settings;
 
   const setupAudioContext = (audio: HTMLAudioElement) => {
     try {
@@ -1594,19 +1680,22 @@ function App() {
     }
   }, [settings.audioOutputDeviceId, applyAudioOutputDevice]);
 
+  const loadAudioOutputDevicesRef = useRef(loadAudioOutputDevices);
+  loadAudioOutputDevicesRef.current = loadAudioOutputDevices;
+
   useEffect(() => {
-    loadAudioOutputDevices();
+    loadAudioOutputDevicesRef.current();
 
     if (typeof navigator !== 'undefined' && navigator.mediaDevices?.addEventListener) {
       const handleDeviceChange = () => {
-        loadAudioOutputDevices();
+        loadAudioOutputDevicesRef.current();
       };
       navigator.mediaDevices.addEventListener('devicechange', handleDeviceChange);
       return () => {
         navigator.mediaDevices.removeEventListener('devicechange', handleDeviceChange);
       };
     }
-  }, [loadAudioOutputDevices]);
+  }, []);
 
   useEffect(() => {
     if (settings.audioOutputDeviceId !== undefined) {
@@ -1614,7 +1703,6 @@ function App() {
     }
   }, [settings.audioOutputDeviceId, applyAudioOutputDevice]);
   const recentScrollRef = useRef<HTMLDivElement>(null);
-  const recsScrollRef = useRef<HTMLDivElement>(null);
 
   const scrollSlider = (ref: React.RefObject<HTMLDivElement | null>, direction: 'left' | 'right') => {
     if (ref.current) {
@@ -1627,9 +1715,47 @@ function App() {
   const [contextMenu, setContextMenu] = useState<{ x: number, y: number, song: any } | null>(null);
 
   useEffect(() => {
-    const closeContextMenu = () => setContextMenu(null);
-    window.addEventListener('click', closeContextMenu);
-    return () => window.removeEventListener('click', closeContextMenu);
+    const closeAllContextMenus = () => {
+      setContextMenu(prev => prev ? null : prev);
+      setPlaylistContextMenu(prev => prev ? null : prev);
+    };
+
+    const handlePointerDown = (e: MouseEvent | PointerEvent) => {
+      const target = e.target as HTMLElement | null;
+      if (target?.closest('.context-menu')) {
+        return;
+      }
+      closeAllContextMenus();
+    };
+
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        closeAllContextMenus();
+      }
+    };
+
+    const handleWheel = (e: WheelEvent) => {
+      const target = e.target as HTMLElement | null;
+      if (!target?.closest('.context-menu')) {
+        closeAllContextMenus();
+      }
+    };
+
+    window.addEventListener('pointerdown', handlePointerDown, true);
+    window.addEventListener('click', handlePointerDown, true);
+    window.addEventListener('contextmenu', handlePointerDown, true);
+    window.addEventListener('keydown', handleKeyDown);
+    window.addEventListener('wheel', handleWheel, { capture: true, passive: true });
+    window.addEventListener('blur', closeAllContextMenus);
+
+    return () => {
+      window.removeEventListener('pointerdown', handlePointerDown, true);
+      window.removeEventListener('click', handlePointerDown, true);
+      window.removeEventListener('contextmenu', handlePointerDown, true);
+      window.removeEventListener('keydown', handleKeyDown);
+      window.removeEventListener('wheel', handleWheel, true);
+      window.removeEventListener('blur', closeAllContextMenus);
+    };
   }, []);
 
   // ─── Persist Data ────────────────────────────────────────────
@@ -1764,7 +1890,9 @@ function App() {
   }, [isPlaying]);
 
   // ─── Recommendations ─────────────────────────────────────────
+  const lastRecQueryRef = useRef<string>('');
   useEffect(() => {
+    if (!FEATURE_FLAGS.ENABLE_DAILY_MIX_SHELF) return;
     const fetchRecs = async () => {
       let query = 'Pop Hits 2024';
       if (playHistory.length > 0) {
@@ -1775,13 +1903,14 @@ function App() {
         }
         query = realArtist || item.title;
       }
+      if (query === lastRecQueryRef.current && recommendations.length > 0) {
+        return;
+      }
+      lastRecQueryRef.current = query;
       try {
         const queries = [
           `${query} official audio`,
-          `${query} popular songs`,
-          `${query} best hits`,
-          `${query} music video`,
-          `${query} acoustic`
+          `${query} popular songs`
         ];
         const responses = await Promise.all(queries.map(q => fetch(`${API_BASE_URL}/api/search?q=${encodeURIComponent(q)}`).catch(() => null)));
         const dataArrays = await Promise.all(responses.filter(r => r !== null).map((r: any) => r.json().catch(() => ({}))));
@@ -1839,7 +1968,10 @@ function App() {
              (window as any).electronAPI.trackSong(currentSongRef.current);
           }
 
-          if (songsPlayedInSessionRef.current > 0 && songsPlayedInSessionRef.current % 5 === 0) {
+          const interval = settingsRef.current?.vibeCheckInterval !== undefined ? settingsRef.current.vibeCheckInterval : 15;
+          const isEnabled = settingsRef.current?.vibeCheckEnabled !== false;
+
+          if (isEnabled && interval > 0 && songsPlayedInSessionRef.current > 0 && songsPlayedInSessionRef.current % interval === 0) {
              setShowVibeCheck(true);
           }
         }
@@ -2430,38 +2562,29 @@ function App() {
     setIsPlaylistSearching(true);
     try {
       const preferAudio = settings?.prioritizeOfficialAudio !== false;
-      let results: any[] = [];
-      if (preferAudio) {
+      const q = preferAudio ? buildSmartSearchQuery(playlistSearchQuery) : playlistSearchQuery;
+      const response = await fetch(`${API_BASE_URL}/api/search?q=${encodeURIComponent(q)}`);
+      const data = await response.json();
+      let ytResults = data.results || [];
+      if (ytResults.length === 0 && q !== playlistSearchQuery) {
         try {
-          const itunesResults = await searchItunesTracks(
-            playlistSearchQuery,
-            15,
-            (window as any).electronAPI?.fetchUrl
-          );
-          if (itunesResults && itunesResults.length > 0) {
-            results = itunesResults;
-          }
-        } catch (err) {
-          console.error('iTunes playlist search error:', err);
-        }
+          const fallbackRes = await fetch(`${API_BASE_URL}/api/search?q=${encodeURIComponent(playlistSearchQuery)}`);
+          const fallbackData = await fallbackRes.json();
+          ytResults = fallbackData.results || [];
+        } catch {}
       }
+      if (preferAudio) {
+        ytResults = rankAudioResults(ytResults, playlistSearchQuery);
+      }
+      const wantsVariant = userExplicitlyWantsAcoustic(playlistSearchQuery) || userExplicitlyWantsRemix(playlistSearchQuery) || userExplicitlyWantsLive(playlistSearchQuery);
+      let results = ytResults
+        .filter((r: any) => r.duration > 0)
+        .map((r: any) => formatTrackLikeSpotify(r, playlistSearchQuery));
 
-      if (results.length === 0) {
-        const q = preferAudio ? buildSmartSearchQuery(playlistSearchQuery) : playlistSearchQuery;
-        const response = await fetch(`${API_BASE_URL}/api/search?q=${encodeURIComponent(q)}`);
-        const data = await response.json();
-        let ytResults = data.results || [];
-        if (ytResults.length === 0 && q !== playlistSearchQuery) {
-          try {
-            const fallbackRes = await fetch(`${API_BASE_URL}/api/search?q=${encodeURIComponent(playlistSearchQuery)}`);
-            const fallbackData = await fallbackRes.json();
-            ytResults = fallbackData.results || [];
-          } catch {}
-        }
-        if (preferAudio) {
-          results = rankAudioResults(ytResults, playlistSearchQuery);
-        } else {
-          results = ytResults;
+      if (!wantsVariant) {
+        const studioOnly = results.filter((r: any) => !isUnwantedTrackVariant(r.title, r.artist));
+        if (studioOnly.length > 0) {
+          results = studioOnly;
         }
       }
 
@@ -2507,10 +2630,162 @@ function App() {
     setShowLogoutConfirm(true);
   };
 
-  const getDiscordAvatar = (user: DiscordUser) => {
-    if (user.avatar) return `https://cdn.discordapp.com/avatars/${user.id}/${user.avatar}.png`;
-    return null;
+  const getDefaultDiscordAvatar = (discordId?: string | null, username?: string) => {
+    if (discordId) {
+      try {
+        const idBig = BigInt(discordId);
+        const index = Number((idBig >> 22n) % 6n);
+        return `https://cdn.discordapp.com/embed/avatars/${index}.png`;
+      } catch {}
+    }
+    return `https://ui-avatars.com/api/?name=${encodeURIComponent(username || 'User')}&background=5865F2&color=fff&bold=true`;
   };
+
+  const handleAvatarError = (e: React.SyntheticEvent<HTMLImageElement>, discordId?: string | null, username?: string) => {
+    const target = e.currentTarget;
+    if (discordId && (window as any).electronAPI?.getLiveDiscordAvatar) {
+      (window as any).electronAPI.getLiveDiscordAvatar(discordId).then((liveUrl: string | null) => {
+        if (liveUrl && liveUrl !== target.src) {
+          target.src = liveUrl;
+          return;
+        }
+        const fallback = getDefaultDiscordAvatar(discordId, username);
+        if (target.src !== fallback) {
+          target.src = fallback;
+        }
+      }).catch(() => {
+        const fallback = getDefaultDiscordAvatar(discordId, username);
+        if (target.src !== fallback) {
+          target.src = fallback;
+        }
+      });
+      return;
+    }
+
+    const fallback = getDefaultDiscordAvatar(discordId, username);
+    if (target.src !== fallback) {
+      target.src = fallback;
+    }
+  };
+
+  const getDiscordAvatar = (user: DiscordUser | null) => {
+    if (!user) return null;
+    if (user.avatar) return `https://cdn.discordapp.com/avatars/${user.id}/${user.avatar}.png`;
+    return getDefaultDiscordAvatar(user.id, user.username);
+  };
+
+  const [isRefreshingProfile, setIsRefreshingProfile] = useState(false);
+  const lastProfileSyncTimeRef = useRef<number>(0);
+  const tRef = useRef(t);
+  tRef.current = t;
+  const discordUserRef = useRef(discordUser);
+  discordUserRef.current = discordUser;
+
+  const refreshDiscordProfile = useCallback(async (showNotification = false) => {
+    const user = discordUserRef.current;
+    if (!user?.id) return;
+
+    // Throttle automatic refreshes to at most once per minute
+    if (!showNotification && Date.now() - lastProfileSyncTimeRef.current < 60000) {
+      return;
+    }
+    lastProfileSyncTimeRef.current = Date.now();
+
+    try {
+      setIsRefreshingProfile(true);
+
+      // 1. Primary: Auto-sync live profile via Bot API (always works, never expires)
+      if ((window as any).electronAPI?.getLiveDiscordUser) {
+        const live = await (window as any).electronAPI.getLiveDiscordUser(user.id);
+        if (live && live.avatarUrl) {
+          const hashMatch = live.avatarUrl.match(/avatars\/[^/]+\/([a-f0-9]+)\./);
+          const freshAvatarHash = hashMatch ? hashMatch[1] : user.avatar;
+
+          setDiscordUser(prev => {
+            if (!prev) return null;
+            if (prev.avatar === freshAvatarHash && prev.username === (live.username || prev.username) && prev.global_name === (live.globalName || prev.global_name)) {
+              return prev; // No change, skip re-render
+            }
+            const updated = {
+              ...prev,
+              avatar: freshAvatarHash,
+              global_name: live.globalName || prev.global_name,
+              username: live.username || prev.username
+            };
+            localStorage.setItem('donpollo_user', JSON.stringify(updated));
+            return updated;
+          });
+
+          if ((window as any).electronAPI?.updateProfile) {
+            await (window as any).electronAPI.updateProfile({
+              discordId: user.id,
+              username: live.globalName || live.username || user.username,
+              avatarUrl: live.avatarUrl
+            });
+          }
+
+          if (showNotification) {
+            showToast(tRef.current('profileUpdated'), 'success');
+          }
+          return;
+        }
+      }
+
+      // 2. Secondary fallback: check OAuth @me if token is in localStorage
+      const token = localStorage.getItem('donpollo_discord_token');
+      if (token) {
+        const res = await fetch('https://discord.com/api/users/@me', {
+          headers: { Authorization: `Bearer ${token}` }
+        });
+        if (res.ok) {
+          const freshUser: DiscordUser = await res.json();
+          setDiscordUser(prev => {
+            if (!prev) return freshUser;
+            if (JSON.stringify(prev) === JSON.stringify(freshUser)) return prev;
+            localStorage.setItem('donpollo_user', JSON.stringify(freshUser));
+            return freshUser;
+          });
+
+          const avatar = freshUser.avatar 
+            ? `https://cdn.discordapp.com/avatars/${freshUser.id}/${freshUser.avatar}.png` 
+            : null;
+
+          if ((window as any).electronAPI?.updateProfile) {
+            await (window as any).electronAPI.updateProfile({
+              discordId: freshUser.id,
+              username: freshUser.global_name || freshUser.username,
+              avatarUrl: avatar
+            });
+          }
+          if (showNotification) {
+            showToast(tRef.current('profileUpdated'), 'success');
+          }
+        }
+      }
+    } catch (e) {
+      console.warn('Failed to refresh Discord profile:', e);
+      if (showNotification) {
+        showToast('Gagal memperbarui profil Discord.', 'error');
+      }
+    } finally {
+      setIsRefreshingProfile(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (discordUser?.id) {
+      refreshDiscordProfile(false);
+      const onFocus = () => refreshDiscordProfile(false);
+      window.addEventListener('focus', onFocus);
+      const interval = setInterval(() => {
+        refreshDiscordProfile(false);
+      }, 2 * 60 * 1000);
+      return () => {
+        window.removeEventListener('focus', onFocus);
+        clearInterval(interval);
+      };
+    }
+  }, [discordUser?.id]);
 
   // ─── Audio Functions ─────────────────────────────────────────
   const parseLRC = (lrc: string) => {
@@ -2757,6 +3032,11 @@ function App() {
               if (settings?.prioritizeOfficialAudio !== false) {
                 candidates = rankAudioResults(candidates, song.title || query, song.duration || 0);
               }
+              const wantsVariant = userExplicitlyWantsAcoustic(song.title || query) || userExplicitlyWantsRemix(song.title || query) || userExplicitlyWantsLive(song.title || query);
+              if (!wantsVariant) {
+                const studioCandidates = candidates.filter((item: any) => !isUnwantedTrackVariant(item.title, item.artist));
+                if (studioCandidates.length > 0) candidates = studioCandidates;
+              }
               validYt = candidates[0] || resData.results.find((item: any) => item.duration >= 60 && item.duration <= 480) || resData.results[0];
             }
 
@@ -2788,15 +3068,16 @@ function App() {
       setLyricsOffset(0);
 
       // 1. Update UI langsung agar terasa lebih cepat
-      setCurrentSong(song);
-      addToHistory(song);
+      const cleanSong = formatTrackLikeSpotify(song);
+      setCurrentSong(cleanSong);
+      addToHistory(cleanSong);
       
       // Track Focus Mode songs
       if (isFocusMode && song.id && !focusSongsPlayed.includes(song.id)) {
         setFocusSongsPlayed(prev => [...prev, song.id]);
       }
       
-      setDuration(song.duration || 0);
+      setDuration(cleanSong.duration || song.duration || 0);
       setIsPlaying(true);
       if (settings.autoLyrics) {
         setIsRightSidebarOpen(true);
@@ -2804,7 +3085,7 @@ function App() {
       }
 
       // 2. Fetch lyrics berjalan di background
-      fetchLyrics(song.title, song.artist, song.duration || 0);
+      fetchLyrics(cleanSong.title, cleanSong.artist, cleanSong.duration || song.duration || 0);
 
       // 3. Stream audio
       ensureAudioType(!!song.isPodcast);
@@ -2951,11 +3232,31 @@ function App() {
   };
 
   const addToHistory = (song: any) => {
-    if (!song || !song.id) return;
-    const cleanSong = { id: song.id, title: song.title, artist: song.artist, thumbnail: song.thumbnail, cover: song.cover, duration: song.duration, originalQuery: song.originalQuery, isPodcast: song.isPodcast };
+    if (!song || (!song.id && !song.title)) return;
+    const formatted = formatTrackLikeSpotify(song) || song;
+    const cleanSong = {
+      id: formatted.id || song.id,
+      title: formatted.title || song.title,
+      artist: formatted.artist || song.artist || 'Unknown Artist',
+      thumbnail: getCleanThumbnail(formatted.thumbnail || song.thumbnail) || getHighResImage(formatted.cover || song.cover) || formatted.thumbnail || song.thumbnail || '',
+      cover: formatted.cover || song.cover || '',
+      duration: formatted.duration || song.duration || 0,
+      originalQuery: formatted.originalQuery || song.originalQuery,
+      isPodcast: song.isPodcast,
+      playedAt: Date.now()
+    };
     setPlayHistory(prev => {
-      const filtered = prev.filter(item => item.id !== cleanSong.id);
-      return [cleanSong, ...filtered].slice(0, 20);
+      const targetBase = cleanBaseSongTitle(cleanSong.title);
+      const targetArtist = (cleanSong.artist || '').toLowerCase().trim();
+      const filtered = prev.filter(item => {
+        if (cleanSong.id && item.id && item.id === cleanSong.id) return false;
+        if (targetBase && cleanBaseSongTitle(item.title) === targetBase) {
+          const itemArtist = (item.artist || '').toLowerCase().trim();
+          if (itemArtist === targetArtist) return false;
+        }
+        return true;
+      });
+      return [cleanSong, ...filtered].slice(0, 100);
     });
   };
 
@@ -2970,10 +3271,11 @@ function App() {
       return;
     }
 
-    let song = list[startIndex];
+    const cleanedList = (list || []).map(s => formatTrackLikeSpotify(s));
+    let song = cleanedList[startIndex];
 
     // Reorder list so the clicked song is first, then wrapping around
-    const reorderedList = [...list.slice(startIndex), ...list.slice(0, startIndex)];
+    const reorderedList = [...cleanedList.slice(startIndex), ...cleanedList.slice(0, startIndex)];
 
     setOriginalQueue(reorderedList);
 
@@ -3063,6 +3365,7 @@ function App() {
 
   const handleContextMenu = (e: React.MouseEvent, song: any) => {
     e.preventDefault();
+    setPlaylistContextMenu(null);
     setContextMenu({ x: e.clientX, y: e.clientY, song });
   };
 
@@ -3324,7 +3627,7 @@ function App() {
 
         if (itunesData.results && itunesData.results.length > 0) {
           let tracks = itunesData.results;
-          tracks = tracks.filter((t: any) => t.artistName && t.artistName.toLowerCase().includes(artist.toLowerCase()));
+          tracks = tracks.filter((t: any) => t.artistName && t.artistName.toLowerCase().includes(artist.toLowerCase()) && !isUnwantedTrackVariant(t.trackName, t.artistName));
 
           if (filter === 'newest') {
             tracks.sort((a: any, b: any) => new Date(b.releaseDate).getTime() - new Date(a.releaseDate).getTime());
@@ -3362,7 +3665,8 @@ function App() {
                 if (data && data.results && data.results.length > 0) {
                   let candidates = data.results.filter((item: any) => item.duration >= 50 && item.duration <= 720);
                   candidates = rankAudioResults(candidates, song.title || '', song.duration || 0);
-                  const validYt = candidates[0] || data.results.find((item: any) => item.duration >= 60 && item.duration <= 480);
+                  const studioCandidates = candidates.filter((item: any) => !isUnwantedTrackVariant(item.title, item.artist));
+                  const validYt = studioCandidates[0] || candidates[0] || data.results.find((item: any) => item.duration >= 60 && item.duration <= 480);
                   if (validYt) {
                     setArtistSongs(prev => {
                       const next = [...prev];
@@ -3397,8 +3701,9 @@ function App() {
           .then(res => res.json())
           .then(data => {
             if (data.results) {
-              const candidates = rankAudioResults(data.results.filter((item: any) => item.duration >= 60 && item.duration <= 480), artist);
-              const validSong = candidates[0] || data.results.find((item: any) => item.duration >= 60 && item.duration <= 480);
+              const candidates = rankAudioResults(data.results.filter((item: any) => item.duration >= 60 && item.duration <= 480 && !isUnwantedTrackVariant(item.title, item.artist)), artist);
+              const rawSong = candidates[0] || data.results.find((item: any) => item.duration >= 60 && item.duration <= 480 && !isUnwantedTrackVariant(item.title, item.artist)) || data.results[0];
+              const validSong = rawSong ? formatTrackLikeSpotify(rawSong, artist) : null;
 
               if (validSong) {
                 if (!firstBatchLoaded) {
@@ -3611,13 +3916,101 @@ function App() {
     </div>
   );
 
+  const generateOrGetMixTracks = async (pl: Playlist, forceRefresh = false): Promise<any[]> => {
+    if (!FEATURE_FLAGS.ENABLE_PLAYLIST_MIX) {
+      return pl.songs || [];
+    }
+    if (!forceRefresh && pl.songs && pl.songs.length >= 48) {
+      return pl.songs;
+    }
+    setIsMixGeneratingId(pl.id);
+    const mixType = pl.mixType || (pl.id.startsWith('vibe_temp_') ? 'vibe_mix' : 'discover_weekly');
+    const mood = pl.mood || (pl.id.replace('vibe_temp_', '') as VibeType) || 'chill';
+    try {
+      const rawTracks = await generateAlgorithmicMix(
+        mixType,
+        mood,
+        playHistory,
+        likedSongs,
+        API_BASE_URL,
+        (window as any).electronAPI?.fetchUrl
+      );
+      const tracks = deduplicateTracks(rawTracks, 4, 50);
+      if (tracks && tracks.length > 0) {
+        const updatedPl: Playlist = {
+          ...pl,
+          avatar: getMixPlaylistCover(pl, { songs: tracks, playHistory, likedSongs }),
+          songs: tracks
+        };
+        setMadeForYouPlaylists(prev => {
+          const list = prev.map(p => p.id === pl.id ? updatedPl : p);
+          localStorage.setItem('donpollo_made_for_you', JSON.stringify(list));
+          return list;
+        });
+        return tracks;
+      }
+    } catch (err) {
+      console.error('generateOrGetMixTracks error:', err);
+      showToast(`Gagal meracik ${pl.name}`, 'error');
+    } finally {
+      setIsMixGeneratingId(null);
+    }
+    return [];
+  };
+
+  const openMadeForYouPlaylist = async (pl: Playlist) => {
+    navigate('playlist-detail', { playlistId: pl.id });
+    if (!pl.songs || pl.songs.length === 0) {
+      await generateOrGetMixTracks(pl);
+    }
+  };
+
+  const playMadeForYouPlaylist = async (pl: Playlist, e?: React.MouseEvent) => {
+    if (e) e.stopPropagation();
+    if (pl.songs && pl.songs.length > 0) {
+      const cleanTracks = deduplicateTracks(pl.songs, 4, 50);
+      startPlayingFromList(cleanTracks, 0);
+      showToast(`Memutar ${pl.name}`, 'success');
+      return;
+    }
+    showToast(`Meracik & memutar ${pl.name}...`, 'success');
+    const rawTracks = await generateOrGetMixTracks(pl);
+    const tracks = deduplicateTracks(rawTracks, 4, 50);
+    if (tracks && tracks.length > 0) {
+      startPlayingFromList(tracks, 0);
+      showToast(`Memutar ${pl.name}`, 'success');
+    }
+  };
+
+  const regenerateMadeForYouMix = async (playlistId: string) => {
+    const pl = madeForYouPlaylists.find(p => p.id === playlistId);
+    if (!pl) return;
+    showToast(`Meracik ulang ${pl.name}...`, 'success');
+    await generateOrGetMixTracks(pl, true);
+    showToast(`${pl.name} berhasil diperbarui!`, 'success');
+  };
+
+  useEffect(() => {
+    if (!FEATURE_FLAGS.ENABLE_PLAYLIST_MIX) return;
+    if (activePage === 'playlist-detail' && activePlaylistId) {
+      const tempPl = madeForYouPlaylists.find(p => p.id === activePlaylistId);
+      if (tempPl && tempPl.isTemporary && (!tempPl.songs || tempPl.songs.length === 0) && isMixGeneratingId !== tempPl.id) {
+        generateOrGetMixTracks(tempPl);
+      }
+    }
+  }, [activePage, activePlaylistId]);
+
   const renderPlaylistPage = () => {
     if (activePage === 'playlist-detail' && activePlaylistId) {
-      const pl = playlists.find(p => p.id === activePlaylistId);
+      const pl = playlists.find(p => p.id === activePlaylistId) || madeForYouPlaylists.find(p => p.id === activePlaylistId);
       if (!pl) return null;
-      const isMyPlaylist = !pl.discordId || pl.discordId === discordUser?.id;
+      const isMyPlaylist = (!pl.discordId || pl.discordId === discordUser?.id) && !(pl as any).isTemporary;
       const isCollaborator = pl.collaborators?.includes(discordUser?.id || '') || false;
-      const canEditSongs = isMyPlaylist || isCollaborator;
+      const canEditSongs = (isMyPlaylist || isCollaborator) && !(pl as any).isTemporary;
+      const isAlgorithmic = Boolean((pl as any).isTemporary || pl.id.startsWith('temp_') || pl.id.startsWith('vibe_temp_'));
+      const effectiveSongs = isAlgorithmic
+        ? deduplicateTracks(pl.songs.map((s: any) => formatTrackLikeSpotify(s)), 3)
+        : pl.songs;
       return (
         <div className="page-content">
           <div className="page-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
@@ -3627,7 +4020,13 @@ function App() {
                 style={{ width: '120px', height: '120px', borderRadius: '8px', backgroundColor: 'var(--surface-color)', display: 'flex', alignItems: 'center', justifyContent: 'center', overflow: 'hidden', cursor: isMyPlaylist ? 'pointer' : 'default', position: 'relative' }}
                 onClick={() => { if (isMyPlaylist) { setAvatarUrlInput(pl.avatar || ''); setShowAvatarPrompt(true); } }}
               >
-                {pl.avatar ? (
+                {isMixPlaylist(pl) ? (
+                  <img
+                    src={getMixPlaylistCover(pl, { songs: effectiveSongs, playHistory, likedSongs })}
+                    alt={pl.name}
+                    style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+                  />
+                ) : pl.avatar ? (
                   <img
                     src={pl.avatar}
                     alt="Avatar"
@@ -3665,64 +4064,145 @@ function App() {
                     <button className="btn-primary" onClick={() => handleEditPlaylistName(pl.id)}>{t('save')}</button>
                     <button className="btn-secondary" onClick={() => setIsEditingPlaylistName(false)}>{t('cancel')}</button>
                   </div>
-                ) : (
-                  <h1 style={{ display: 'flex', alignItems: 'center', gap: '12px', margin: 0, fontSize: '32px' }}>
-                    {pl.name}
-                    {isMyPlaylist && (
-                      <button className="btn-icon" onClick={() => { setEditPlaylistNameValue(pl.name); setIsEditingPlaylistName(true); }}>
-                        <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M17 3a2.828 2.828 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5L17 3z"></path></svg>
-                      </button>
-                    )}
-                  </h1>
-                )}
-                <div style={{ display: 'flex', alignItems: 'center', gap: '16px', marginTop: '4px' }}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer' }} onClick={() => { if (pl.discordId) { setActiveProfileId(pl.discordId); setActivePage('profile'); } }}>
-                    {(pl as any).authorAvatar ? (
-                      <img src={(pl as any).authorAvatar} alt="avatar" style={{ width: '24px', height: '24px', borderRadius: '50%', objectFit: 'cover' }} />
-                    ) : (
-                      <div className="user-avatar" style={{ width: '24px', height: '24px', fontSize: '10px' }}>
-                        {((pl as any).authorName || discordUser?.global_name || discordUser?.username || 'U').charAt(0).toUpperCase()}
-                      </div>
-                    )}
-                    <span style={{ fontSize: '14px', fontWeight: '600', color: 'white', transition: 'text-decoration 0.2s' }} onMouseOver={e => e.currentTarget.style.textDecoration = 'underline'} onMouseOut={e => e.currentTarget.style.textDecoration = 'none'}>
-                      {isMyPlaylist ? (discordUser?.global_name || discordUser?.username) : ((pl as any).authorName || 'User')}
-                    </span>
-                  </div>
-                  <span style={{ color: 'var(--text-muted)' }}>•</span>
-                  <p className="page-subtitle" style={{ margin: 0 }}>{pl.songs.length} {t('songs')}</p>
-
-                  {discordUser && discordUser.id === pl.discordId && (
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer', background: 'rgba(255,255,255,0.05)', padding: '4px 12px', borderRadius: '20px' }} onClick={async () => {
-                      const updated = { ...pl, privacy: pl.privacy === 'private' ? 'public' : 'private' };
-                      if ((window as any).electronAPI) {
-                        await (window as any).electronAPI.savePlaylist(updated);
-                        setPlaylists(prev => prev.map(p => p.id === pl.id ? updated : p));
+                ) : (() => {
+                  const isMix = isMixPlaylist(pl);
+                  const displayName = (() => {
+                    if (isMix) {
+                      if (pl.mixType === 'daily_mix' || pl.id === 'temp_mix_daily') return t('dailyMixTitle');
+                      if (pl.mixType === 'discover_weekly' || pl.id === 'temp_mix_discover_weekly') return t('discoverWeekly');
+                      if (pl.mixType === 'release_radar' || pl.id === 'temp_mix_release_radar') return t('releaseRadar');
+                      if ((pl as any).mood) {
+                        const cfg = VIBE_CONFIGS[(pl as any).mood as VibeType];
+                        if (cfg) return `${t(cfg.labelKey as any)} Mix`;
                       }
-                    }}>
-                      <div style={{ width: '30px', height: '16px', background: pl.privacy !== 'private' ? 'var(--accent-primary)' : 'rgba(255,255,255,0.2)', borderRadius: '10px', position: 'relative', transition: 'all 0.2s' }}>
-                        <div style={{ width: '12px', height: '12px', background: pl.privacy !== 'private' ? '#000' : '#fff', borderRadius: '50%', position: 'absolute', top: '2px', left: pl.privacy !== 'private' ? '16px' : '2px', transition: 'all 0.2s' }} />
+                    }
+                    return pl.name;
+                  })();
+
+                  const displayDescription = (() => {
+                    if (isMix) {
+                      if (pl.mixType === 'daily_mix' || pl.id === 'temp_mix_daily') return t('dailyMixDesc');
+                      if (pl.mixType === 'discover_weekly' || pl.id === 'temp_mix_discover_weekly') return t('discoverWeeklyDesc');
+                      if (pl.mixType === 'release_radar' || pl.id === 'temp_mix_release_radar') return t('releaseRadarDesc');
+                      if ((pl as any).mood) {
+                        const cfg = VIBE_CONFIGS[(pl as any).mood as VibeType];
+                        if (cfg && cfg.descriptionKey) return t(cfg.descriptionKey as any);
+                      }
+                    }
+                    return (pl as any).description;
+                  })();
+
+                  return (
+                    <>
+                      <h1 style={{ display: 'flex', alignItems: 'center', gap: '12px', margin: 0, fontSize: '32px' }}>
+                        {displayName}
+                        {isMyPlaylist && (
+                          <button className="btn-icon" onClick={() => { setEditPlaylistNameValue(pl.name); setIsEditingPlaylistName(true); }}>
+                            <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M17 3a2.828 2.828 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5L17 3z"></path></svg>
+                          </button>
+                        )}
+                      </h1>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '16px', marginTop: '4px' }}>
+                        {(pl as any).isTemporary ? (
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                            <span style={{ fontSize: '12px', color: 'var(--accent-primary)', fontWeight: 600, background: 'rgba(255,255,255,0.06)', padding: '2px 10px', borderRadius: '12px' }}>
+                              {t('madeForYou')} • {t('temporaryMix')}
+                            </span>
+                          </div>
+                        ) : (
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer' }} onClick={() => { if (pl.discordId) { setActiveProfileId(pl.discordId); setActivePage('profile'); } }}>
+                            {(pl as any).authorAvatar ? (
+                              <img src={(pl as any).authorAvatar} alt="avatar" style={{ width: '24px', height: '24px', borderRadius: '50%', objectFit: 'cover' }} />
+                            ) : (
+                              <div className="user-avatar" style={{ width: '24px', height: '24px', fontSize: '10px' }}>
+                                {((pl as any).authorName || discordUser?.global_name || discordUser?.username || 'U').charAt(0).toUpperCase()}
+                              </div>
+                            )}
+                            <span style={{ fontSize: '14px', fontWeight: '600', color: 'white', transition: 'text-decoration 0.2s' }} onMouseOver={e => e.currentTarget.style.textDecoration = 'underline'} onMouseOut={e => e.currentTarget.style.textDecoration = 'none'}>
+                              {isMyPlaylist ? (discordUser?.global_name || discordUser?.username) : ((pl as any).authorName || 'User')}
+                            </span>
+                          </div>
+                        )}
+                        <span style={{ color: 'var(--text-muted)' }}>•</span>
+                        <p className="page-subtitle" style={{ margin: 0 }}>{effectiveSongs.length} {t('songs')}</p>
+
+                        {discordUser && discordUser.id === pl.discordId && (
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer', background: 'rgba(255,255,255,0.05)', padding: '4px 12px', borderRadius: '20px' }} onClick={async () => {
+                            const updated = { ...pl, privacy: pl.privacy === 'private' ? 'public' : 'private' };
+                            if ((window as any).electronAPI) {
+                              await (window as any).electronAPI.savePlaylist(updated);
+                              setPlaylists(prev => prev.map(p => p.id === pl.id ? updated : p));
+                            }
+                          }}>
+                            <div style={{ width: '30px', height: '16px', background: pl.privacy !== 'private' ? 'var(--accent-primary)' : 'rgba(255,255,255,0.2)', borderRadius: '10px', position: 'relative', transition: 'all 0.2s' }}>
+                              <div style={{ width: '12px', height: '12px', background: pl.privacy !== 'private' ? '#000' : '#fff', borderRadius: '50%', position: 'absolute', top: '2px', left: pl.privacy !== 'private' ? '16px' : '2px', transition: 'all 0.2s' }} />
+                            </div>
+                            <span style={{ fontSize: '12px', color: 'var(--text-secondary)', fontWeight: 600 }}>{pl.privacy !== 'private' ? t('isPublic') : t('isPrivate')}</span>
+                          </div>
+                        )}
                       </div>
-                      <span style={{ fontSize: '12px', color: 'var(--text-secondary)', fontWeight: 600 }}>{pl.privacy !== 'private' ? t('isPublic') : t('isPrivate')}</span>
-                    </div>
-                  )}
-                </div>
+                      {displayDescription && (
+                        <p style={{ margin: '6px 0 0 0', fontSize: '13px', color: 'var(--text-secondary)', maxWidth: '650px', lineHeight: 1.4 }}>
+                          {displayDescription}
+                        </p>
+                      )}
+                    </>
+                  );
+                })()}
               </div>
             </div>
             <div style={{ display: 'flex', gap: '12px', marginTop: 'auto', flexWrap: 'wrap' }}>
-              {pl.songs.length > 0 && (
-                <button className="btn-primary" onClick={() => startPlayingFromList(pl.songs, 0)}>
+              {effectiveSongs.length > 0 && (
+                <button className="btn-primary" onClick={() => startPlayingFromList(effectiveSongs, 0)}>
                   <Play size={16} fill="currentColor" /> {t('playAll')}
                 </button>
               )}
-              {pl.songs.length > 0 && (
+              {(pl as any).isTemporary && effectiveSongs.length > 0 && (
+                <button
+                  className="btn-secondary"
+                  style={{ display: 'flex', alignItems: 'center', gap: '6px' }}
+                  onClick={() => {
+                    const permanentPl: Playlist = {
+                      ...pl,
+                      id: `pl_${Date.now()}`,
+                      name: pl.name,
+                      avatar: getMixPlaylistCover(pl, { songs: effectiveSongs, playHistory, likedSongs }),
+                      songs: effectiveSongs,
+                      createdAt: Date.now(),
+                      discordId: discordUser?.id || undefined
+                    };
+                    delete (permanentPl as any).isTemporary;
+                    const user = JSON.parse(localStorage.getItem('donpollo_user') || 'null');
+                    const suffix = user ? `_${user.id}` : '';
+                    const updated = [permanentPl, ...playlists];
+                    setPlaylists(updated);
+                    localStorage.setItem(`donpollo_playlists${suffix}`, JSON.stringify(updated));
+                    showToast(t('playlistSavedToLibrary'), 'success');
+                  }}
+                >
+                  <FolderPlus size={16} /> {t('saveToPlaylist')}
+                </button>
+              )}
+              {(pl as any).isTemporary && (
+                <button
+                  className="btn-secondary"
+                  style={{ display: 'flex', alignItems: 'center', gap: '6px' }}
+                  onClick={() => regenerateMadeForYouMix(pl.id)}
+                  disabled={isMixGeneratingId === pl.id}
+                >
+                  <RefreshCw size={16} className={isMixGeneratingId === pl.id ? 'spinner' : ''} />
+                  {isMixGeneratingId === pl.id ? t('remixing') : t('remixVibe')}
+                </button>
+              )}
+              {effectiveSongs.length > 0 && (
                 <button className="btn-secondary" onClick={() => {
                   if ((window as any).electronAPI?.cacheAudio) {
-                    const toDownload = pl.songs.filter(s => !downloadedSongs.some(ds => ds.id === s.id) && !activeDownloads[s.id]);
+                    const toDownload = effectiveSongs.filter(s => !downloadedSongs.some(ds => ds.id === s.id) && !activeDownloads[s.id]);
                     if (toDownload.length === 0) {
-                      showToast('Semua lagu sudah diunduh', 'success');
+                      showToast(t('allSongsDownloaded'), 'success');
                       return;
                     }
-                    showToast(`Mulai mengunduh ${toDownload.length} lagu...`, 'success');
+                    showToast(t('startDownloadingSongs', { '0': String(toDownload.length) }), 'success');
                     toDownload.forEach(song => {
                       let streamUrl = `${API_BASE_URL}/api/stream?id=${song.id}`;
                       if (settings.audioQuality && settings.audioQuality !== 'auto') {
@@ -3734,7 +4214,7 @@ function App() {
                     showToast(t('downloadDesktopOnly'), 'error');
                   }
                 }}>
-                  <DownloadCloud size={16} /> Download All
+                  <DownloadCloud size={16} /> {t('downloadAll')}
                 </button>
               )}
               {(isMyPlaylist || isCollaborator) && (
@@ -3742,7 +4222,7 @@ function App() {
                   setCollabPlaylistId(pl.id);
                   setShowCollabModal(true);
                 }}>
-                  <Users size={16} /> Collab ({pl.collaborators?.length || 0})
+                  <Users size={16} /> {t('collabButton', { '0': String(pl.collaborators?.length || 0) })}
                 </button>
               )}
               {isMyPlaylist && (
@@ -3750,10 +4230,10 @@ function App() {
                   if ((window as any).electronAPI?.createShareCode) {
                     const result = await (window as any).electronAPI.createShareCode(pl);
                     if (result) setShareCodeResult(result);
-                    else showToast('Gagal membuat kode share', 'error');
+                    else showToast(t('shareCodeError'), 'error');
                   }
                 }}>
-                  <Share2 size={16} /> Share
+                  <Share2 size={16} /> {t('share')}
                 </button>
               )}
               {isMyPlaylist ? (
@@ -3767,9 +4247,19 @@ function App() {
               )}
             </div>
           </div>
-          {pl.songs.length > 0 ? (
+          {isMixGeneratingId === pl.id ? (
+            <div style={{ padding: '60px 20px', textAlign: 'center', color: 'var(--text-secondary)' }}>
+              <Loader2 size={36} className="spinner" style={{ margin: '0 auto 16px', color: 'var(--accent-primary)' }} />
+              <div style={{ fontSize: '16px', fontWeight: 600, color: 'var(--text-primary)' }}>
+                Meracik lagu untuk {pl.name}...
+              </div>
+              <div style={{ fontSize: '13px', color: 'var(--text-secondary)', marginTop: '6px' }}>
+                Menganalisis lagu & musisi favoritmu secara cerdas
+              </div>
+            </div>
+          ) : effectiveSongs.length > 0 ? (
             <div className="library-list">
-              {pl.songs.map((song, i) => (
+              {effectiveSongs.map((song, i) => (
                 <div key={i} className={`library-item ${currentSong?.id === song.id ? 'playing' : ''}`} onContextMenu={(e) => handleContextMenu(e, song)}
                   draggable={true}
                   onDragStart={(e) => {
@@ -3827,18 +4317,33 @@ function App() {
                     transition: 'border 0.2s',
                   }}
                 >
-                  <div className="library-item-art" onClick={() => startPlayingFromList(pl.songs, i)}>
-                    <img src={(getCleanThumbnail(song.thumbnail) || getHighResImage(song.cover))} alt={song.title} />
-                    <div className="library-item-play"><Play size={16} fill="currentColor" /></div>
-                  </div>
-                  <div className="library-item-info" onClick={() => startPlayingFromList(pl.songs, i)}>
-                    <div className="library-item-title" title={song.title}>{song.title}</div>
-                    <div className="library-item-artist">{song.artist}</div>
-                  </div>
+                  {(() => {
+                    const cleanSong = formatTrackLikeSpotify(song);
+                    return (
+                      <>
+                        <div className="library-item-art" onClick={() => startPlayingFromList(effectiveSongs, i)}>
+                          <img src={(getCleanThumbnail(cleanSong.thumbnail) || getHighResImage(cleanSong.cover))} alt={cleanSong.title} />
+                          <div className="library-item-play"><Play size={16} fill="currentColor" /></div>
+                        </div>
+                        <div className="library-item-info" onClick={() => startPlayingFromList(effectiveSongs, i)}>
+                          <div className="library-item-title" title={cleanSong.title}>{cleanSong.title}</div>
+                          <div className="library-item-artist" style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                            <span>{cleanSong.artist}</span>
+                            {(cleanSong.source === 'itunes' || cleanSong.isOfficialAudio || getAudioBadge(cleanSong)?.type === 'audio') && (
+                              <span className="suggestion-badge badge-audio" style={{ fontSize: '10px', padding: '1px 6px' }}>
+                                <Music size={10} strokeWidth={2.4} />
+                                <span>{t('badgeAudio')}</span>
+                              </span>
+                            )}
+                          </div>
+                        </div>
+                      </>
+                    );
+                  })()}
                   {song.addedBy && (
                     <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginRight: '16px', flexShrink: 0 }} title={`Added by ${song.addedBy.username}`}>
                       {song.addedBy.avatar ? (
-                        <img src={song.addedBy.avatar} alt="" style={{ width: '18px', height: '18px', borderRadius: '50%', objectFit: 'cover' }} />
+                        <img src={song.addedBy.avatar || getDefaultDiscordAvatar(song.addedBy.id, song.addedBy.name)} alt="" style={{ width: '18px', height: '18px', borderRadius: '50%', objectFit: 'cover' }} onError={(e) => handleAvatarError(e, song.addedBy.id, song.addedBy.name)} />
                       ) : (
                         <div style={{ width: '18px', height: '18px', borderRadius: '50%', background: 'var(--bg-card-hover)', color: 'var(--text-secondary)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '9px', fontWeight: 'bold' }}>
                           {song.addedBy.username?.charAt(0).toUpperCase()}
@@ -3871,6 +4376,17 @@ function App() {
                   </div>
                 </div>
               ))}
+            </div>
+          ) : (pl as any).isTemporary ? (
+            <div style={{ padding: '60px 20px', textAlign: 'center', color: 'var(--text-secondary)' }}>
+              <div style={{ fontSize: '15px', color: 'var(--text-secondary)' }}>Belum ada lagu dalam playlist ini.</div>
+              <button
+                className="btn-primary"
+                style={{ marginTop: '16px', display: 'inline-flex', alignItems: 'center', gap: '8px' }}
+                onClick={() => regenerateMadeForYouMix(pl.id)}
+              >
+                <RefreshCw size={15} /> Racik Lagu Sekarang
+              </button>
             </div>
           ) : (
             <div className="empty-state">
@@ -3982,9 +4498,16 @@ function App() {
         {playlists.filter(pl => pl.discordId === discordUser?.id || savedPlaylists.includes(pl.id) || pl.collaborators?.includes(discordUser?.id || '')).length > 0 ? (
           <div className="playlist-grid">
             {playlists.filter(pl => pl.discordId === discordUser?.id || savedPlaylists.includes(pl.id) || pl.collaborators?.includes(discordUser?.id || '')).map(pl => (
-              <div key={pl.id} className="playlist-card" onClick={() => { navigate('playlist-detail', { playlistId: pl.id }); }}>
+              <div key={pl.id} className="playlist-card" onClick={() => { navigate('playlist-detail', { playlistId: pl.id }); }}
+                onContextMenu={(e) => {
+                  e.preventDefault();
+                  setContextMenu(null);
+                  setPlaylistContextMenu({ x: e.clientX, y: e.clientY, playlist: pl });
+                }}>
                 <div className="playlist-card-art">
-                  {pl.avatar ? (
+                  {isMixPlaylist(pl) ? (
+                    <img src={getMixPlaylistCover(pl, { songs: pl.songs, playHistory, likedSongs })} alt={pl.name} />
+                  ) : pl.avatar ? (
                     <img src={pl.avatar} alt={pl.name} />
                   ) : pl.songs.length > 0 ? (
                     <img src={(getCleanThumbnail(pl.songs[0].thumbnail) || getHighResImage(pl.songs[0].cover))} alt={pl.name} />
@@ -4103,7 +4626,7 @@ function App() {
           )}
 
           <div style={{ position: 'relative', zIndex: 1, display: 'flex', gap: '24px', width: '100%', alignItems: 'flex-end' }}>
-            <img src={displayAvatar} alt={displayUsername} style={{ width: '160px', height: '160px', borderRadius: '50%', objectFit: 'cover', boxShadow: '0 8px 32px rgba(0,0,0,0.6)' }} />
+            <img src={displayAvatar} alt={displayUsername} style={{ width: '160px', height: '160px', borderRadius: '50%', objectFit: 'cover', boxShadow: '0 8px 32px rgba(0,0,0,0.6)' }} onError={(e) => handleAvatarError(e, activeProfileId, displayUsername)} />
             <div style={{ flex: 1 }}>
               <div style={{ fontSize: '12px', fontWeight: '700', textTransform: 'uppercase', letterSpacing: '1px', marginBottom: '8px', color: 'var(--text-secondary)' }}>{t('profile') || 'Profil'}</div>
               <h1 style={{ fontSize: '56px', fontWeight: '900', margin: '0 0 16px 0', letterSpacing: '-2px', lineHeight: '1', color: 'var(--text-primary)' }}>{displayUsername}</h1>
@@ -4434,17 +4957,28 @@ function App() {
         {discordUser ? (
           <div className="settings-account-card">
             {getDiscordAvatar(discordUser) ? (
-              <img src={getDiscordAvatar(discordUser)!} alt="avatar" className="settings-avatar" />
+              <img src={getDiscordAvatar(discordUser)!} alt="avatar" className="settings-avatar" onError={(e) => handleAvatarError(e, discordUser.id, discordUser.username)} />
             ) : (
               <div className="settings-avatar-placeholder">{(discordUser.global_name || discordUser.username).charAt(0).toUpperCase()}</div>
             )}
             <div className="settings-account-info">
               <div className="settings-account-name">{discordUser.global_name || discordUser.username}</div>
-              <div className="settings-account-sub">@{discordUser.username}#{discordUser.discriminator} • Disocrd</div>
+              <div className="settings-account-sub">@{discordUser.username}#{discordUser.discriminator} • Discord</div>
             </div>
-            <button className="btn-secondary" onClick={logoutDiscord} style={{ marginLeft: 'auto' }}>
-              <LogOut size={16} /> {t('logout')}
-            </button>
+            <div className="settings-account-actions" style={{ marginLeft: 'auto', display: 'flex', gap: '8px', alignItems: 'center' }}>
+              <button
+                className="btn-secondary"
+                onClick={() => refreshDiscordProfile(true)}
+                disabled={isRefreshingProfile}
+                title={t('syncProfile')}
+                style={{ display: 'flex', alignItems: 'center', gap: '6px' }}
+              >
+                <RefreshCw size={15} className={isRefreshingProfile ? 'spin' : ''} /> {t('syncProfile')}
+              </button>
+              <button className="btn-secondary" onClick={logoutDiscord} style={{ color: '#ff5555' }}>
+                <LogOut size={16} /> {t('logout')}
+              </button>
+            </div>
           </div>
         ) : (
           <div className="settings-account-card">
@@ -4620,6 +5154,60 @@ function App() {
             }}>
             {settings.prioritizeOfficialAudio !== false && <Check size={14} />}
           </button>
+        </div>
+        <div className="settings-row">
+          <div>
+            <div className="settings-label">{t('vibeSettingTitle')}</div>
+            <div className="settings-desc">{t('vibeSettingDesc')}</div>
+          </div>
+          <button className={`settings-toggle ${settings.vibeCheckEnabled !== false ? 'on' : ''}`}
+            onClick={() => {
+              const newVal = !(settings.vibeCheckEnabled !== false);
+              setSettings((p: any) => ({ ...p, vibeCheckEnabled: newVal }));
+              localStorage.setItem('donpollo_settings', JSON.stringify({ ...settings, vibeCheckEnabled: newVal }));
+            }}>
+            {settings.vibeCheckEnabled !== false && <Check size={14} />}
+          </button>
+        </div>
+        {settings.vibeCheckEnabled !== false && (
+          <div className="settings-row">
+            <div>
+              <div className="settings-label">{t('vibeInterval')}</div>
+              <div className="settings-desc">{t('vibeIntervalSongs').replace('{0}', String(settings.vibeCheckInterval || 15))}</div>
+            </div>
+            <select className="settings-select"
+              value={settings.vibeCheckInterval !== undefined ? settings.vibeCheckInterval : 15}
+              onChange={e => {
+                const val = Number(e.target.value);
+                setSettings((p: any) => ({ ...p, vibeCheckInterval: val }));
+                localStorage.setItem('donpollo_settings', JSON.stringify({ ...settings, vibeCheckInterval: val }));
+              }}>
+              <option value="10">{t('vibeIntervalSongs').replace('{0}', '10')}</option>
+              <option value="15">{t('vibeIntervalSongs').replace('{0}', '15')}</option>
+              <option value="20">{t('vibeIntervalSongs').replace('{0}', '20')}</option>
+              <option value="0">{t('vibeIntervalManual')}</option>
+            </select>
+          </div>
+        )}
+        <div className="settings-row">
+          <div>
+            <div className="settings-label">{t('searchStorefront')}</div>
+            <div className="settings-desc">{t('searchStorefrontDesc')}</div>
+          </div>
+          <select className="settings-select"
+            value={settings.searchCountry || localStorage.getItem('donpollo_search_country') || 'auto'}
+            onChange={e => {
+              const val = e.target.value;
+              localStorage.setItem('donpollo_search_country', val);
+              setSettings((p: any) => ({ ...p, searchCountry: val }));
+              searchCacheRef.current = {};
+            }}>
+            <option value="auto">{t('storefrontAuto')}</option>
+            <option value="ID">{t('storefrontId')}</option>
+            <option value="US">{t('storefrontUs')}</option>
+            <option value="JP">{t('storefrontJp')}</option>
+            <option value="KR">{t('storefrontKr')}</option>
+          </select>
         </div>
         <div className="settings-row">
           <div>
@@ -5498,128 +6086,624 @@ function App() {
               </div>
             )}
 
-            {/* ── Bento Featured Grid (Daily Mix) ──────── */}
-            {(() => {
+            {/* ── Desktop Editorial "Dibuat Untuk Kamu" (Personalized Mixes) ── */}
+            {FEATURE_FLAGS.ENABLE_PLAYLIST_MIX && (
+            <section className="home-section mfy-shelf-container" id="made-for-you-shelf">
+              {/* Honest, Clear Header */}
+              <div className="section-header-v2" style={{ flexWrap: 'wrap', gap: '8px', marginBottom: '8px' }}>
+                <div className="section-header-left">
+                  <span className="mfy-header-icon" style={{ display: 'flex', alignItems: 'center' }}><Sparkles size={20} /></span>
+                  <div>
+                    <h2 className="section-title-v2" style={{ margin: 0 }}>{t('madeForYou')}</h2>
+                    <div style={{ fontSize: '12px', color: 'var(--text-secondary)', marginTop: '2px' }}>
+                      {t('madeForYouDesc')}
+                    </div>
+                  </div>
+                </div>
 
+                {/* Tactile Mood Filter Tabs */}
+                <div className="mfy-mood-tabs" role="tablist" aria-label="Pilih Mood">
+                  {([
+                    { id: 'chill', labelKey: 'vibeMoodChill' },
+                    { id: 'happy', labelKey: 'vibeMoodHappy' },
+                    { id: 'energetic', labelKey: 'vibeMoodEnergetic' },
+                    { id: 'sad', labelKey: 'vibeMoodSad' }
+                  ] as { id: VibeType; labelKey: any }[]).map(item => {
+                    const isSelected = selectedVibeMood === item.id;
+                    return (
+                      <button
+                        key={item.id}
+                        type="button"
+                        className={`mfy-mood-tab-btn ${isSelected ? 'active' : ''}`}
+                        onClick={() => {
+                          setSelectedVibeMood(item.id);
+                          localStorage.setItem('donpollo_current_vibe', item.id);
+                          const targetPl = madeForYouPlaylists.find(p => p.id === `vibe_temp_${item.id}`);
+                          if (targetPl && (!targetPl.songs || targetPl.songs.length === 0)) {
+                            generateOrGetMixTracks(targetPl);
+                          }
+                        }}
+                      >
+                        {renderMixIcon(VIBE_CONFIGS[item.id]?.iconName, 13)}
+                        <span>{t(item.labelKey)}</span>
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+
+              {/* Asymmetric Split Layout: Left Spotlight (Active Mood Mix) + Right Companions */}
+              {(() => {
+                const currentVibePl = madeForYouPlaylists.find(p => p.id === `vibe_temp_${selectedVibeMood}`) || DEFAULT_MADE_FOR_YOU_PLAYLISTS.find(p => p.id === `vibe_temp_${selectedVibeMood}`)!;
+                const discoverWeeklyPl = madeForYouPlaylists.find(p => p.id === 'temp_mix_discover_weekly') || DEFAULT_MADE_FOR_YOU_PLAYLISTS.find(p => p.id === 'temp_mix_discover_weekly')!;
+                const dailyMixPl = madeForYouPlaylists.find(p => p.id === 'temp_mix_daily') || DEFAULT_MADE_FOR_YOU_PLAYLISTS.find(p => p.id === 'temp_mix_daily')!;
+                const releaseRadarPl = madeForYouPlaylists.find(p => p.id === 'temp_mix_release_radar') || DEFAULT_MADE_FOR_YOU_PLAYLISTS.find(p => p.id === 'temp_mix_release_radar')!;
+
+                const isVibeGenerating = isMixGeneratingId === currentVibePl?.id;
+                const vibeSongs = currentVibePl?.songs || [];
+                const vibeCover = getMixPlaylistCover(currentVibePl, {
+                  id: currentVibePl?.id || `vibe_temp_${selectedVibeMood}`,
+                  name: currentVibePl?.name || 'Mood Mix',
+                  mixType: currentVibePl?.mixType || 'vibe_mix',
+                  mood: selectedVibeMood,
+                  songs: vibeSongs,
+                  playHistory,
+                  likedSongs
+                });
+
+                const formatSec = (sec?: number) => {
+                  if (!sec || isNaN(sec)) return '';
+                  const m = Math.floor(sec / 60);
+                  const s = Math.floor(sec % 60);
+                  return `${m}:${s < 10 ? '0' : ''}${s}`;
+                };
+
+                const companionList = [
+                  {
+                    pl: discoverWeeklyPl,
+                    title: t('discoverWeekly'),
+                    desc: t('discoverWeeklyDesc'),
+                    badge: t('weeklyUpdateBadge')
+                  },
+                  {
+                    pl: dailyMixPl,
+                    title: t('dailyMixTitle'),
+                    desc: t('dailyMixDesc'),
+                    badge: t('dailyUpdateBadge')
+                  },
+                  {
+                    pl: releaseRadarPl,
+                    title: t('releaseRadar'),
+                    desc: t('releaseRadarDesc'),
+                    badge: t('newReleaseBadge')
+                  }
+                ];
+
+                return (
+                  <div className="mfy-split-layout">
+                    {/* LEFT: Spotlight Card with Direct Song Preview & Play */}
+                    <div className="mfy-spotlight-card">
+                      <div className="mfy-spotlight-top">
+                        {vibeCover ? (
+                          <img src={vibeCover} alt={currentVibePl?.name || 'Vibe Mix'} className="mfy-spotlight-cover" />
+                        ) : (
+                          <div
+                            className="mfy-spotlight-cover"
+                            style={{
+                              display: 'flex',
+                              alignItems: 'center',
+                              justifyContent: 'center',
+                              color: 'var(--text-muted)'
+                            }}
+                          >
+                            <Music size={32} />
+                          </div>
+                        )}
+
+                        <div className="mfy-spotlight-meta">
+                          <div>
+                            <span className="mfy-spotlight-badge">{t('mixMoodSelected')}</span>
+                            <h3 className="mfy-spotlight-title">{currentVibePl?.name || 'Mood Mix'}</h3>
+                            <p className="mfy-spotlight-desc">
+                              {t(VIBE_CONFIGS[selectedVibeMood]?.descriptionKey as any) || currentVibePl?.description}
+                            </p>
+                          </div>
+
+                          <div className="mfy-spotlight-actions">
+                            <button
+                              type="button"
+                              className="mfy-btn-play-all"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                if (currentVibePl) playMadeForYouPlaylist(currentVibePl, e);
+                              }}
+                              title={t('playAll')}
+                            >
+                              {isVibeGenerating ? (
+                                <Loader2 size={15} className="spinner" />
+                              ) : (
+                                <Play size={15} fill="currentColor" />
+                              )}
+                              <span>{t('btnPlay')} ({vibeSongs.length > 0 ? `${vibeSongs.length} ${t('songs')}` : 'Mix'})</span>
+                            </button>
+
+                            <button
+                              type="button"
+                              className="mfy-btn-secondary"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                if (currentVibePl) regenerateMadeForYouMix(currentVibePl.id);
+                              }}
+                              title={t('remixVibeTooltip')}
+                            >
+                              <RefreshCw size={13} className={isVibeGenerating ? 'spinner' : ''} />
+                              <span>{t('remixVibe')}</span>
+                            </button>
+
+                            <button
+                              type="button"
+                              className="mfy-btn-secondary"
+                              onClick={() => {
+                                if (currentVibePl) openMadeForYouPlaylist(currentVibePl);
+                              }}
+                              title={t('openMixTooltip')}
+                            >
+                              <span>{t('openMix')}</span>
+                            </button>
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Interactive Song Preview Rows */}
+                      <div className="mfy-tracklist-preview">
+                        <div className="mfy-tracklist-header">
+                          <span>{t('tracklistPreview')}</span>
+                          <span>{vibeSongs.length > 0 ? t('mixSongsCount').replace('{0}', String(vibeSongs.length)) : ''}</span>
+                        </div>
+
+                        {vibeSongs.length === 0 ? (
+                          <div className="mfy-tracklist-empty">
+                            {isVibeGenerating ? t('loadingMixRecommendation') : t('emptyMixPrompt')}
+                          </div>
+                        ) : (
+                          vibeSongs.slice(0, 3).map((rawSong: any, sIdx: number) => {
+                            const song = formatTrackLikeSpotify(rawSong) || rawSong;
+                            const isThisPlaying = currentSong?.id === song.id && isPlaying;
+                            return (
+                              <div
+                                key={song.id || sIdx}
+                                className={`mfy-track-row ${currentSong?.id === song.id ? 'is-active' : ''}`}
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  startPlayingFromList(vibeSongs, sIdx);
+                                }}
+                                title={`Putar ${song.title} - ${song.artist}`}
+                              >
+                                <div className="mfy-track-left">
+                                  <span className="mfy-track-num">
+                                    {isThisPlaying ? '▶' : sIdx + 1}
+                                  </span>
+                                  <div className="mfy-track-info">
+                                    <span className="mfy-track-title">{song.title}</span>
+                                    <span className="mfy-track-artist">{song.artist}</span>
+                                  </div>
+                                </div>
+                                {song.duration ? (
+                                  <span className="mfy-track-duration">{formatSec(song.duration)}</span>
+                                ) : null}
+                              </div>
+                            );
+                          })
+                        )}
+                      </div>
+                    </div>
+
+                    {/* RIGHT: Companion Algorithmic Mixes (Discover, Daily, Release) */}
+                    <div className="mfy-companion-list">
+                      {companionList.map(({ pl, title, desc, badge }) => {
+                        if (!pl) return null;
+                        const hasSongs = pl.songs && pl.songs.length > 0;
+                        const isGenerating = isMixGeneratingId === pl.id;
+                        const cover = getMixPlaylistCover(pl, {
+                          songs: pl.songs,
+                          playHistory,
+                          likedSongs
+                        });
+
+                        const artistPreview = (() => {
+                          const andMore = t('andOthers') || 'dan lainnya';
+                          if (hasSongs) {
+                            const artList = Array.from(new Set(pl.songs.map((s: any) => s.artist).filter(Boolean))).slice(0, 3);
+                            if (artList.length > 0) return artList.join(', ') + `, ${andMore}`;
+                          }
+                          const userTop = extractTopArtists(playHistory, likedSongs, 3);
+                          if (userTop.length > 0) return userTop.join(', ') + `, ${andMore}`;
+                          return desc;
+                        })();
+
+                        return (
+                          <div
+                            key={pl.id}
+                            className="mfy-companion-card"
+                            onClick={() => openMadeForYouPlaylist(pl)}
+                            title={`${t('openMix')} ${title}`}
+                          >
+                            <div className="mfy-companion-left">
+                              {cover ? (
+                                <img src={cover} alt={title} className="mfy-companion-thumb" />
+                              ) : (
+                                <div className="mfy-companion-thumb" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--text-muted)' }}>
+                                  <Music size={20} />
+                                </div>
+                              )}
+                              <div className="mfy-companion-meta">
+                                <div className="mfy-companion-title">{title}</div>
+                                <div className="mfy-companion-desc" title={artistPreview}>
+                                  {artistPreview}
+                                </div>
+                                <div className="mfy-companion-note">
+                                  {badge} • {hasSongs ? `${pl.songs.length} ${t('songs')}` : t('readyToPlay')}
+                                </div>
+                              </div>
+                            </div>
+
+                            <button
+                              type="button"
+                              className="mfy-companion-play-btn"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                playMadeForYouPlaylist(pl, e);
+                              }}
+                              title={`${t('btnPlay')} ${title}`}
+                            >
+                              {isGenerating ? (
+                                <Loader2 size={16} className="spinner" />
+                              ) : (
+                                <Play size={16} fill="currentColor" style={{ marginLeft: '1px' }} />
+                              )}
+                            </button>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                );
+              })()}
+            </section>
+            )}
+
+            {/* ── Daily Mix & Highlights (Desktop Editorial) ──────── */}
+            {FEATURE_FLAGS.ENABLE_DAILY_MIX_SHELF && (() => {
               const getDailyMix = () => {
                 const mix: any[] = [];
-                if (playHistory.length > 0) mix.push({ ...playHistory[0], bentoTag: 'JUMP BACK IN', tagClass: 'tag-hero' });
-                else if (hitsInternational.length > 0) mix.push({ ...hitsInternational[0], bentoTag: 'TOP PICK', tagClass: 'tag-hero' });
+                const isDuplicate = (s: any) => {
+                  if (!s || !s.title) return true;
+                  const base = cleanBaseSongTitle(s.title);
+                  return mix.some(m => m.id === s.id || (base && cleanBaseSongTitle(m.title) === base));
+                };
 
-                const favs = likedSongs.filter(s => s.id !== mix[0]?.id).slice(0, 2);
-                favs.forEach(s => mix.push({ ...s, bentoTag: 'FAVORITE', tagClass: 'tag-fav' }));
+                // 1. HERO SPOTLIGHT:
+                // If a song is currently playing, suggest the previous track from history rather than repeating the current song!
+                const prevSessionTrack = playHistory.find(s => s && s.id !== currentSong?.id && !isUnwantedTrackVariant(s.title, s.artist));
+                const heroCandidate = prevSessionTrack || playHistory[0] || hitsInternational[0];
 
-                const recs = playHistory.length > 0 ? recommendations : hitsInternational;
-                const usableRecs = recs.filter(s => !mix.some(m => m.id === s.id)).slice(0, 2);
-                usableRecs.forEach(s => mix.push({ ...s, bentoTag: 'SUGGESTED', tagClass: 'tag-sug' }));
-
-                const historyFill = playHistory.length > 0 ? playHistory.filter(s => !mix.some(m => m.id === s.id)) : hitsInternational.filter(s => !mix.some(m => m.id === s.id));
-                while (mix.length < 5 && historyFill.length > 0) {
-                  mix.push({ ...historyFill.shift(), bentoTag: playHistory.length > 0 ? 'RECENTLY PLAYED' : 'TRENDING', tagClass: 'tag-recent' });
+                if (heroCandidate) {
+                  const isFromHistory = playHistory.some(s => s.id === heroCandidate.id);
+                  mix.push({ ...heroCandidate, bentoTag: isFromHistory ? 'JUMP BACK IN' : 'TOP PICK' });
                 }
+
+                // 2. FAVORITE (from liked songs):
+                const favs = likedSongs.filter(s => !isDuplicate(s) && !isUnwantedTrackVariant(s.title, s.artist)).slice(0, 1);
+                favs.forEach(s => mix.push({ ...s, bentoTag: 'FAVORITE' }));
+
+                // 3. SUGGESTED (from recommendations or curated hits):
+                const recPool = recommendations.length > 0 ? recommendations : hitsInternational.slice(1);
+                const usableRecs = recPool.filter(s => !isDuplicate(s) && !isUnwantedTrackVariant(s.title, s.artist)).slice(0, 1);
+                usableRecs.forEach(s => mix.push({ ...s, bentoTag: 'SUGGESTED' }));
+
+                // 4. TRENDING (from international hits):
+                const trendingPool = hitsInternational.filter(s => !isDuplicate(s) && !isUnwantedTrackVariant(s.title, s.artist)).slice(0, 1);
+                trendingPool.forEach(s => mix.push({ ...s, bentoTag: 'TRENDING' }));
+
+                // 5. RECENTLY PLAYED (from history, if not already used as hero):
+                const recentPool = playHistory.filter(s => !isDuplicate(s) && !isUnwantedTrackVariant(s.title, s.artist)).slice(0, 1);
+                recentPool.forEach(s => mix.push({ ...s, bentoTag: 'RECENTLY PLAYED' }));
+
+                // 6. Fill any remaining slots up to 5 with diverse unique tracks
+                const fallbackPool = [...hitsInternational, ...likedSongs, ...recommendations, ...playHistory]
+                  .filter(s => !isDuplicate(s) && !isUnwantedTrackVariant(s.title, s.artist));
+                while (mix.length < 5 && fallbackPool.length > 0) {
+                  const candidate = fallbackPool.shift();
+                  if (candidate && !isDuplicate(candidate)) {
+                    mix.push({ ...candidate, bentoTag: 'TRENDING' });
+                  }
+                }
+
                 return mix;
               };
 
-              const dailyMix = getDailyMix();
-              if (dailyMix.length === 0) return null;
+              const rawMix = getDailyMix();
+              if (rawMix.length === 0) return null;
+
+              const getTagLabel = (tag: string) => {
+                switch (tag) {
+                  case 'JUMP BACK IN': return t('tagJumpBackIn');
+                  case 'TOP PICK': return t('tagTopPick');
+                  case 'FAVORITE': return t('tagFavorite');
+                  case 'SUGGESTED': return t('tagSuggested');
+                  case 'RECENTLY PLAYED': return t('tagRecentlyPlayed');
+                  case 'TRENDING': return t('tagTrending');
+                  default: return tag;
+                }
+              };
+
+              const dailyMix = rawMix.map(item => {
+                const formatted = formatTrackLikeSpotify(item);
+                return {
+                  ...item,
+                  title: formatted?.title || item.title,
+                  artist: formatted?.artist || item.artist,
+                  thumbnail: formatted?.thumbnail || item.thumbnail,
+                  cover: formatted?.cover || item.cover,
+                  tagLabel: getTagLabel(item.bentoTag)
+                };
+              });
+
+              const heroTrack = dailyMix[0];
+              const companionTracks = dailyMix.slice(1, 5);
+              const isHeroPlaying = currentSong?.id === heroTrack.id && isPlaying;
+              const isHeroCurrent = currentSong?.id === heroTrack.id;
+              const isHeroLiked = likedSongs.some(s => s.id === heroTrack.id);
 
               return (
-                <div className="bento-grid">
-                  {/* Hero card */}
-                  <div
-                    className={`bento-card bento-hero ${currentSong?.id === dailyMix[0].id ? 'bento-active' : ''}`}
-                    onClick={() => startPlayingFromList(dailyMix, 0)}
-                    onContextMenu={(e) => handleContextMenu(e, dailyMix[0])}
-                    draggable={true}
-                    onDragStart={(e) => { setDraggedGlobalSong(dailyMix[0]); applyDragGhost(e, dailyMix[0]); }}
-                    onDragEnd={(e) => { setDraggedGlobalSong(null); (e.currentTarget as HTMLElement).classList.remove('dragging-origin'); }}
-                  >
-                    <img src={(getCleanThumbnail(dailyMix[0].thumbnail) || getHighResImage(dailyMix[0].cover))} alt={dailyMix[0].title} className="bento-img" />
-                    <div className="bento-gradient" />
-                    <div className={`bento-tag ${dailyMix[0].tagClass}`}>{dailyMix[0].bentoTag}</div>
-                    <div className="bento-meta">
-                      <div className="bento-title-lg">{dailyMix[0].title}</div>
-                      <div className="bento-artist-lg">{dailyMix[0].artist}</div>
+                <section className="home-section daily-shelf-container">
+                  <div className="section-header-v2" style={{ marginBottom: '8px' }}>
+                    <div className="section-header-left">
+                      <span className="daily-header-icon" style={{ display: 'flex', alignItems: 'center' }}>
+                        <Headphones size={20} />
+                      </span>
+                      <div>
+                        <h2 className="section-title-v2" style={{ margin: 0 }}>{t('dailyMixShelfTitle')}</h2>
+                        <div style={{ fontSize: '12px', color: 'var(--text-secondary)', marginTop: '2px' }}>
+                          {t('dailyMixShelfDesc')}
+                        </div>
+                      </div>
                     </div>
-                    <button className="bento-play-btn" onClick={(e) => { e.stopPropagation(); startPlayingFromList(dailyMix, 0); }}>
-                      {currentSong?.id === dailyMix[0].id && isPlaying
-                        ? <Pause size={20} fill="currentColor" />
-                        : <Play size={20} fill="currentColor" style={{ marginLeft: '2px' }} />}
-                    </button>
                   </div>
 
-                  {/* Mini cards */}
-                  {dailyMix.slice(1, 5).map((item, i) => (
+                  <div className="daily-split-layout">
+                    {/* LEFT: Spotlight Hero Card */}
                     <div
-                      key={i}
-                      className={`bento-card bento-mini ${currentSong?.id === item.id ? 'bento-active' : ''}`}
-                      onClick={() => startPlayingFromList(dailyMix, i + 1)}
-                      onContextMenu={(e) => handleContextMenu(e, item)}
+                      className={`daily-hero-card ${isHeroCurrent ? 'is-active' : ''}`}
+                      onContextMenu={(e) => handleContextMenu(e, heroTrack)}
                       draggable={true}
-                      onDragStart={(e) => { setDraggedGlobalSong(item); applyDragGhost(e, item); }}
+                      onDragStart={(e) => { setDraggedGlobalSong(heroTrack); applyDragGhost(e, heroTrack); }}
                       onDragEnd={(e) => { setDraggedGlobalSong(null); (e.currentTarget as HTMLElement).classList.remove('dragging-origin'); }}
                     >
-                      <img src={(getCleanThumbnail(item.thumbnail) || getHighResImage(item.cover))} alt={item.title} className="bento-img" />
-                      <div className="bento-gradient" />
-                      <div className={`bento-tag ${item.tagClass}`}>{item.bentoTag}</div>
-                      <div className="bento-meta bento-meta-sm">
-                        <div className="bento-title-sm">{item.title}</div>
-                        <div className="bento-artist-sm">{item.artist}</div>
-                      </div>
-                      {currentSong?.id === item.id && isPlaying && (
-                        <div className="bento-eq-badge">
+                      {isHeroPlaying && (
+                        <div className="daily-playing-pill" style={{ position: 'absolute', top: '16px', right: '16px' }}>
                           <div className="eq-bar" /><div className="eq-bar" /><div className="eq-bar" />
+                          <span>{t('nowPlayingStatus')}</span>
                         </div>
                       )}
+
+                      <div className="daily-hero-body">
+                        <img
+                          src={getCleanThumbnail(heroTrack.thumbnail) || getHighResImage(heroTrack.cover)}
+                          alt={heroTrack.title}
+                          className="daily-hero-cover"
+                          onClick={() => {
+                            if (isHeroCurrent) togglePlay();
+                            else playSingleSong(heroTrack);
+                          }}
+                          title={isHeroPlaying ? t('btnPause') : t('playSongBtn')}
+                        />
+                        <div className="daily-hero-meta">
+                          <div>
+                            <h3 className="daily-hero-title" title={heroTrack.title}>{heroTrack.title}</h3>
+                            <p className="daily-hero-artist" title={heroTrack.artist}>{heroTrack.artist}</p>
+                          </div>
+
+                          <div className="daily-hero-actions">
+                            <button
+                              type="button"
+                              className="daily-btn-play"
+                              onClick={() => {
+                                if (isHeroCurrent) togglePlay();
+                                else playSingleSong(heroTrack);
+                              }}
+                              title={isHeroPlaying ? t('btnPause') : t('playSongBtn')}
+                            >
+                              {isHeroPlaying ? (
+                                <Pause size={15} fill="currentColor" />
+                              ) : (
+                                <Play size={15} fill="currentColor" style={{ marginLeft: '1px' }} />
+                              )}
+                              <span>{isHeroPlaying ? t('btnPause') : t('playSongBtn')}</span>
+                            </button>
+
+                            <button
+                              type="button"
+                              className={`daily-btn-icon ${isHeroLiked ? 'liked' : ''}`}
+                              onClick={() => toggleLike(heroTrack)}
+                              title={isHeroLiked ? t('unlikeSong') : t('likeSong')}
+                            >
+                              <Heart
+                                size={16}
+                                fill={isHeroLiked ? 'var(--accent-primary, #3b82f6)' : 'none'}
+                                color={isHeroLiked ? 'var(--accent-primary, #3b82f6)' : '#b3b3b3'}
+                              />
+                            </button>
+                          </div>
+                        </div>
+                      </div>
                     </div>
-                  ))}
-                </div>
+
+                    {/* RIGHT: 4 Companion Cards */}
+                    <div className="daily-companion-list">
+                      {companionTracks.map((item, i) => {
+                        const isCurrentPlaying = currentSong?.id === item.id && isPlaying;
+                        const isCurrentActive = currentSong?.id === item.id;
+                        const isLiked = likedSongs.some(s => s.id === item.id);
+
+                        return (
+                          <div
+                            key={item.id || i}
+                            className={`daily-companion-card ${isCurrentActive ? 'is-active' : ''}`}
+                            onClick={() => {
+                              if (isCurrentActive) togglePlay();
+                              else playSingleSong(item);
+                            }}
+                            onContextMenu={(e) => handleContextMenu(e, item)}
+                            draggable={true}
+                            onDragStart={(e) => { setDraggedGlobalSong(item); applyDragGhost(e, item); }}
+                            onDragEnd={(e) => { setDraggedGlobalSong(null); (e.currentTarget as HTMLElement).classList.remove('dragging-origin'); }}
+                          >
+                            <div className="daily-companion-left">
+                              <img
+                                src={getCleanThumbnail(item.thumbnail) || getHighResImage(item.cover)}
+                                alt={item.title}
+                                className="daily-companion-thumb"
+                              />
+                              <div className="daily-companion-meta">
+                                <span className={`daily-companion-badge badge-${item.bentoTag?.toLowerCase().replace(/\s+/g, '-')}`}>
+                                  {item.tagLabel}
+                                </span>
+                                <div className="daily-companion-title" title={item.title}>{item.title}</div>
+                                <div className="daily-companion-artist" title={item.artist}>{item.artist}</div>
+                              </div>
+                            </div>
+
+                            <div className="daily-companion-right">
+                              {isCurrentPlaying && (
+                                <div className="daily-eq-mini">
+                                  <div className="eq-bar" /><div className="eq-bar" /><div className="eq-bar" />
+                                </div>
+                              )}
+                              <button
+                                type="button"
+                                className={`daily-companion-icon-btn ${isLiked ? 'liked' : ''}`}
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  toggleLike(item);
+                                }}
+                                title={isLiked ? t('unlikeSong') : t('likeSong')}
+                              >
+                                <Heart
+                                  size={14}
+                                  fill={isLiked ? 'var(--accent-primary, #3b82f6)' : 'none'}
+                                  color={isLiked ? 'var(--accent-primary, #3b82f6)' : '#808080'}
+                                />
+                              </button>
+                              <button
+                                type="button"
+                                className="daily-companion-play-btn"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  if (isCurrentActive) togglePlay();
+                                  else playSingleSong(item);
+                                }}
+                                title={isCurrentPlaying ? t('btnPause') : `${t('btnPlay')} ${item.title}`}
+                              >
+                                {isCurrentPlaying ? (
+                                  <Pause size={15} fill="currentColor" />
+                                ) : (
+                                  <Play size={15} fill="currentColor" style={{ marginLeft: '1px' }} />
+                                )}
+                              </button>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                </section>
               );
             })()}
 
             {/* ── Recently Played ──────────────────────── */}
             {playHistory.length > 0 && (
-              <section className="home-section">
-                <div className="section-header-v2">
+              <section className="home-section" id="recently-played-shelf">
+                <div className="section-header-v2" style={{ marginBottom: '14px' }}>
                   <div className="section-header-left">
-                    <span style={{ display: 'flex', alignItems: 'center', color: 'var(--text-secondary)' }}><Clock size={20} /></span>
-                    <h2 className="section-title-v2">{t('recentlyPlayed')}</h2>
+                    <span className="recent-header-icon" style={{ display: 'flex', alignItems: 'center' }}>
+                      <Clock size={20} />
+                    </span>
+                    <div>
+                      <h2 className="section-title-v2" style={{ margin: 0 }}>{t('recentlyPlayed')}</h2>
+                      <div style={{ fontSize: '12px', color: 'var(--text-secondary)', marginTop: '2px' }}>
+                        {playHistory.length} {t('songs')}
+                      </div>
+                    </div>
                   </div>
-                  <span className="show-all" onClick={() => setIsRecentExpanded(!isRecentExpanded)}>
-                    {isRecentExpanded ? t('showLess') : t('viewAll')}
-                  </span>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '14px' }}>
+                    <span
+                      className="show-all"
+                      style={{ fontSize: '12px', color: 'var(--text-muted)', cursor: 'pointer' }}
+                      onClick={() => {
+                        setPlayHistory([]);
+                        showToast(t('toastHistoryCleared'), 'success');
+                      }}
+                      title={t('clearHistory')}
+                    >
+                      {t('clearHistory')}
+                    </span>
+                    <span className="show-all" onClick={() => setIsRecentExpanded(!isRecentExpanded)}>
+                      {isRecentExpanded ? t('showLess') : t('viewAll')}
+                    </span>
+                  </div>
                 </div>
 
                 {isRecentExpanded ? (
                   <div className="card-expanded-grid">
-                    {playHistory.map((item, i) => (
-                      <div
-                        key={i}
-                        className={`music-card-v2 ${currentSong?.id === item.id ? 'music-card-v2-playing' : ''}`}
-                        onClick={() => playSingleSong(item)}
-                        onContextMenu={(e) => handleContextMenu(e, item)}
-                        draggable={true}
-                        onDragStart={(e) => { setDraggedGlobalSong(item); applyDragGhost(e, item); }}
-                        onDragEnd={(e) => { setDraggedGlobalSong(null); (e.currentTarget as HTMLElement).classList.remove('dragging-origin'); }}
-                      >
-                        <div className="card-v2-art">
-                          <img src={(getCleanThumbnail(item.thumbnail) || getHighResImage(item.cover))} alt={item.title} />
-                          {currentSong?.id === item.id && isPlaying ? (
-                            <div className="card-v2-eq">
-                              <div className="eq-bar" /><div className="eq-bar" /><div className="eq-bar" />
-                            </div>
-                          ) : (
-                            <button className="card-v2-play-btn">
-                              <Play size={18} fill="currentColor" style={{ marginLeft: '2px' }} />
+                    {playHistory.map((item, i) => {
+                      const isThisPlaying = currentSong?.id === item.id && isPlaying;
+                      const isThisCurrent = currentSong?.id === item.id;
+                      return (
+                        <div
+                          key={item.id || i}
+                          className={`music-card-v2 ${isThisCurrent ? 'music-card-v2-playing' : ''}`}
+                          onClick={() => {
+                            if (isThisCurrent) togglePlay();
+                            else playSingleSong(item);
+                          }}
+                          onContextMenu={(e) => handleContextMenu(e, item)}
+                          draggable={true}
+                          onDragStart={(e) => { setDraggedGlobalSong(item); applyDragGhost(e, item); }}
+                          onDragEnd={(e) => { setDraggedGlobalSong(null); (e.currentTarget as HTMLElement).classList.remove('dragging-origin'); }}
+                          title={isThisPlaying ? t('btnPause') : `${t('btnPlay')} ${item.title}`}
+                        >
+                          <div className="card-v2-art">
+                            <img src={(getCleanThumbnail(item.thumbnail) || getHighResImage(item.cover))} alt={item.title} loading="lazy" />
+                            {isThisPlaying && (
+                              <div className="card-v2-eq">
+                                <div className="eq-bar" /><div className="eq-bar" /><div className="eq-bar" />
+                              </div>
+                            )}
+                            <button
+                              type="button"
+                              className={`card-v2-play-btn ${isThisCurrent ? 'is-active' : ''}`}
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                if (isThisCurrent) togglePlay();
+                                else playSingleSong(item);
+                              }}
+                              title={isThisPlaying ? t('btnPause') : t('playSongBtn')}
+                            >
+                              {isThisPlaying ? (
+                                <Pause size={18} fill="currentColor" />
+                              ) : (
+                                <Play size={18} fill="currentColor" style={{ marginLeft: '1px' }} />
+                              )}
                             </button>
-                          )}
+                          </div>
+                          <div className="card-v2-info">
+                            <div className="card-v2-title" title={item.title}>{item.title}</div>
+                            <div className="card-v2-artist" title={item.artist}>{item.artist}</div>
+                          </div>
                         </div>
-                        <div className="card-v2-info">
-                          <div className="card-v2-title" title={item.title}>{item.title}</div>
-                          <div className="card-v2-artist">{item.artist}</div>
-                        </div>
-                      </div>
-                    ))}
+                      );
+                    })}
                   </div>
                 ) : (
                   <div className="slider-wrapper">
@@ -5627,34 +6711,54 @@ function App() {
                       <ChevronLeft size={20} />
                     </button>
                     <div className="card-scroll-container" ref={recentScrollRef}>
-                      {playHistory.map((item, i) => (
-                        <div
-                          key={i}
-                          className={`music-card-v2 ${currentSong?.id === item.id ? 'music-card-v2-playing' : ''}`}
-                          onClick={() => playSingleSong(item)}
-                          onContextMenu={(e) => handleContextMenu(e, item)}
-                          draggable={true}
-                          onDragStart={(e) => { setDraggedGlobalSong(item); applyDragGhost(e, item); }}
-                          onDragEnd={(e) => { setDraggedGlobalSong(null); (e.currentTarget as HTMLElement).classList.remove('dragging-origin'); }}
-                        >
-                          <div className="card-v2-art">
-                            <img src={(getCleanThumbnail(item.thumbnail) || getHighResImage(item.cover))} alt={item.title} />
-                            {currentSong?.id === item.id && isPlaying ? (
-                              <div className="card-v2-eq">
-                                <div className="eq-bar" /><div className="eq-bar" /><div className="eq-bar" />
-                              </div>
-                            ) : (
-                              <button className="card-v2-play-btn">
-                                <Play size={18} fill="currentColor" style={{ marginLeft: '2px' }} />
+                      {playHistory.map((item, i) => {
+                        const isThisPlaying = currentSong?.id === item.id && isPlaying;
+                        const isThisCurrent = currentSong?.id === item.id;
+                        return (
+                          <div
+                            key={item.id || i}
+                            className={`music-card-v2 ${isThisCurrent ? 'music-card-v2-playing' : ''}`}
+                            onClick={() => {
+                              if (isThisCurrent) togglePlay();
+                              else playSingleSong(item);
+                            }}
+                            onContextMenu={(e) => handleContextMenu(e, item)}
+                            draggable={true}
+                            onDragStart={(e) => { setDraggedGlobalSong(item); applyDragGhost(e, item); }}
+                            onDragEnd={(e) => { setDraggedGlobalSong(null); (e.currentTarget as HTMLElement).classList.remove('dragging-origin'); }}
+                            title={isThisPlaying ? t('btnPause') : `${t('btnPlay')} ${item.title}`}
+                          >
+                            <div className="card-v2-art">
+                              <img src={(getCleanThumbnail(item.thumbnail) || getHighResImage(item.cover))} alt={item.title} loading="lazy" />
+                              {isThisPlaying && (
+                                <div className="card-v2-eq">
+                                  <div className="eq-bar" /><div className="eq-bar" /><div className="eq-bar" />
+                                </div>
+                              )}
+                              <button
+                                type="button"
+                                className={`card-v2-play-btn ${isThisCurrent ? 'is-active' : ''}`}
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  if (isThisCurrent) togglePlay();
+                                  else playSingleSong(item);
+                                }}
+                                title={isThisPlaying ? t('btnPause') : t('playSongBtn')}
+                              >
+                                {isThisPlaying ? (
+                                  <Pause size={18} fill="currentColor" />
+                                ) : (
+                                  <Play size={18} fill="currentColor" style={{ marginLeft: '1px' }} />
+                                )}
                               </button>
-                            )}
+                            </div>
+                            <div className="card-v2-info">
+                              <div className="card-v2-title" title={item.title}>{item.title}</div>
+                              <div className="card-v2-artist" title={item.artist}>{item.artist}</div>
+                            </div>
                           </div>
-                          <div className="card-v2-info">
-                            <div className="card-v2-title" title={item.title}>{item.title}</div>
-                            <div className="card-v2-artist">{item.artist}</div>
-                          </div>
-                        </div>
-                      ))}
+                        );
+                      })}
                     </div>
                     <button className="slider-nav-btn slider-nav-right" onClick={() => scrollSlider(recentScrollRef, 'right')} aria-label="Scroll right">
                       <ChevronRight size={20} />
@@ -5664,91 +6768,7 @@ function App() {
               </section>
             )}
 
-            {/* ── Discover / Recommendations ───────────── */}
-            {playHistory.length > 0 && recommendations.length > 0 && (
-              <section className="home-section">
-                <div className="section-header-v2">
-                  <div className="section-header-left">
-                    <span style={{ display: 'flex', alignItems: 'center', color: 'var(--text-secondary)' }}><Zap size={20} /></span>
-                    <h2 className="section-title-v2">
-                      {(() => {
-                        if (playHistory.length === 0) return t('recommendations');
-                        const item = playHistory[0];
-                        let realArtist = item.artist || '';
-                        if (item.title && item.title.includes(' - ')) {
-                          realArtist = item.title.split(' - ')[0].trim();
-                        }
-                        return `${t('recommendations')} ${realArtist}`;
-                      })()}
-                    </h2>
-                  </div>
-                  <div style={{ display: 'flex', gap: '16px', alignItems: 'center' }}>
-                    <span className="show-all" onClick={() => setIsRecsExpanded(!isRecsExpanded)}>
-                      {isRecsExpanded ? t('showLess') : t('viewAll')}
-                    </span>
-                    <span className="show-all" onClick={() => startPlayingFromList(recommendations, 0)}>{t('playAll')}</span>
-                  </div>
-                </div>
 
-                {isRecsExpanded ? (
-                  <div className="card-expanded-grid">
-                    {recommendations.map((item, i) => (
-                      <div
-                        key={i}
-                        className="music-card-circle"
-                        onClick={() => startPlayingFromList(recommendations, i)}
-                        onContextMenu={(e) => handleContextMenu(e, item)}
-                      >
-                        <div className="card-circle-art">
-                          <img src={(getCleanThumbnail(item.thumbnail) || getHighResImage(item.cover))} alt={item.title} />
-                          <div className="card-circle-overlay">
-                            <button className="card-circle-play">
-                              <Play size={18} fill="currentColor" style={{ marginLeft: '2px' }} />
-                            </button>
-                          </div>
-                        </div>
-                        <div className="card-v2-info" style={{ textAlign: 'center' }}>
-                          <div className="card-v2-title" style={{ justifyContent: 'center' }} title={item.title}>{item.title}</div>
-                          <div className="card-v2-artist">{item.artist}</div>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                ) : (
-                  <div className="slider-wrapper">
-                    <button className="slider-nav-btn slider-nav-left" onClick={() => scrollSlider(recsScrollRef, 'left')} aria-label="Scroll left">
-                      <ChevronLeft size={20} />
-                    </button>
-                    <div className="card-scroll-container" ref={recsScrollRef}>
-                      {recommendations.map((item, i) => (
-                        <div
-                          key={i}
-                          className="music-card-circle"
-                          onClick={() => startPlayingFromList(recommendations, i)}
-                          onContextMenu={(e) => handleContextMenu(e, item)}
-                        >
-                          <div className="card-circle-art">
-                            <img src={(getCleanThumbnail(item.thumbnail) || getHighResImage(item.cover))} alt={item.title} />
-                            <div className="card-circle-overlay">
-                              <button className="card-circle-play">
-                                <Play size={18} fill="currentColor" style={{ marginLeft: '2px' }} />
-                              </button>
-                            </div>
-                          </div>
-                          <div className="card-v2-info" style={{ textAlign: 'center' }}>
-                            <div className="card-v2-title" style={{ justifyContent: 'center' }} title={item.title}>{item.title}</div>
-                            <div className="card-v2-artist">{item.artist}</div>
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                    <button className="slider-nav-btn slider-nav-right" onClick={() => scrollSlider(recsScrollRef, 'right')} aria-label="Scroll right">
-                      <ChevronRight size={20} />
-                    </button>
-                  </div>
-                )}
-              </section>
-            )}
 
             {/* ── Hits Sections ───────────── */}
             {(() => {
@@ -6229,7 +7249,7 @@ function App() {
             <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
               <div style={{ position: 'relative', width: '64px', height: '64px', borderRadius: '50%', backgroundColor: 'var(--bg-card, #1c1c1c)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '24px', fontWeight: 'bold', color: 'var(--text-primary)', border: '2px solid var(--border-color)' }}>
                 {getDiscordAvatar(discordUser) ? (
-                  <img src={getDiscordAvatar(discordUser)!} alt="avatar" style={{ width: '100%', height: '100%', borderRadius: '50%', objectFit: 'cover' }} />
+                  <img src={getDiscordAvatar(discordUser)!} alt="avatar" style={{ width: '100%', height: '100%', borderRadius: '50%', objectFit: 'cover' }} onError={(e) => handleAvatarError(e, discordUser.id, discordUser.username)} />
                 ) : (
                   <span>{(discordUser.global_name || discordUser.username).charAt(0).toUpperCase()}</span>
                 )}
@@ -6289,29 +7309,41 @@ function App() {
       {shareCodeResult && (
         <div className="modal-overlay" onClick={() => setShareCodeResult(null)}>
           <div className="modal" onClick={e => e.stopPropagation()} style={{ textAlign: 'center' }}>
-            <div style={{ fontSize: '40px', marginBottom: '8px' }}>🔗</div>
-            <h3 className="modal-title">Share Playlist</h3>
+            <div style={{
+              width: '56px',
+              height: '56px',
+              borderRadius: '50%',
+              background: 'rgba(59, 130, 246, 0.12)',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              margin: '0 auto 16px',
+              color: 'var(--accent-primary)'
+            }}>
+              <Share2 size={26} />
+            </div>
+            <h3 className="modal-title">{t('sharePlaylistTitle')}</h3>
             <p style={{ color: 'var(--text-secondary)', fontSize: '13px', marginBottom: '20px' }}>
-              Bagikan kode ini ke teman. Kode aktif selama 7 hari.
+              {t('sharePlaylistDesc')}
             </p>
             <div style={{ display: 'flex', alignItems: 'center', gap: '10px', background: 'var(--bg-card)', border: '1px solid var(--border-color)', borderRadius: '10px', padding: '14px 18px', marginBottom: '20px', justifyContent: 'center' }}>
               <span style={{ fontSize: '28px', fontWeight: 800, letterSpacing: '4px', color: 'var(--accent-primary)', fontFamily: 'monospace' }}>{shareCodeResult.code}</span>
               <button style={{ background: 'transparent', border: 'none', cursor: 'pointer', color: 'var(--text-secondary)', padding: '4px', display: 'flex', alignItems: 'center' }}
                 onMouseOver={e => e.currentTarget.style.color = 'var(--accent-primary)'}
                 onMouseOut={e => e.currentTarget.style.color = 'var(--text-secondary)'}
-                title="Copy kode"
+                title={t('copyCode')}
                 onClick={() => {
                   navigator.clipboard.writeText(shareCodeResult.code);
-                  showToast('Kode disalin ke clipboard! 📋', 'success');
+                  showToast(t('codeCopied'), 'success');
                 }}>
                 <Copy size={20} />
               </button>
             </div>
             <p style={{ color: 'var(--text-muted)', fontSize: '11px', marginBottom: '20px' }}>
-              Teman cukup tempel kode ini di tombol Import Playlist
+              {t('sharePlaylistHint')}
             </p>
             <div className="modal-actions" style={{ justifyContent: 'center' }}>
-              <button className="btn-secondary" onClick={() => setShareCodeResult(null)}>Tutup</button>
+              <button className="btn-secondary" onClick={() => setShareCodeResult(null)}>{t('close')}</button>
             </div>
           </div>
         </div>
@@ -6323,12 +7355,12 @@ function App() {
           <div className="modal" onClick={e => e.stopPropagation()}>
             <h3 className="modal-title">{t('importPlaylist')}</h3>
             <p style={{ color: 'var(--text-muted)', fontSize: '12px', marginBottom: '12px' }}>
-              Masukkan link playlist YouTube <em>atau</em> kode share (contoh: <span style={{ fontFamily: 'monospace', color: 'var(--accent-primary)' }}>DP-XXXXXX</span>)
+              {t('importPlaylistHint')}
             </p>
             <input
               className="modal-input"
               type="text"
-              placeholder="Link YouTube atau kode DP-XXXXXX..."
+              placeholder={t('importPlaylistPlaceholder')}
               value={importPlaylistUrl}
               onChange={e => setImportPlaylistUrl(e.target.value)}
               onKeyDown={e => e.key === 'Enter' && !isImporting && handleImportPlaylist()}
@@ -6370,15 +7402,42 @@ function App() {
               value={newPlaylistAvatar}
               onChange={e => setNewPlaylistAvatar(e.target.value)}
               onKeyDown={e => e.key === 'Enter' && createPlaylist()}
-              style={{ marginBottom: '8px' }}
+              style={{ marginBottom: '10px' }}
             />
-            <input type="file" className="modal-file-input" accept="image/*" onChange={(e) => {
-              if (e.target.files && e.target.files[0]) {
-                const p = (e.target.files[0] as any).path;
-                if (p) setNewPlaylistAvatar(`file:///${p.replace(/\\/g, '/')}`);
-                else setNewPlaylistAvatar(URL.createObjectURL(e.target.files[0]));
-              }
-            }} />
+            <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '14px' }}>
+              <input
+                id="modal-playlist-cover-upload"
+                type="file"
+                style={{ display: 'none' }}
+                accept="image/*"
+                onChange={(e) => {
+                  if (e.target.files && e.target.files[0]) {
+                    const p = (e.target.files[0] as any).path;
+                    if (p) setNewPlaylistAvatar(`file:///${p.replace(/\\/g, '/')}`);
+                    else setNewPlaylistAvatar(URL.createObjectURL(e.target.files[0]));
+                  }
+                }}
+              />
+              <label
+                htmlFor="modal-playlist-cover-upload"
+                className="btn-secondary"
+                style={{
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: '8px',
+                  cursor: 'pointer',
+                  padding: '6px 14px',
+                  fontSize: '12px',
+                  borderRadius: '6px'
+                }}
+              >
+                <Upload size={14} />
+                <span>{newPlaylistAvatar ? t('changeFile') : t('chooseFile')}</span>
+              </label>
+              <span style={{ fontSize: '12px', color: 'var(--text-muted)', maxWidth: '200px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                {newPlaylistAvatar ? t('fileChosen') : t('noFileChosen')}
+              </span>
+            </div>
 
             <div className="modal-actions">
               <button className="btn-secondary" onClick={() => setShowCreatePlaylist(false)}>{t('cancel')}</button>
@@ -6406,7 +7465,9 @@ function App() {
                 {playlists.filter(pl => pl.discordId === discordUser?.id || pl.collaborators?.includes(discordUser?.id || '')).map(pl => (
                   <div key={pl.id} className="modal-playlist-item" onClick={() => addSongToPlaylist(pl.id, addToPlaylistSong)}>
                     <div className="modal-playlist-art">
-                      {pl.avatar ? (
+                      {isMixPlaylist(pl) ? (
+                        <img src={getMixPlaylistCover(pl, { songs: pl.songs, playHistory, likedSongs })} alt="" />
+                      ) : pl.avatar ? (
                         <img src={pl.avatar} alt="" />
                       ) : pl.songs[0] ? (
                         <img src={(getCleanThumbnail(pl.songs[0].thumbnail) || getHighResImage(pl.songs[0].cover))} alt="" />
@@ -6587,19 +7648,19 @@ function App() {
             <div className="modal" onClick={e => e.stopPropagation()} style={{ maxWidth: '480px' }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '20px', color: 'var(--accent-primary)' }}>
                 <Users size={24} />
-                <h3 className="modal-title" style={{ margin: 0 }}>Collaborative Playlist</h3>
+                <h3 className="modal-title" style={{ margin: 0 }}>{t('collabModalTitle')}</h3>
               </div>
               
               <p style={{ color: 'var(--text-secondary)', fontSize: '13px', marginBottom: '20px' }}>
-                Manage collaborators for <strong>{pl.name}</strong>. Collaborators can add, delete, and reorder songs.
+                {t('collabModalDesc', { '0': pl.name })}
               </p>
 
               {/* Current Collaborators */}
               <div style={{ marginBottom: '24px' }}>
-                <label style={{ display: 'block', fontSize: '12px', color: 'var(--text-secondary)', marginBottom: '8px', fontWeight: 'bold' }}>Current Collaborators ({currentCollabs.length})</label>
+                <label style={{ display: 'block', fontSize: '12px', color: 'var(--text-secondary)', marginBottom: '8px', fontWeight: 'bold' }}>{t('currentCollabsLabel', { '0': String(currentCollabs.length) })}</label>
                 {currentCollabs.length === 0 ? (
                   <div style={{ padding: '12px', background: 'var(--bg-card-hover)', borderRadius: '8px', fontSize: '12px', color: 'var(--text-muted)', textAlign: 'center' }}>
-                    No collaborators yet.
+                    {t('noCollabsYet')}
                   </div>
                 ) : (
                   <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
@@ -6609,7 +7670,7 @@ function App() {
                         <div key={cid} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '8px 12px', background: 'var(--bg-card-hover)', borderRadius: '8px' }}>
                           <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                             {friend?.avatarUrl ? (
-                              <img src={friend.avatarUrl} alt="" style={{ width: 24, height: 24, borderRadius: '50%' }} />
+                              <img src={friend.avatarUrl || getDefaultDiscordAvatar(friend.discordId, friend.username)} alt="" style={{ width: 24, height: 24, borderRadius: '50%' }} onError={(e) => handleAvatarError(e, friend.discordId, friend.username)} />
                             ) : (
                               <div style={{ width: 24, height: 24, borderRadius: '50%', background: 'var(--surface-color)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '10px' }}>
                                 {friend?.username?.charAt(0).toUpperCase() || 'U'}
@@ -6624,9 +7685,9 @@ function App() {
                                 await (window as any).electronAPI.savePlaylist(updated);
                                 setPlaylists(prev => prev.map(p => p.id === pl.id ? updated : p));
                               }
-                              showToast('Collaborator removed', 'success');
+                              showToast(t('collaboratorRemoved'), 'success');
                             }}>
-                              Remove
+                              {t('removeCollab')}
                             </button>
                           )}
                         </div>
@@ -6639,7 +7700,7 @@ function App() {
               {/* Add Collaborator */}
               {isMyPlaylist && (
                 <div style={{ marginBottom: '24px' }}>
-                  <label style={{ display: 'block', fontSize: '12px', color: 'var(--text-secondary)', marginBottom: '8px', fontWeight: 'bold' }}>Invite Online Friends</label>
+                  <label style={{ display: 'block', fontSize: '12px', color: 'var(--text-secondary)', marginBottom: '8px', fontWeight: 'bold' }}>{t('inviteFriendsLabel')}</label>
 
                   {/* Online Friends List */}
                   {onlineUsers.filter(u => u.discordId !== discordUser?.id && !currentCollabs.includes(u.discordId)).length > 0 ? (
@@ -6647,7 +7708,7 @@ function App() {
                       {onlineUsers.filter(u => u.discordId !== discordUser?.id && !currentCollabs.includes(u.discordId)).map(friend => (
                         <div key={friend.discordId} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '6px 10px', background: 'rgba(255,255,255,0.02)', borderRadius: '6px' }}>
                           <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                            <img src={friend.avatarUrl} alt="" style={{ width: 20, height: 20, borderRadius: '50%' }} />
+                            <img src={friend.avatarUrl || getDefaultDiscordAvatar(friend.discordId, friend.username)} alt="" style={{ width: 20, height: 20, borderRadius: '50%' }} onError={(e) => handleAvatarError(e, friend.discordId, friend.username)} />
                             <span style={{ fontSize: '12px' }}>{friend.username}</span>
                           </div>
                           <button className="btn-secondary" style={{ padding: '3px 6px', fontSize: '10px' }} onClick={async () => {
@@ -6659,24 +7720,24 @@ function App() {
                                 discordUser.global_name || discordUser.username,
                                 friend.discordId
                               );
-                              showToast(`Invitation sent to ${friend.username}!`, 'success');
+                              showToast(t('inviteSent'), 'success');
                             }
                           }}>
-                            Invite
+                            {t('sendInvite')}
                           </button>
                         </div>
                       ))}
                     </div>
                   ) : (
                     <div style={{ padding: '12px', background: 'var(--bg-card-hover)', borderRadius: '8px', fontSize: '12px', color: 'var(--text-muted)', textAlign: 'center' }}>
-                      No other friends online to invite.
+                      {t('noCollabsYet')}
                     </div>
                   )}
                 </div>
               )}
 
               <div className="modal-actions" style={{ marginTop: '24px' }}>
-                <button className="btn-secondary" onClick={() => setShowCollabModal(false)}>Close</button>
+                <button className="btn-secondary" onClick={() => setShowCollabModal(false)}>{t('close')}</button>
               </div>
             </div>
           </div>
@@ -6892,6 +7953,7 @@ function App() {
                   }}
                   onContextMenu={(e) => {
                     e.preventDefault();
+                    setContextMenu(null);
                     setPlaylistContextMenu({ x: e.clientX, y: e.clientY, playlist: pl });
                   }}
                   onDragOver={(e) => {
@@ -6922,7 +7984,13 @@ function App() {
                   }}
                 >
                   <div className="sidebar-item-img">
-                    {pl.avatar ? (
+                    {isMixPlaylist(pl) ? (
+                      <img
+                        src={getMixPlaylistCover(pl, { songs: pl.songs, playHistory, likedSongs })}
+                        alt="cover"
+                        style={{ width: '100%', height: '100%', objectFit: 'cover', borderRadius: '4px' }}
+                      />
+                    ) : pl.avatar ? (
                       <img
                         src={pl.avatar}
                         alt="cover"
@@ -7096,7 +8164,7 @@ function App() {
                                 <div style={{ fontSize: '11px', fontWeight: 600, color: 'var(--text-secondary)', marginBottom: '8px', padding: '0 4px', marginTop: '12px' }}>{t('partyMembers') || 'Party Members'}</div>
                                 {partyAvatars.map(u => (
                                   <div key={u.id} className="party-popup-member hover-bg" style={{ display: 'flex', alignItems: 'center', padding: '6px 4px', borderRadius: '4px', position: 'relative', cursor: 'pointer' }} onClick={() => navigate('profile', { profileId: u.id })}>
-                                    <img src={u.url} alt={u.name} style={{ width: '24px', height: '24px', borderRadius: '50%', marginRight: '8px', objectFit: 'cover' }} />
+                                    <img src={u.url || getDefaultDiscordAvatar(u.id, u.name)} alt={u.name} style={{ width: '24px', height: '24px', borderRadius: '50%', marginRight: '8px', objectFit: 'cover' }} onError={(e) => handleAvatarError(e, u.id, u.name)} />
                                     <div style={{ flex: 1, fontSize: '12px', color: 'var(--text-primary)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
                                       {u.name}
                                       {effectivePartyId === u.id && <span style={{ fontSize: '10px', color: 'var(--accent-primary)', marginLeft: '6px' }}>({t('partyHost')})</span>}
@@ -7163,6 +8231,7 @@ function App() {
                                               zIndex: partyAvatars.length - idx,
                                               objectFit: 'cover'
                                             }}
+                                            onError={(e) => handleAvatarError(e, av.id, av.name)}
                                           />
                                         ))}
                                       </div>
@@ -7228,7 +8297,7 @@ function App() {
                                 standaloneFriends.map(user => (
                                   <div key={user.discordId} className="friend-item" onClick={() => { navigate('profile', { profileId: user.discordId }); }} style={{ cursor: 'pointer' }}>
                                     <div className="friend-avatar-container" style={{ position: 'relative' }}>
-                                      <img src={user.avatarUrl || `https://ui-avatars.com/api/?name=${user.username}`} alt={user.username} className="friend-avatar" />
+                                      <img src={user.avatarUrl || getDefaultDiscordAvatar(user.discordId, user.username)} alt={user.username} className="friend-avatar" onError={(e) => handleAvatarError(e, user.discordId, user.username)} />
                                       <div className={`status-dot-avatar status-dot ${user.status || 'online'}`}></div>
                                     </div>
                                     <div className="friend-info">
@@ -7311,7 +8380,7 @@ function App() {
             <button className="user-profile-btn" onClick={() => { if (discordUser) { navigate('profile', { profileId: discordUser.id }); setShowLogoutDropdown(false); } else { setShowLogoutDropdown(!showLogoutDropdown); } }} onContextMenu={(e) => { e.preventDefault(); setShowLogoutDropdown(!showLogoutDropdown); setShowProfileStats(false); }} title={discordUser ? `` : 'Login'}>
               <div className="user-avatar" style={{ position: 'relative' }}>
                 {discordUser && getDiscordAvatar(discordUser) ? (
-                  <img src={getDiscordAvatar(discordUser)!} alt="avatar" style={{ width: '100%', height: '100%', borderRadius: '50%', objectFit: 'cover' }} />
+                  <img src={getDiscordAvatar(discordUser)!} alt="avatar" style={{ width: '100%', height: '100%', borderRadius: '50%', objectFit: 'cover' }} onError={(e) => handleAvatarError(e, discordUser.id, discordUser.username)} />
                 ) : (
                   <span>{discordUser ? (discordUser.global_name || discordUser.username).charAt(0).toUpperCase() : 'DP'}</span>
                 )}
@@ -7532,7 +8601,8 @@ function App() {
                                         if (resData && resData.results && resData.results.length > 0) {
                                           let candidates = resData.results.filter((item: any) => item.duration >= 50 && item.duration <= 720);
                                           candidates = rankAudioResults(candidates, songToCache.title, songToCache.duration || 0);
-                                          const validYt = candidates[0] || resData.results[0];
+                                          const studioCandidates = candidates.filter((item: any) => !isUnwantedTrackVariant(item.title, item.artist));
+                                          const validYt = studioCandidates[0] || candidates[0] || resData.results[0];
                                           if (validYt) {
                                             songToCache.id = validYt.id;
                                           }
@@ -7578,7 +8648,7 @@ function App() {
                   }}
                   title={t('myProfile')}
                 >
-                  <img src={discordUser.avatar ? `https://cdn.discordapp.com/avatars/${discordUser.id}/${discordUser.avatar}.png` : `https://ui-avatars.com/api/?name=${discordUser.username}`} alt="Profile" style={{ width: '36px', height: '36px', borderRadius: '50%', objectFit: 'cover' }} />
+                  <img src={discordUser.avatar ? `https://cdn.discordapp.com/avatars/${discordUser.id}/${discordUser.avatar}.png` : getDefaultDiscordAvatar(discordUser.id, discordUser.username)} alt="Profile" style={{ width: '36px', height: '36px', borderRadius: '50%', objectFit: 'cover' }} onError={(e) => handleAvatarError(e, discordUser.id, discordUser.username)} />
                 </div>
               )}
               {updateStatus !== 'none' && (
@@ -7989,7 +9059,7 @@ function App() {
                                       <div style={{ fontSize: '11px', fontWeight: 600, color: 'var(--text-secondary)', marginBottom: '8px', padding: '0 4px' }}>{t('partyMembers') || 'Party Members'}</div>
                                       {group.map(u => (
                                         <div key={u.discordId} className="party-popup-member hover-bg" style={{ display: 'flex', alignItems: 'center', padding: '6px 4px', borderRadius: '4px', position: 'relative', cursor: 'pointer' }} onClick={() => navigate('profile', { profileId: u.discordId })}>
-                                          <img src={u.avatarUrl || `https://ui-avatars.com/api/?name=${u.username}`} alt={u.username} style={{ width: '24px', height: '24px', borderRadius: '50%', marginRight: '8px', objectFit: 'cover' }} />
+                                          <img src={u.avatarUrl || getDefaultDiscordAvatar(u.discordId, u.username)} alt={u.username} style={{ width: '24px', height: '24px', borderRadius: '50%', marginRight: '8px', objectFit: 'cover' }} onError={(e) => handleAvatarError(e, u.discordId, u.username)} />
                                           <div style={{ flex: 1, fontSize: '12px', color: 'var(--text-primary)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
                                             {u.username}
                                             {targetId === u.discordId && <span style={{ fontSize: '10px', color: 'var(--accent-primary)', marginLeft: '6px' }}>({t('partyHost')})</span>}
@@ -8005,7 +9075,7 @@ function App() {
                               return (
                                 <div key={user.discordId} className="friend-item" onClick={() => { navigate('profile', { profileId: user.discordId }); }} style={{ cursor: 'pointer' }}>
                                   <div className="friend-avatar-container" style={{ position: 'relative' }}>
-                                    <img src={user.avatarUrl || `https://ui-avatars.com/api/?name=${user.username}`} alt={user.username} className="friend-avatar" />
+                                    <img src={user.avatarUrl || getDefaultDiscordAvatar(user.discordId, user.username)} alt={user.username} className="friend-avatar" onError={(e) => handleAvatarError(e, user.discordId, user.username)} />
                                     <div className={`status-dot-avatar status-dot ${user.status || 'online'}`}></div>
                                   </div>
                                   <div className="friend-info">
@@ -8325,7 +9395,7 @@ function App() {
 
                         {song.addedBy && !!(activePartyId || (discordUser && onlineUsers.some(u => u.partyId === discordUser.id))) && (
                           <div className="queue-added-by" style={{ marginLeft: '4px', flexShrink: 0 }} title={`${t('addedByUser')} ${song.addedBy.name}`}>
-                            <img src={song.addedBy.avatarUrl} alt={song.addedBy.name} style={{ width: '20px', height: '20px', borderRadius: '50%', objectFit: 'cover', border: '1px solid var(--border-color)' }} />
+                            <img src={song.addedBy.avatarUrl || getDefaultDiscordAvatar(song.addedBy.id, song.addedBy.name)} alt={song.addedBy.name} style={{ width: '20px', height: '20px', borderRadius: '50%', objectFit: 'cover', border: '1px solid var(--border-color)' }} onError={(e) => handleAvatarError(e, song.addedBy.id, song.addedBy.name)} />
                           </div>
                         )}
 
@@ -8529,113 +9599,121 @@ function App() {
           </div>
         </div>
       )}
-      {contextMenu && (
-        <div className="context-menu" style={{ top: contextMenu.y, left: contextMenu.x, position: 'fixed', zIndex: 9999 }}>
-          {!(isGuest && activePartyId) && (
-            <div className="context-menu-item" onClick={() => {
-              const newQ = [...queue];
-              const augSong = augmentSongWithUser(contextMenu.song);
-              newQ.splice(currentIndex + 1, 0, augSong);
-              setQueue(newQ);
-              setOriginalQueue(newQ);
-              showToast(t('toastPlayNext'));
-            }}>
-              <Play size={16} /> {t('playNext')}
-            </div>
-          )}
-          <div className="context-menu-item" onClick={async () => {
-            if (isGuest && activePartyId) {
-              await (window as any).electronAPI.sendQueueRequest(activePartyId, discordUser?.id, discordUser?.global_name || discordUser?.username, contextMenu.song);
-              showToast(`Berhasil meminta Host untuk menambahkan "${contextMenu.song.title}" ke antrean!`, 'success');
-              setContextMenu(null);
-              return;
-            }
-            const augSong = augmentSongWithUser(contextMenu.song);
-            setQueue(prev => [...prev, augSong]);
-            setOriginalQueue(prev => [...prev, augSong]);
-            if (currentIndex === -1) {
-              setCurrentIndex(0);
-              executePlay(augSong);
-            } else {
-              showToast(t('toastAddedToQueue'));
-            }
-          }}>
-            <ListMusic size={16} /> {t('addToQueue')}
-          </div>
-          <div className="context-menu-item" onClick={() => {
-            setAddToPlaylistSong(contextMenu.song);
-            setContextMenu(null);
-          }}>
-            <FolderPlus size={16} /> {t('addToPlaylist')}
-          </div>
-          <div className="context-menu-item" onClick={() => {
-            setNewCapsule(prev => ({ ...prev, songs: [...prev.songs, contextMenu.song] }));
-            setShowTimeCapsuleModal(true);
-            setContextMenu(null);
-          }}>
-            <Hourglass size={16} /> {t('timeCapsule')}
-          </div>
-          {!contextMenu.song.isPodcast && (
-            <div className="context-menu-item" onClick={() => {
-              if ((window as any).electronAPI?.cacheAudio) {
-                let streamUrl = `${API_BASE_URL}/api/stream?id=${contextMenu.song.id}`;
-                if (settings.audioQuality && settings.audioQuality !== 'auto') {
-                  streamUrl += `&quality=${settings.audioQuality}`;
-                }
-                (window as any).electronAPI.cacheAudio(contextMenu.song, streamUrl);
-                showToast(`${t('toastDownloadStarted')} "${contextMenu.song.title}"...`, 'success');
-              } else {
-                showToast(t('downloadDesktopOnly'), 'error');
+      {contextMenu && (() => {
+        const left = Math.max(10, Math.min(contextMenu.x, window.innerWidth - 230));
+        const top = Math.max(10, Math.min(contextMenu.y, window.innerHeight - 260));
+        return (
+          <div className="context-menu" style={{ left: `${left}px`, top: `${top}px`, position: 'fixed', zIndex: 9999 }}>
+            {!(isGuest && activePartyId) && (
+              <div className="context-menu-item" onClick={() => {
+                const newQ = [...queue];
+                const augSong = augmentSongWithUser(contextMenu.song);
+                newQ.splice(currentIndex + 1, 0, augSong);
+                setQueue(newQ);
+                setOriginalQueue(newQ);
+                showToast(t('toastPlayNext'));
+              }}>
+                <Play size={16} /> {t('playNext')}
+              </div>
+            )}
+            <div className="context-menu-item" onClick={async () => {
+              if (isGuest && activePartyId) {
+                await (window as any).electronAPI.sendQueueRequest(activePartyId, discordUser?.id, discordUser?.global_name || discordUser?.username, contextMenu.song);
+                showToast(`Berhasil meminta Host untuk menambahkan "${contextMenu.song.title}" ke antrean!`, 'success');
+                setContextMenu(null);
+                return;
               }
+              const augSong = augmentSongWithUser(contextMenu.song);
+              setQueue(prev => [...prev, augSong]);
+              setOriginalQueue(prev => [...prev, augSong]);
+              if (currentIndex === -1) {
+                setCurrentIndex(0);
+                executePlay(augSong);
+              } else {
+                showToast(t('toastAddedToQueue'));
+              }
+            }}>
+              <ListMusic size={16} /> {t('addToQueue')}
+            </div>
+            <div className="context-menu-item" onClick={() => {
+              setAddToPlaylistSong(contextMenu.song);
               setContextMenu(null);
             }}>
-              <DownloadCloud size={16} /> {t('downloadSong')}
+              <FolderPlus size={16} /> {t('addToPlaylist')}
             </div>
-          )}
-        </div>
-      )}
-
-      {/* Playlist Context Menu */}
-      {playlistContextMenu && (
-        <div className="context-menu" style={{ left: playlistContextMenu.x, top: playlistContextMenu.y }}>
-          <div className="context-menu-item" onClick={() => {
-            const pl = playlistContextMenu.playlist;
-            if ((window as any).electronAPI?.cacheAudio) {
-              const toDownload = pl.songs.filter((s: any) => !downloadedSongs.some(ds => ds.id === s.id) && !activeDownloads[s.id]);
-              if (toDownload.length === 0) {
-                showToast('Semua lagu sudah diunduh', 'success');
-              } else {
-                showToast(`Mulai mengunduh ${toDownload.length} lagu...`, 'success');
-                toDownload.forEach((song: any) => {
-                  let streamUrl = `${API_BASE_URL}/api/stream?id=${song.id}`;
+            <div className="context-menu-item" onClick={() => {
+              setNewCapsule(prev => ({ ...prev, songs: [...prev.songs, contextMenu.song] }));
+              setShowTimeCapsuleModal(true);
+              setContextMenu(null);
+            }}>
+              <Hourglass size={16} /> {t('timeCapsule')}
+            </div>
+            {!contextMenu.song.isPodcast && (
+              <div className="context-menu-item" onClick={() => {
+                if ((window as any).electronAPI?.cacheAudio) {
+                  let streamUrl = `${API_BASE_URL}/api/stream?id=${contextMenu.song.id}`;
                   if (settings.audioQuality && settings.audioQuality !== 'auto') {
                     streamUrl += `&quality=${settings.audioQuality}`;
                   }
-                  (window as any).electronAPI.cacheAudio(song, streamUrl);
-                });
-              }
-            }
-            setPlaylistContextMenu(null);
-          }}>
-            <DownloadCloud size={16} /> Download All
+                  (window as any).electronAPI.cacheAudio(contextMenu.song, streamUrl);
+                  showToast(`${t('toastDownloadStarted')} "${contextMenu.song.title}"...`, 'success');
+                } else {
+                  showToast(t('downloadDesktopOnly'), 'error');
+                }
+                setContextMenu(null);
+              }}>
+                <DownloadCloud size={16} /> {t('downloadSong')}
+              </div>
+            )}
           </div>
-          {playlistContextMenu.playlist.discordId === discordUser?.id ? (
+        );
+      })()}
+
+      {/* Playlist Context Menu */}
+      {playlistContextMenu && (() => {
+        const left = Math.max(10, Math.min(playlistContextMenu.x, window.innerWidth - 210));
+        const top = Math.max(10, Math.min(playlistContextMenu.y, window.innerHeight - 120));
+        return (
+          <div className="context-menu" style={{ left: `${left}px`, top: `${top}px`, position: 'fixed', zIndex: 9999 }}>
             <div className="context-menu-item" onClick={() => {
-              setPlaylistToDelete(playlistContextMenu.playlist.id);
+              const pl = playlistContextMenu.playlist;
+              if ((window as any).electronAPI?.cacheAudio) {
+                const toDownload = pl.songs.filter((s: any) => !downloadedSongs.some(ds => ds.id === s.id) && !activeDownloads[s.id]);
+                if (toDownload.length === 0) {
+                  showToast(t('allSongsDownloaded'), 'success');
+                } else {
+                  showToast(t('startDownloadingSongs', { '0': String(toDownload.length) }), 'success');
+                  toDownload.forEach((song: any) => {
+                    let streamUrl = `${API_BASE_URL}/api/stream?id=${song.id}`;
+                    if (settings.audioQuality && settings.audioQuality !== 'auto') {
+                      streamUrl += `&quality=${settings.audioQuality}`;
+                    }
+                    (window as any).electronAPI.cacheAudio(song, streamUrl);
+                  });
+                }
+              }
               setPlaylistContextMenu(null);
-            }} style={{ color: '#ff5555' }}>
-              <Trash2 size={16} /> {t('deletePlaylist')}
+            }}>
+              <DownloadCloud size={16} /> {t('downloadAll')}
             </div>
-          ) : (
-            <div className="context-menu-item" onClick={() => {
-              setPlaylistToRemove(playlistContextMenu.playlist.id);
-              setPlaylistContextMenu(null);
-            }} style={{ color: '#ff5555' }}>
-              <Trash2 size={16} /> {t('removeFromLibrary')}
-            </div>
-          )}
-        </div>
-      )}
+            {playlistContextMenu.playlist.discordId === discordUser?.id ? (
+              <div className="context-menu-item" onClick={() => {
+                setPlaylistToDelete(playlistContextMenu.playlist.id);
+                setPlaylistContextMenu(null);
+              }} style={{ color: '#ff5555' }}>
+                <Trash2 size={16} /> {t('deletePlaylist')}
+              </div>
+            ) : (
+              <div className="context-menu-item" onClick={() => {
+                setPlaylistToRemove(playlistContextMenu.playlist.id);
+                setPlaylistContextMenu(null);
+              }} style={{ color: '#ff5555' }}>
+                <Trash2 size={16} /> {t('removeFromLibrary')}
+              </div>
+            )}
+          </div>
+        );
+      })()}
 
       {/* Floating Download Manager UI */}
       {Object.keys(activeDownloads).length > 0 && (
@@ -8677,26 +9755,44 @@ function App() {
 
       {/* Vibe Check Popup */}
       {showVibeCheck && (
-        <div className="vibe-check-overlay">
-          <div className="vibe-check-modal">
-            <h3>{t('vibeCheckTitle')}</h3>
-            <p>{t('vibeCheckPrompt')}</p>
-            <div className="vibe-options">
-              {['happy', 'sad', 'chill', 'energetic'].map(mood => (
-                <button key={mood} className="vibe-btn" onClick={() => {
-                  if ((window as any).electronAPI?.trackMood) {
-                    (window as any).electronAPI.trackMood(mood);
-                  }
-                  setShowVibeCheck(false);
-                  showToast('Mood tersimpan!', 'success');
-                }}>
-                  {t(`mood${mood.charAt(0).toUpperCase() + mood.slice(1)}` as any)}
-                </button>
-              ))}
-            </div>
+        <div className="vibe-check-overlay" onClick={() => setShowVibeCheck(false)}>
+          <div className="vibe-check-modal" onClick={e => e.stopPropagation()}>
             <button className="vibe-close-btn" onClick={() => setShowVibeCheck(false)}>
               <X size={20} />
             </button>
+
+            <h3>{t('vibeCheckTitle')}</h3>
+            <p>{t('vibeCheckPrompt')}</p>
+            <div className="vibe-options">
+              {(['chill', 'happy', 'energetic', 'sad'] as VibeType[]).map(mood => {
+                const targetId = `vibe_temp_${mood}`;
+                const vPl = madeForYouPlaylists.find(p => p.id === targetId);
+                const cfg = VIBE_CONFIGS[mood];
+                return (
+                  <button
+                    key={mood}
+                    className="vibe-btn"
+                    style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px' }}
+                    onClick={() => {
+                      if ((window as any).electronAPI?.trackMood) {
+                        (window as any).electronAPI.trackMood(mood);
+                      }
+                      setSelectedVibeMood(mood);
+                      localStorage.setItem('donpollo_current_vibe', mood);
+                      setShowVibeCheck(false);
+                      if (FEATURE_FLAGS.ENABLE_PLAYLIST_MIX && vPl) {
+                        openMadeForYouPlaylist(vPl);
+                      } else {
+                        showToast(t('moodSaved') || 'Mood tersimpan!', 'success');
+                      }
+                    }}
+                  >
+                    {renderMixIcon(cfg?.iconName || mood, 16)}
+                    <span>{t(`mood${mood.charAt(0).toUpperCase() + mood.slice(1)}` as any)}</span>
+                  </button>
+                );
+              })}
+            </div>
           </div>
         </div>
       )}

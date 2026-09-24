@@ -267,6 +267,243 @@
   color: var(--accent-text, #000);
 }
 
+/* ── Minimalist Overrides for Made For You & Daily Mix ── */
+.theme-minimalist .mfy-shelf-container .mfy-header-icon,
+.theme-minimalist .daily-shelf-container .daily-header-icon {
+  color: #ffffff !important;
+  filter: none !important;
+}
+
+.theme-minimalist .mfy-shelf-container .section-title-v2,
+.theme-minimalist .daily-shelf-container .section-title-v2 {
+  color: #ffffff !important;
+}
+
+.theme-minimalist .mfy-mood-tabs {
+  gap: 6px !important;
+}
+
+.theme-minimalist .mfy-mood-tab-btn {
+  background: rgba(255, 255, 255, 0.05) !important;
+  border: 1px solid rgba(255, 255, 255, 0.1) !important;
+  color: #888888 !important;
+  border-radius: 20px !important;
+  transition: all 0.15s ease !important;
+}
+
+.theme-minimalist .mfy-mood-tab-btn:hover {
+  background: rgba(255, 255, 255, 0.12) !important;
+  color: #ffffff !important;
+  border-color: rgba(255, 255, 255, 0.2) !important;
+}
+
+.theme-minimalist .mfy-mood-tab-btn.active {
+  background: #ffffff !important;
+  border-color: #ffffff !important;
+  color: #000000 !important;
+  font-weight: 700 !important;
+}
+
+.theme-minimalist .mfy-mood-tab-btn.active svg {
+  color: #000000 !important;
+}
+
+.theme-minimalist .mfy-spotlight-card,
+.theme-minimalist .mfy-companion-card,
+.theme-minimalist .daily-hero-card,
+.theme-minimalist .daily-companion-card {
+  background: #181818 !important;
+  border: 1px solid rgba(255, 255, 255, 0.08) !important;
+  border-radius: 8px !important;
+  box-shadow: none !important;
+  transition: background 0.15s ease, border-color 0.15s ease !important;
+}
+
+.theme-minimalist .mfy-spotlight-card:hover,
+.theme-minimalist .mfy-companion-card:hover,
+.theme-minimalist .daily-hero-card:hover,
+.theme-minimalist .daily-companion-card:hover {
+  background: #222222 !important;
+  border-color: rgba(255, 255, 255, 0.18) !important;
+}
+
+.theme-minimalist .daily-hero-card.is-active,
+.theme-minimalist .daily-companion-card.is-active {
+  background: #1e1e1e !important;
+  border-color: rgba(255, 255, 255, 0.3) !important;
+}
+
+.theme-minimalist .mfy-spotlight-badge,
+.theme-minimalist .daily-companion-badge,
+.theme-minimalist .daily-companion-badge.badge-recently-played,
+.theme-minimalist .daily-companion-badge.badge-trending,
+.theme-minimalist .daily-companion-badge.badge-favorite,
+.theme-minimalist .daily-companion-badge.badge-suggested {
+  color: #888888 !important;
+  font-weight: 700 !important;
+}
+
+.theme-minimalist .mfy-spotlight-title,
+.theme-minimalist .daily-hero-title,
+.theme-minimalist .mfy-companion-title,
+.theme-minimalist .daily-companion-title {
+  color: #ffffff !important;
+}
+
+.theme-minimalist .daily-hero-card.is-active .daily-hero-title,
+.theme-minimalist .daily-companion-card.is-active .daily-companion-title,
+.theme-minimalist .mfy-track-row.is-active .mfy-track-title {
+  color: #ffffff !important;
+  font-weight: 700 !important;
+}
+
+.theme-minimalist .mfy-spotlight-desc,
+.theme-minimalist .mfy-companion-desc,
+.theme-minimalist .mfy-companion-note,
+.theme-minimalist .daily-hero-artist,
+.theme-minimalist .daily-companion-artist,
+.theme-minimalist .mfy-track-artist,
+.theme-minimalist .mfy-track-duration {
+  color: #888888 !important;
+}
+
+.theme-minimalist .mfy-btn-play-all,
+.theme-minimalist .daily-btn-play,
+.theme-minimalist .mfy-companion-play-btn,
+.theme-minimalist .daily-companion-play-btn {
+  background: #ffffff !important;
+  color: #000000 !important;
+  border: none !important;
+  font-weight: 700 !important;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3) !important;
+}
+
+.theme-minimalist .mfy-btn-play-all:hover,
+.theme-minimalist .daily-btn-play:hover {
+  background: #e6e6e6 !important;
+  color: #000000 !important;
+  transform: scale(1.03) !important;
+}
+
+.theme-minimalist .mfy-companion-play-btn:hover,
+.theme-minimalist .daily-companion-play-btn:hover {
+  background: #e6e6e6 !important;
+  color: #000000 !important;
+  transform: scale(1.08) !important;
+}
+
+.theme-minimalist .mfy-btn-play-all svg,
+.theme-minimalist .daily-btn-play svg,
+.theme-minimalist .mfy-companion-play-btn svg,
+.theme-minimalist .daily-companion-play-btn svg {
+  color: #000000 !important;
+  fill: #000000 !important;
+}
+
+.theme-minimalist .mfy-btn-secondary {
+  background: rgba(255, 255, 255, 0.06) !important;
+  border: 1px solid rgba(255, 255, 255, 0.12) !important;
+  color: #ffffff !important;
+}
+
+.theme-minimalist .mfy-btn-secondary:hover {
+  background: rgba(255, 255, 255, 0.12) !important;
+  border-color: rgba(255, 255, 255, 0.22) !important;
+}
+
+.theme-minimalist .daily-btn-icon,
+.theme-minimalist .daily-companion-icon-btn {
+  background: rgba(255, 255, 255, 0.06) !important;
+  border: 1px solid rgba(255, 255, 255, 0.1) !important;
+  color: #888888 !important;
+}
+
+.theme-minimalist .daily-btn-icon:hover,
+.theme-minimalist .daily-companion-icon-btn:hover {
+  background: rgba(255, 255, 255, 0.12) !important;
+  color: #ffffff !important;
+}
+
+.theme-minimalist .daily-btn-icon.liked,
+.theme-minimalist .daily-companion-icon-btn.liked {
+  color: #ffffff !important;
+  border-color: rgba(255, 255, 255, 0.25) !important;
+}
+
+.theme-minimalist .daily-playing-pill {
+  background: rgba(255, 255, 255, 0.1) !important;
+  color: #ffffff !important;
+  border: 1px solid rgba(255, 255, 255, 0.16) !important;
+}
+
+.theme-minimalist .daily-playing-pill .eq-bar,
+.theme-minimalist .daily-eq-mini .eq-bar {
+  background: #ffffff !important;
+}
+
+.theme-minimalist .mfy-tracklist-preview {
+  border-top: 1px solid rgba(255, 255, 255, 0.08) !important;
+}
+
+.theme-minimalist .mfy-track-row:hover {
+  background: rgba(255, 255, 255, 0.06) !important;
+}
+
+.theme-minimalist .mfy-track-row.is-active {
+  background: rgba(255, 255, 255, 0.1) !important;
+  color: #ffffff !important;
+}
+
+.theme-minimalist .mfy-track-row.is-active .mfy-track-num {
+  color: #ffffff !important;
+}
+
+.theme-minimalist .music-card-v2 {
+  background: #181818 !important;
+  border: 1px solid rgba(255, 255, 255, 0.08) !important;
+  border-radius: 8px !important;
+  box-shadow: none !important;
+}
+
+.theme-minimalist .music-card-v2:hover {
+  background: #222222 !important;
+  border-color: rgba(255, 255, 255, 0.18) !important;
+}
+
+.theme-minimalist .music-card-v2.music-card-v2-playing {
+  background: #1e1e1e !important;
+  border-color: rgba(255, 255, 255, 0.3) !important;
+}
+
+.theme-minimalist .music-card-v2-playing .card-v2-title {
+  color: #ffffff !important;
+  font-weight: 700 !important;
+}
+
+.theme-minimalist .card-v2-play-btn {
+  background: #ffffff !important;
+  color: #000000 !important;
+  font-weight: 700 !important;
+}
+
+.theme-minimalist .card-v2-play-btn svg {
+  color: #000000 !important;
+  fill: #000000 !important;
+}
+
+.theme-minimalist .card-v2-play-btn:hover {
+  background: #e6e6e6 !important;
+  color: #000000 !important;
+}
+
+.theme-minimalist .card-v2-eq .eq-bar {
+  background: #ffffff !important;
+}
+
+.theme-minimalist #recently-played-shelf .recent-header-icon svg {
+  color: #ffffff !important;
+}
+
 /* =========================================
    2. THEME: VIBRANT
    Layout: Bottom Nav + Glassmorphism + Compact Player
@@ -612,270 +849,285 @@
 }
 
 
-/* Default transition for smooth theme switching */
-.app-layout {
-  transition: all 0.3s ease;
+/* =========================================================
+   Vibrant Overrides: Dibuat Untuk Kamu & Mix Unggulan
+   ========================================================= */
+.theme-vibrant .mfy-shelf-container .mfy-header-icon,
+.theme-vibrant .daily-shelf-container .daily-header-icon {
+  color: #00f0ff !important;
+  filter: drop-shadow(0 0 8px rgba(0, 240, 255, 0.6)) !important;
 }
 
-/* =========================================
-   1. THEME: MINIMALIST
-   ========================================= */
-.theme-minimalist {
-  --bg-primary: #121212;
-  --bg-secondary: #181818;
-  --bg-card: #222222;
-  --accent-primary: #ffffff;
-  --accent-text: #000000;
-  --accent-hover: #dddddd;
-  --text-primary: #ffffff;
-  --text-secondary: #aaaaaa;
-  --border-color: #333333;
-  --bg-card-hover: #2a2a2a;
+.theme-vibrant .mfy-shelf-container .section-title-v2,
+.theme-vibrant .daily-shelf-container .section-title-v2,
+.theme-vibrant .mfy-header-title {
+  background: linear-gradient(90deg, #00bfff, #00f0ff, #55ffff) !important;
+  -webkit-background-clip: text !important;
+  -webkit-text-fill-color: transparent !important;
+  background-clip: text !important;
 }
 
-/* Hide Sidebars by default in minimalist */
-.theme-minimalist .right-sidebar:not(.xbox-widget) {
-  display: none !important;
+.theme-vibrant .mfy-mood-tab-btn {
+  background: rgba(0, 240, 255, 0.06) !important;
+  border: 1px solid rgba(0, 240, 255, 0.2) !important;
+  color: #8ab4f8 !important;
+  border-radius: 20px !important;
+  backdrop-filter: blur(8px) !important;
+  transition: all 0.25s ease !important;
 }
 
-.theme-minimalist .right-sidebar.xbox-widget {
-  display: flex !important;
-  flex-direction: column;
-  position: fixed;
-  bottom: 0;
-  left: 60px;
-  width: 320px;
-  background: #1a1b1e;
-  border: 1px solid var(--border-color);
-  border-bottom: none;
-  border-radius: 8px 8px 0 0;
-  z-index: 10000;
-  transition: max-height 0.3s cubic-bezier(0.4, 0, 0.2, 1), width 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-  overflow: hidden;
-  box-shadow: 0 -4px 20px rgba(0,0,0,0.5);
-  margin: 0;
-  padding: 0;
-  min-height: 0 !important;
+.theme-vibrant .mfy-mood-tab-btn:hover {
+  background: rgba(0, 240, 255, 0.14) !important;
+  border-color: rgba(0, 240, 255, 0.45) !important;
+  color: #ffffff !important;
+  box-shadow: 0 0 10px rgba(0, 240, 255, 0.25) !important;
 }
 
-.theme-minimalist .right-sidebar.xbox-widget.collapsed {
-  max-height: 52px;
-  width: 200px;
+.theme-vibrant .mfy-mood-tab-btn.active {
+  background: #00f0ff !important;
+  border-color: #00f0ff !important;
+  color: #050b14 !important;
+  font-weight: 800 !important;
+  box-shadow: 0 0 16px rgba(0, 240, 255, 0.6) !important;
 }
 
-.theme-minimalist .right-sidebar.xbox-widget.expanded {
-  max-height: 80vh;
+.theme-vibrant .mfy-mood-tab-btn.active svg {
+  color: #050b14 !important;
 }
 
-/* Hide inner contents completely when collapsed so they don't scroll or block clicks */
-.theme-minimalist .right-sidebar.xbox-widget.collapsed .lyrics-mode,
-.theme-minimalist .right-sidebar.xbox-widget.collapsed .queue-list {
-  opacity: 0;
-  pointer-events: none;
+.theme-vibrant .mfy-spotlight-card,
+.theme-vibrant .mfy-companion-card,
+.theme-vibrant .daily-hero-card,
+.theme-vibrant .daily-companion-card {
+  background: rgba(10, 20, 35, 0.65) !important;
+  border: 1px solid rgba(0, 240, 255, 0.2) !important;
+  border-radius: 16px !important;
+  backdrop-filter: blur(16px) !important;
+  -webkit-backdrop-filter: blur(16px) !important;
+  box-shadow: 0 4px 20px rgba(0, 240, 255, 0.06), 0 8px 32px rgba(0, 0, 0, 0.35) !important;
+  transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1) !important;
 }
 
-.theme-minimalist .right-sidebar.xbox-widget.expanded .lyrics-mode,
-.theme-minimalist .right-sidebar.xbox-widget.expanded .queue-list {
-  opacity: 1;
-  pointer-events: auto;
-  transition: opacity 0.3s ease;
-  transition-delay: 0.1s;
+.theme-vibrant .mfy-spotlight-card:hover,
+.theme-vibrant .mfy-companion-card:hover,
+.theme-vibrant .daily-hero-card:hover,
+.theme-vibrant .daily-companion-card:hover {
+  background: rgba(14, 28, 50, 0.8) !important;
+  border-color: rgba(0, 240, 255, 0.5) !important;
+  box-shadow: 0 0 24px rgba(0, 240, 255, 0.22), 0 12px 36px rgba(0, 0, 0, 0.5) !important;
+  transform: translateY(-2px) !important;
 }
 
-.theme-minimalist .right-sidebar.xbox-widget .lyrics-mode,
-.theme-minimalist .right-sidebar.xbox-widget .queue-list {
-  padding: 0 16px 16px 16px;
-  flex: 1;
-  overflow-y: auto;
+.theme-vibrant .daily-hero-card.is-active,
+.theme-vibrant .daily-companion-card.is-active {
+  background: rgba(16, 32, 58, 0.88) !important;
+  border-color: #00f0ff !important;
+  box-shadow: 0 0 24px rgba(0, 240, 255, 0.35), 0 8px 32px rgba(0, 0, 0, 0.5) !important;
 }
 
-.theme-minimalist .nav-sidebar {
-  width: 0 !important;
-  flex: 0 !important;
-  overflow: visible !important;
+.theme-vibrant .mfy-spotlight-cover,
+.theme-vibrant .daily-hero-cover {
+  border-radius: 12px !important;
+  border: 1px solid rgba(0, 240, 255, 0.3) !important;
+  box-shadow: 0 4px 16px rgba(0, 240, 255, 0.2), 0 8px 24px rgba(0, 0, 0, 0.5) !important;
 }
 
-.theme-minimalist .nav-sidebar .nav-top-box,
-.theme-minimalist .nav-sidebar .library-section,
-.theme-minimalist .nav-sidebar .nav-bottom {
-  display: none !important;
+.theme-vibrant .mfy-companion-thumb,
+.theme-vibrant .daily-companion-thumb {
+  border-radius: 8px !important;
+  border: 1px solid rgba(0, 240, 255, 0.2) !important;
 }
 
-.theme-minimalist .friend-activity-section {
-  display: none !important;
+.theme-vibrant .mfy-spotlight-badge,
+.theme-vibrant .daily-companion-badge {
+  color: #00f0ff !important;
+  text-shadow: 0 0 8px rgba(0, 240, 255, 0.4) !important;
 }
 
-/* Floating Xbox-style Widget (Bottom Right) */
-.theme-minimalist .friend-activity-section.xbox-widget {
-  display: flex !important;
-  flex-direction: column;
-  position: fixed;
-  bottom: 0;
-  right: 60px;
-  width: 320px;
-  background: #1a1b1e;
-  border: 1px solid var(--border-color);
-  border-bottom: none;
-  border-radius: 8px 8px 0 0;
-  z-index: 10000;
-  transition: max-height 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-  overflow: hidden;
-  box-shadow: 0 -4px 20px rgba(0,0,0,0.5);
-  margin: 0;
-  padding: 0;
-  min-height: 0 !important;
+.theme-vibrant .daily-companion-badge.badge-recently-played {
+  color: #a5b4fc !important;
+  text-shadow: none !important;
 }
 
-.theme-minimalist .friend-activity-section.xbox-widget.collapsed {
-  max-height: 70px;
+.theme-vibrant .daily-companion-badge.badge-trending {
+  color: #facc15 !important;
+  text-shadow: 0 0 8px rgba(250, 204, 21, 0.4) !important;
 }
 
-.theme-minimalist .friend-activity-section.xbox-widget.expanded {
-  max-height: 80vh;
+.theme-vibrant .daily-companion-badge.badge-favorite {
+  color: #f472b6 !important;
+  text-shadow: 0 0 8px rgba(244, 114, 182, 0.4) !important;
 }
 
-.theme-minimalist .xbox-widget-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 12px 16px;
-  background: transparent;
-  cursor: pointer;
-  user-select: none;
-  border-bottom: 1px solid transparent;
-  flex-shrink: 0;
+.theme-vibrant .daily-companion-badge.badge-suggested {
+  color: #38bdf8 !important;
+  text-shadow: 0 0 8px rgba(56, 189, 248, 0.4) !important;
 }
 
-.theme-minimalist .friend-activity-section.xbox-widget.expanded .xbox-widget-header {
-  border-bottom-color: var(--border-color);
+.theme-vibrant .daily-hero-card.is-active .daily-hero-title,
+.theme-vibrant .daily-companion-card.is-active .daily-companion-title,
+.theme-vibrant .mfy-track-row.is-active .mfy-track-title {
+  color: #00f0ff !important;
+  text-shadow: 0 0 10px rgba(0, 240, 255, 0.5) !important;
 }
 
-.theme-minimalist .xbox-widget-header:hover {
-  background: rgba(255, 255, 255, 0.05);
+.theme-vibrant .daily-hero-artist,
+.theme-vibrant .daily-companion-artist,
+.theme-vibrant .mfy-spotlight-desc,
+.theme-vibrant .mfy-companion-desc,
+.theme-vibrant .mfy-track-artist,
+.theme-vibrant .mfy-companion-note {
+  color: #8ab4f8 !important;
 }
 
-.theme-minimalist .xbox-widget-header-info {
-  display: flex;
-  flex-direction: column;
+.theme-vibrant .mfy-btn-play-all,
+.theme-vibrant .daily-btn-play {
+  background: linear-gradient(135deg, #00f0ff 0%, #0099ff 100%) !important;
+  color: #050b14 !important;
+  border: none !important;
+  font-weight: 800 !important;
+  box-shadow: 0 0 16px rgba(0, 240, 255, 0.45) !important;
 }
 
-.theme-minimalist .xbox-widget-title {
-  font-size: 13px;
-  font-weight: 600;
-  color: white;
+.theme-vibrant .mfy-btn-play-all:hover,
+.theme-vibrant .daily-btn-play:hover {
+  box-shadow: 0 0 24px rgba(0, 240, 255, 0.75) !important;
+  transform: scale(1.05) !important;
 }
 
-.theme-minimalist .xbox-widget-subtitle {
-  font-size: 11px;
-  color: var(--text-secondary);
-  margin-top: 2px;
+.theme-vibrant .mfy-companion-play-btn,
+.theme-vibrant .daily-companion-play-btn {
+  background: #00f0ff !important;
+  color: #050b14 !important;
+  box-shadow: 0 0 14px rgba(0, 240, 255, 0.5) !important;
 }
 
-.theme-minimalist .xbox-widget-actions {
-  display: flex;
-  align-items: center;
-  color: var(--text-secondary);
+.theme-vibrant .mfy-companion-play-btn:hover,
+.theme-vibrant .daily-companion-play-btn:hover {
+  background: #55ffff !important;
+  box-shadow: 0 0 20px rgba(0, 240, 255, 0.8) !important;
+  transform: scale(1.1) !important;
 }
 
-.theme-minimalist .xbox-widget-actions svg:hover {
-  color: white;
+.theme-vibrant .mfy-btn-play-all svg,
+.theme-vibrant .daily-btn-play svg,
+.theme-vibrant .mfy-companion-play-btn svg,
+.theme-vibrant .daily-companion-play-btn svg {
+  color: #050b14 !important;
+  fill: #050b14 !important;
 }
 
-.theme-minimalist .friend-activity-section.xbox-widget .friend-activity-inner {
-  overflow-y: auto;
-  padding: 12px 16px 16px 16px;
-  display: flex;
-  flex-direction: column;
-  opacity: 1;
+.theme-vibrant .mfy-btn-secondary {
+  background: rgba(0, 240, 255, 0.08) !important;
+  border: 1px solid rgba(0, 240, 255, 0.3) !important;
+  color: #00f0ff !important;
+  backdrop-filter: blur(8px) !important;
 }
 
-/* Hide inner completely when collapsed so you can't focus elements inside */
-.theme-minimalist .friend-activity-section.xbox-widget.collapsed .friend-activity-inner {
-  display: none;
+.theme-vibrant .mfy-btn-secondary:hover {
+  background: rgba(0, 240, 255, 0.18) !important;
+  border-color: #00f0ff !important;
+  box-shadow: 0 0 14px rgba(0, 240, 255, 0.35) !important;
 }
 
-.theme-minimalist .friend-activity-section.expanded {
-  width: 320px;
+.theme-vibrant .daily-btn-icon,
+.theme-vibrant .daily-companion-icon-btn {
+  background: rgba(0, 240, 255, 0.06) !important;
+  border: 1px solid rgba(0, 240, 255, 0.15) !important;
+  color: #8ab4f8 !important;
 }
 
-/* Hide inner details when collapsed */
-.theme-minimalist .friend-activity-section.collapsed .friend-activity-inner {
-  opacity: 0;
-  pointer-events: none;
-  display: none;
+.theme-vibrant .daily-btn-icon:hover,
+.theme-vibrant .daily-companion-icon-btn:hover {
+  background: rgba(0, 240, 255, 0.16) !important;
+  border-color: rgba(0, 240, 255, 0.4) !important;
+  color: #ffffff !important;
 }
 
-/* Toggle button styling */
-.theme-minimalist .sidebar-toggle-btn {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 44px;
-  height: 44px;
-  border-radius: 50%;
-  background: transparent;
-  color: var(--text-primary);
-  border: none;
-  cursor: pointer;
-  margin-bottom: 16px;
-  flex-shrink: 0;
-  transition: background 0.2s;
+.theme-vibrant .daily-btn-icon.liked,
+.theme-vibrant .daily-companion-icon-btn.liked {
+  color: #00f0ff !important;
+  border-color: rgba(0, 240, 255, 0.6) !important;
+  box-shadow: 0 0 10px rgba(0, 240, 255, 0.4) !important;
 }
 
-.theme-minimalist .sidebar-toggle-btn:hover {
-  background: rgba(255, 255, 255, 0.1);
+.theme-vibrant .daily-playing-pill {
+  background: rgba(0, 240, 255, 0.15) !important;
+  border: 1px solid rgba(0, 240, 255, 0.35) !important;
+  color: #00f0ff !important;
+  box-shadow: 0 0 14px rgba(0, 240, 255, 0.3) !important;
 }
 
-/* Only show friend-activity-inner when expanded */
-.theme-minimalist .friend-activity-section.expanded .friend-activity-inner {
-  display: flex;
-  flex-direction: column;
-  flex: 1;
-  opacity: 1;
-  transition: opacity 0.3s ease;
-  overflow-y: auto;
+.theme-vibrant .daily-playing-pill .eq-bar,
+.theme-vibrant .daily-eq-mini .eq-bar {
+  background: #00f0ff !important;
+  box-shadow: 0 0 6px #00f0ff !important;
 }
 
-/* Fake a Top-Nav using main-view padding */
-.theme-minimalist .main-view {
-  margin-top: 20px;
+.theme-vibrant .mfy-tracklist-preview {
+  border-top: 1px solid rgba(0, 240, 255, 0.15) !important;
 }
 
-/* Floating Pill Player */
-.theme-minimalist .bottom-player-bar {
-  position: fixed;
-  bottom: 24px;
-  left: 50%;
-  transform: translateX(-50%);
-  width: calc(100vw - 800px);
-  min-width: 500px;
-  max-width: 800px;
-  border-radius: 100px;
-  background: rgba(20, 20, 20, 0.85);
-  backdrop-filter: blur(20px);
-  border: 1px solid #333;
-  padding: 8px 24px;
-  height: auto;
-  box-shadow: 0 10px 40px rgba(0,0,0,0.8);
-  z-index: 10001;
+.theme-vibrant .mfy-track-row:hover {
+  background: rgba(0, 240, 255, 0.08) !important;
 }
 
-@media (max-width: 1280px) {
-  .theme-minimalist .bottom-player-bar {
-    width: 90%;
-    min-width: 0;
-  }
+.theme-vibrant .mfy-track-row.is-active {
+  background: rgba(0, 240, 255, 0.14) !important;
 }
 
-/* Podcast Theme Overrides for Minimalist */
-.theme-minimalist .home-mode-toggle {
-  background: rgba(255,255,255,0.08);
-  border: none;
+.theme-vibrant .mfy-track-row.is-active .mfy-track-num {
+  color: #00f0ff !important;
 }
-.theme-minimalist .home-mode-btn.active {
-  background: var(--accent-primary);
-  color: var(--accent-text, #000);
+
+.theme-vibrant .music-card-v2 {
+  background: rgba(10, 20, 35, 0.65) !important;
+  border: 1px solid rgba(0, 240, 255, 0.2) !important;
+  border-radius: 14px !important;
+  backdrop-filter: blur(16px) !important;
+  -webkit-backdrop-filter: blur(16px) !important;
+  box-shadow: 0 4px 16px rgba(0, 240, 255, 0.06) !important;
 }
+
+.theme-vibrant .music-card-v2:hover {
+  background: rgba(14, 28, 50, 0.8) !important;
+  border-color: rgba(0, 240, 255, 0.5) !important;
+  box-shadow: 0 0 20px rgba(0, 240, 255, 0.22) !important;
+  transform: translateY(-4px) !important;
+}
+
+.theme-vibrant .music-card-v2.music-card-v2-playing {
+  background: rgba(16, 32, 58, 0.88) !important;
+  border-color: #00f0ff !important;
+  box-shadow: 0 0 20px rgba(0, 240, 255, 0.35) !important;
+}
+
+.theme-vibrant .music-card-v2-playing .card-v2-title {
+  color: #00f0ff !important;
+  text-shadow: 0 0 8px rgba(0, 240, 255, 0.5) !important;
+}
+
+.theme-vibrant .card-v2-play-btn {
+  background: linear-gradient(135deg, #00f0ff, #0099ff) !important;
+  color: #050b14 !important;
+  box-shadow: 0 0 14px rgba(0, 240, 255, 0.5) !important;
+}
+
+.theme-vibrant .card-v2-play-btn svg {
+  color: #050b14 !important;
+  fill: #050b14 !important;
+}
+
+.theme-vibrant .card-v2-eq .eq-bar {
+  background: #00f0ff !important;
+  box-shadow: 0 0 6px #00f0ff !important;
+}
+
+.theme-vibrant #recently-played-shelf .recent-header-icon svg {
+  color: #00f0ff !important;
+  filter: drop-shadow(0 0 8px rgba(0, 240, 255, 0.6)) !important;
+}
+
 
 
 /* -- Sidebar Inner Boxes Override (Hacker/Bento style) -- */
@@ -910,7 +1162,12 @@
 .theme-vibrant .card-v2-play-btn:hover,
 .theme-vibrant .podcast-play-btn:hover,
 .theme-vibrant .playlist-card-play,
-.theme-vibrant .library-item-play {
+.theme-vibrant .library-item-play,
+.theme-vibrant .mfy-btn-play-all,
+.theme-vibrant .daily-btn-play,
+.theme-vibrant .mfy-companion-play-btn,
+.theme-vibrant .daily-companion-play-btn,
+.theme-vibrant .mfy-mood-tab-btn.active {
   color: #050b14 !important;
 }
 

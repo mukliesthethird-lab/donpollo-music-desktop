@@ -83,6 +83,8 @@ contextBridge.exposeInMainWorld('electronAPI', {
   sendCollabInvite: (playlistId: string, playlistName: string, hostId: string, hostName: string, guestId: string) => ipcRenderer.invoke('send-collab-invite', playlistId, playlistName, hostId, hostName, guestId),
   pollCollabInvites: (userId: string) => ipcRenderer.invoke('poll-collab-invites', userId),
   respondCollabInvite: (inviteId: number, status: string) => ipcRenderer.invoke('respond-collab-invite', inviteId, status),
+  getLiveDiscordAvatar: (discordId: string) => ipcRenderer.invoke('get-live-discord-avatar', discordId),
+  getLiveDiscordUser: (discordId: string) => ipcRenderer.invoke('get-live-discord-user', discordId),
   getCachePath: () => ipcRenderer.invoke('get-cache-path'),
   onDownloadCacheProgress: (callback: (event: any, data: any) => void) => {
     ipcRenderer.on('download-cache-progress', callback);
