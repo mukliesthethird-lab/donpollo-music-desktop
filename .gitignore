@@ -34,3 +34,6 @@ win-unpacked
 # Environment variables (credentials)
 .env
 .env.*
+
+# api.py
+api.py

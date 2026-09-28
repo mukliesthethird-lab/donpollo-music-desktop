@@ -107,4 +107,5 @@ contextBridge.exposeInMainWorld('electronAPI', {
   trackSong: (songData: any) => ipcRenderer.send('track-song', songData),
   trackMood: (mood: string) => ipcRenderer.send('track-mood', mood),
   getAnalytics: () => ipcRenderer.invoke('get-analytics'),
+  searchYTMusic: (query: string, limit?: number) => ipcRenderer.invoke('search-ytmusic', query, limit),
 });

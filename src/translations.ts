@@ -358,6 +358,7 @@ type TranslationKeys = {
   trayShow: string;
   trayQuit: string;
   kickedFromParty: string;
+  hostLeftParty: string;
   partyMembers: string;
   kickUser: string;
   confirmKick: string;
@@ -943,6 +944,7 @@ const translations: Record<Language, TranslationKeys> = {
     trayShow: 'Tampilkan Aplikasi',
     trayQuit: 'Keluar',
     kickedFromParty: 'Dikeluarkan dari Party',
+    hostLeftParty: 'Host telah menutup sesi Listen Along',
     partyMembers: 'Anggota Party',
     kickUser: 'Keluarkan Pengguna',
     confirmKick: 'Apakah Anda yakin ingin mengeluarkan',
@@ -1527,6 +1529,7 @@ const translations: Record<Language, TranslationKeys> = {
     trayShow: 'Show App',
     trayQuit: 'Quit',
     kickedFromParty: 'Kicked from Party',
+    hostLeftParty: 'The host has ended the Listen Along session',
     partyMembers: 'Party Members',
     kickUser: 'Kick User',
     confirmKick: 'Are you sure you want to kick',
@@ -2111,6 +2114,7 @@ const translations: Record<Language, TranslationKeys> = {
     trayShow: 'アプリを表示',
     trayQuit: '終了',
     kickedFromParty: 'パーティーから退出されました',
+    hostLeftParty: 'ホストがListen Alongセッションを終了しました',
     partyMembers: 'パーティーメンバー',
     kickUser: 'ユーザーをキック',
     confirmKick: '本当にキックしますか:',
@@ -2696,6 +2700,7 @@ const translations: Record<Language, TranslationKeys> = {
     trayShow: '앱 표시',
     trayQuit: '종료',
     kickedFromParty: '파티에서 추방됨',
+    hostLeftParty: '호스트가 Listen Along 세션을 종료했습니다',
     partyMembers: '파티 멤버',
     kickUser: '유저 추방',
     confirmKick: '정말 추방하시겠습니까:',

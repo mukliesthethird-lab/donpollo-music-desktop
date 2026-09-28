@@ -1296,6 +1296,102 @@ ipcMain.handle('fetch-url', async (event, url: string) => {
   }
 });
 ipcMain.handle('fetch-text', async (event, url: string) => { try { const res = await fetch(url, { headers: { 'User-Agent': 'DonPollo/1.0' } }); return await res.text(); } catch (err: any) { throw err; } });
+
+// ── YouTube Music Search via Innertube API ──────────────────────────────────
+// Uses YouTube Music's internal API to return proper audio results (album art, 
+// no MV thumbnails, correct studio durations)
+ipcMain.handle('search-ytmusic', async (event, query: string, limit: number = 10) => {
+  try {
+    const YTMUSIC_API = 'https://music.youtube.com/youtubei/v1/search?prettyPrint=false';
+    const payload = {
+      context: {
+        client: {
+          clientName: 'WEB_REMIX',
+          clientVersion: '1.20240101.01.00',
+          hl: 'id',
+          gl: 'ID',
+          userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/122.0.0.0 Safari/537.36'
+        }
+      },
+      query,
+      params: 'EgWKAQIIAWoKEAMQBBAJEAoQBQ%3D%3D' // filter: songs only
+    };
+
+    const res = await fetch(YTMUSIC_API, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/122.0.0.0 Safari/537.36',
+        'Origin': 'https://music.youtube.com',
+        'Referer': 'https://music.youtube.com/',
+        'X-Youtube-Client-Name': '67',
+        'X-Youtube-Client-Version': '1.20240101.01.00'
+      },
+      body: JSON.stringify(payload)
+    });
+
+    if (!res.ok) throw new Error(`YTMusic API error: ${res.status}`);
+    const data: any = await res.json();
+
+    // Parse the nested response structure
+    const results: any[] = [];
+    const tabs = data?.contents?.tabbedSearchResultsRenderer?.tabs;
+    if (!tabs) return { results: [] };
+
+    for (const tab of tabs) {
+      const sectionList = tab?.tabRenderer?.content?.sectionListRenderer?.contents;
+      if (!sectionList) continue;
+      for (const section of sectionList) {
+        const items = section?.musicShelfRenderer?.contents || section?.musicCardShelfRenderer ? [section.musicCardShelfRenderer] : [];
+        for (const item of items) {
+          const renderer = item?.musicResponsiveListItemRenderer || item?.musicTwoRowItemRenderer;
+          if (!renderer) continue;
+
+          // Extract video ID
+          const videoId = renderer.playlistItemData?.videoId ||
+            renderer.flexColumns?.[0]?.musicResponsiveListItemFlexColumnRenderer?.text?.runs?.[0]?.navigationEndpoint?.watchEndpoint?.videoId ||
+            renderer.overlay?.musicItemThumbnailOverlayRenderer?.content?.musicPlayButtonRenderer?.playNavigationEndpoint?.watchEndpoint?.videoId;
+          if (!videoId) continue;
+
+          // Extract title
+          const titleRuns = renderer.flexColumns?.[0]?.musicResponsiveListItemFlexColumnRenderer?.text?.runs || [];
+          const title = titleRuns.map((r: any) => r.text).join('');
+
+          // Extract artist
+          const subRuns = renderer.flexColumns?.[1]?.musicResponsiveListItemFlexColumnRenderer?.text?.runs || [];
+          const artist = subRuns.filter((r: any) => r.navigationEndpoint?.browseEndpoint?.browseEndpointContextSupportedConfigs?.browseEndpointContextMusicConfig?.pageType === 'MUSIC_PAGE_TYPE_ARTIST').map((r: any) => r.text).join(', ') || subRuns.map((r: any) => r.text).join('').replace(/·.*$/, '').trim();
+
+          // Extract duration
+          const durationText = renderer.fixedColumns?.[0]?.musicResponsiveListItemFixedColumnRenderer?.text?.runs?.[0]?.text || '';
+          let duration = 0;
+          if (durationText) {
+            const parts = durationText.split(':').map(Number);
+            if (parts.length === 2) duration = parts[0] * 60 + parts[1];
+            else if (parts.length === 3) duration = parts[0] * 3600 + parts[1] * 60 + parts[2];
+          }
+
+          // Extract thumbnail - YouTube Music thumbnails are album art, not MV screenshots
+          const thumbnails = renderer.thumbnail?.musicThumbnailRenderer?.thumbnail?.thumbnails ||
+            renderer.thumbnailRenderer?.musicThumbnailRenderer?.thumbnail?.thumbnails || [];
+          const thumbnail = thumbnails.sort((a: any, b: any) => (b.width || 0) - (a.width || 0))[0]?.url || '';
+
+          if (title && videoId) {
+            results.push({ id: videoId, title, artist, duration, thumbnail, source: 'ytmusic' });
+          }
+          if (results.length >= limit) break;
+        }
+        if (results.length >= limit) break;
+      }
+      if (results.length >= limit) break;
+    }
+
+    return { results };
+  } catch (err: any) {
+    console.error('YTMusic search error:', err.message);
+    return { results: [] };
+  }
+});
+
 // ROMANIZATION IPC
 let kuroshiroInstance: any = null;
 ipcMain.handle('romanize-lyrics', async (event, text: string, lang: 'ko' | 'ja') => {

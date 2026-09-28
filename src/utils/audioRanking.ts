@@ -1,4 +1,4 @@
-/**
+﻿/**
  * Audio Ranking & Query Optimization Helper for Don Pollo Music
  * 
  * Prioritizes official album audio and studio master releases over music videos (MV),
@@ -297,6 +297,10 @@ export function formatTrackLikeSpotify(item: any, artistHint = ''): any {
     .replace(/^["'“”‘’\s]+|["'“”‘’\s]+$/g, '')
     .replace(/\s*[-–—:]\s*$/, '')
     .trim();
+
+  // Strip YouTube hashtags like #music, #kerispatih, #viral etc.
+  // These appear in YouTube titles but are NOT part of the actual song title
+  title = title.replace(/\s*#\w+/g, '').trim();
 
   // If title still has artist prefix like "NIKI - Every Summertime"
   if (artist && title.toLowerCase().startsWith(artist.toLowerCase())) {

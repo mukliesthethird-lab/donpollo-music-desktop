@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect, useCallback, useMemo } from 'react';
+﻿import React, { useState, useRef, useEffect, useCallback, useMemo } from 'react';
 import { Home, Library, Plus, Mic2, Settings, Play, Pause, SkipBack, SkipForward, Repeat, Shuffle, Volume2, VolumeX, ListMusic, UserCircle, ChevronRight, Search, AlertCircle, Headset, Loader2, Maximize2, X, ChevronLeft, ChevronUp, ChevronDown, Music, PanelRight, Trash2, Heart, LogIn, LogOut, Check, FolderPlus, Globe, Headphones, Download, DownloadCloud, Database, WifiOff, CheckCircle2, Paintbrush, Clock, Trophy, Zap, Radio, Timer, Repeat1, MinusCircle, PlusCircle, Edit3, Share2, Copy, Smartphone, Hourglass, Lock, Map as MapIcon, Users, RotateCcw, FileText, Film, Sparkles, RefreshCw, Coffee, Sun, CloudRain, Compass, Flame, Upload } from 'lucide-react';
 import './index.css';
 import './themes.css';
@@ -379,14 +379,15 @@ function App() {
 
           if (!wantsVariant) {
             const studioOnly = cleanedResults.filter((r: any) => !isUnwantedTrackVariant(r.title, r.artist));
-            if (studioOnly.length > 0) {
+            // Only filter if we have enough studio results; preserve all results otherwise
+            if (studioOnly.length >= 2) {
               cleanedResults = studioOnly;
             }
           }
           results = cleanedResults.slice(0, 5);
 
-          // Fallback to iTunes only if YouTube returned 0 results
-          if (results.length === 0 && preferAudio) {
+          // Fallback to iTunes if YouTube returned < 3 results for better coverage of regional music
+          if (results.length < 3 && preferAudio) {
             try {
               const itunesResults = await searchItunesTracks(
                 searchQuery,
@@ -395,7 +396,10 @@ function App() {
                 settings?.searchCountry === 'auto' ? undefined : settings?.searchCountry
               );
               if (itunesResults && itunesResults.length > 0) {
-                results = itunesResults;
+                // Merge: prepend iTunes results that aren't already in YouTube results
+                const ytIds = new Set(results.map((r: any) => r.id).filter(Boolean));
+                const newFromItunes = itunesResults.filter((r: any) => !r.id || !ytIds.has(r.id));
+                results = [...newFromItunes, ...results].slice(0, 5);
               }
             } catch (err) {}
           }
@@ -431,6 +435,11 @@ function App() {
   const [cachePath, setCachePath] = useState<string>('');
   const [showClearCacheConfirm, setShowClearCacheConfirm] = useState(false);
   const [isGuest, setIsGuest] = useState(false);
+  // Cache Discord user info so offline collaborators still show username/avatar
+  // Persisted in localStorage so it survives app restarts
+  const collabUserCacheRef = useRef<Record<string, { username: string; avatarUrl: string }>>(
+    (() => { try { return JSON.parse(localStorage.getItem('donpollo_collab_user_cache') || '{}'); } catch { return {}; } })()
+  );
 
   // ─── Profile & Social State ────────────────────────────────
   const [activeProfileId, setActiveProfileId] = useState<string | null>(null);
@@ -1391,6 +1400,36 @@ function App() {
           }
           const users = await (window as any).electronAPI.getOnlineUsers(discordUser.id);
           setOnlineUsers(users);
+
+          // Cache online users' info so we can display them even when offline
+          let cacheUpdated = false;
+          users.forEach((u: any) => {
+            if (u.discordId && u.username) {
+              collabUserCacheRef.current[u.discordId] = {
+                username: u.username,
+                avatarUrl: u.avatarUrl || ''
+              };
+              cacheUpdated = true;
+            }
+          });
+          // Persist to localStorage for next session
+          if (cacheUpdated) {
+            try { localStorage.setItem('donpollo_collab_user_cache', JSON.stringify(collabUserCacheRef.current)); } catch {}
+          }
+
+          // ── Host-left detection ──
+          // If this client is a guest and the host is no longer in the online user list, kick them out
+          if (isGuest && activePartyId) {
+            const hostStillOnline = users.some((u: any) => u.discordId === activePartyId);
+            if (!hostStillOnline) {
+              showToast(t('hostLeftParty'), 'error');
+              setIsGuest(false);
+              setActivePartyId(null);
+              // Stop playback so the guest doesn't keep playing the host's song indefinitely
+              if (audioRef.current) audioRef.current.pause();
+              setIsPlaying(false);
+            }
+          }
 
           // Poll requests
           const reqs = await (window as any).electronAPI.pollJoinRequests(discordUser.id);
@@ -3203,8 +3242,9 @@ function App() {
               audioRef.current.pause();
             }
 
-            // If we are out of sync by more than 3 seconds, forcefully seek to catch up
-            if (Math.abs(audioRef.current.currentTime - targetTime) > 3) {
+            // Tighter sync: seek if out of sync by more than 1.5s (reduced from 3s)
+            // Only seek when host is playing to avoid unnecessary interruptions during pause
+            if (hs.isPlaying && Math.abs(audioRef.current.currentTime - targetTime) > 1.5) {
               audioRef.current.currentTime = targetTime;
             }
           }
@@ -3617,8 +3657,9 @@ function App() {
       }
 
       // ============================================================
-      // MUSIC PATH: iTunes + YouTube (unchanged)
+      // MUSIC PATH: iTunes + YouTube Music (merged for best coverage)
       // ============================================================
+      let itunesInitialSongs: any[] = [];
       try {
         const targetUrl = `https://itunes.apple.com/search?term=${encodeURIComponent(artist)}&entity=song&limit=100`;
         const itunesData = (window as any).electronAPI
@@ -3640,53 +3681,144 @@ function App() {
 
           const topTracks = Array.from(uniqueTracks.values()).slice(0, 30);
 
-          const initialSongs = topTracks.map((t: any) => ({
+          itunesInitialSongs = topTracks.map((t: any) => ({
             id: null,
             title: t.trackName,
             artist: t.artistName,
             thumbnail: (t.artworkUrl600 || t.artworkUrl160 || t.artworkUrl100 || t.artworkUrl60 || '').replace('100x100bb.jpg', '500x500bb.jpg').replace('100x100bb.png', '500x500bb.png').replace('160x160bb.jpg', '600x600bb.jpg'),
             duration: (t.trackTimeMillis && t.trackTimeMillis > 0) ? Math.floor(t.trackTimeMillis / 1000) : 0,
             originalQuery: `${t.artistName} ${t.trackName} official audio`,
-            isPodcast: false
+            isPodcast: false,
+            _fromItunes: true
           }));
-
-          setArtistSongs(initialSongs);
-          setIsArtistLoading(false);
-
-          // Background YouTube mapping for music
-          (async () => {
-            for (let idx = 0; idx < initialSongs.length; idx++) {
-              const song = initialSongs[idx];
-              const url = `${API_BASE_URL}/api/search?q=${encodeURIComponent(song.originalQuery)}`;
-              try {
-                const data = (window as any).electronAPI
-                  ? await (window as any).electronAPI.fetchUrl(url)
-                  : await (await fetch(url)).json();
-                if (data && data.results && data.results.length > 0) {
-                  let candidates = data.results.filter((item: any) => item.duration >= 50 && item.duration <= 720);
-                  candidates = rankAudioResults(candidates, song.title || '', song.duration || 0);
-                  const studioCandidates = candidates.filter((item: any) => !isUnwantedTrackVariant(item.title, item.artist));
-                  const validYt = studioCandidates[0] || candidates[0] || data.results.find((item: any) => item.duration >= 60 && item.duration <= 480);
-                  if (validYt) {
-                    setArtistSongs(prev => {
-                      const next = [...prev];
-                      if (next[idx] && next[idx].title === song.title) next[idx] = { ...next[idx], id: validYt.id, duration: validYt.duration };
-                      return next;
-                    });
-                  }
-                }
-              } catch (e) { console.error('BG mapping error:', e); }
-              await new Promise(resolve => setTimeout(resolve, 300));
-            }
-          })();
-
-          return;
         }
       } catch (err) {
-        console.error('iTunes API fallback', err);
+        console.error('iTunes API error', err);
       }
 
-      // Fallback if iTunes fails
+      // ── Always also fetch YouTube Music to supplement ──
+      // This is critical for artists with few or no iTunes results (e.g. Kerispatih)
+      let ytSupplement: any[] = [];
+      const ytSeenTitles = new Set<string>();
+      try {
+        // "- Topic" targets YouTube Music auto-generated channels (clean studio audio)
+        const ytMusicQueries = filter === 'popular'
+          ? [`${artist} - Topic`, `${artist} official audio`, `${artist} audio`]
+          : [`${artist} - Topic`, `${artist} official audio`, `${artist} terbaru`];
+
+        for (const ytQuery of ytMusicQueries) {
+          const ytRes = await fetch(`${API_BASE_URL}/api/search?q=${encodeURIComponent(ytQuery)}`);
+          const ytData = await ytRes.json();
+          if (ytData.results && ytData.results.length > 0) {
+            let candidates = ytData.results.filter((item: any) => item.duration >= 50 && item.duration <= 720);
+            candidates = rankAudioResults(candidates, artist);
+            const studioCandidates = candidates.filter((item: any) => !isUnwantedTrackVariant(item.title, item.artist));
+            const pool = (studioCandidates.length > 0 ? studioCandidates : candidates).slice(0, 20);
+            for (const item of pool) {
+              const formatted = formatTrackLikeSpotify(item, artist);
+              if (!formatted || !formatted.title) continue;
+              // Deduplicate within YouTube results by normalized title (strips #music etc.)
+              const cleanTitle = cleanBaseSongTitle(formatted.title);
+              if (cleanTitle && !ytSeenTitles.has(cleanTitle)) {
+                ytSeenTitles.add(cleanTitle);
+                ytSupplement.push(formatted);
+              }
+            }
+          }
+          if (ytSupplement.length >= 20) break;
+        }
+      } catch (ytErr) {
+        console.error('YouTube Music supplement fetch failed:', ytErr);
+      }
+
+      // u2500u2500 Merge: iTunes (HD covers) + YouTube Music (full catalog) u2500u2500
+      const itunesTitleSet = new Set<string>(
+        itunesInitialSongs.map(s => cleanBaseSongTitle(s.title))
+      );
+      // Only add YouTube songs not already represented by iTunes entries
+      const ytOnlySongs = ytSupplement.filter(s => {
+        const base = cleanBaseSongTitle(s.title);
+        return base && !itunesTitleSet.has(base);
+      });
+
+      const mergedSongs = [...itunesInitialSongs, ...ytOnlySongs].slice(0, 30);
+
+      if (mergedSongs.length > 0) {
+        // Show all songs immediately (YouTube ones already have IDs, iTunes ones get mapped in background)
+        setArtistSongs(mergedSongs);
+        setIsArtistLoading(false);
+
+        // Background YouTube ID mapping for iTunes-only songs (those without an id yet)
+        (async () => {
+          for (let idx = 0; idx < mergedSongs.length; idx++) {
+            const song = mergedSongs[idx];
+            if (song.id) continue; // Already has YouTube ID (from YouTube supplement or prior mapping)
+            const url = `${API_BASE_URL}/api/search?q=${encodeURIComponent(song.originalQuery)}`;
+            try {
+              const data = (window as any).electronAPI
+                ? await (window as any).electronAPI.fetchUrl(url)
+                : await (await fetch(url)).json();
+              if (data && data.results && data.results.length > 0) {
+                let candidates = data.results.filter((item: any) => item.duration >= 50 && item.duration <= 720);
+                candidates = rankAudioResults(candidates, song.title || '', song.duration || 0);
+                const studioCandidates = candidates.filter((item: any) => !isUnwantedTrackVariant(item.title, item.artist));
+                const validYt = studioCandidates[0] || candidates[0] || data.results.find((item: any) => item.duration >= 60 && item.duration <= 480);
+                if (validYt) {
+                  setArtistSongs(prev => {
+                    const next = [...prev];
+                    if (next[idx] && next[idx].title === song.title) next[idx] = { ...next[idx], id: validYt.id, duration: validYt.duration };
+                    return next;
+                  });
+                }
+              }
+            } catch (e) { console.error('BG mapping error:', e); }
+            await new Promise(resolve => setTimeout(resolve, 300));
+          }
+        })();
+
+        return;
+      }
+
+      // ── YouTube Music fallback when iTunes returns no results ──
+      // This handles artists not on iTunes (e.g. Indonesian indie bands)
+      if (queries.length === 0) {
+        try {
+          const ytMusicQuery = filter === 'popular'
+            ? `${artist} official audio`
+            : `${artist} new song official audio`;
+          const ytRes = await fetch(`${API_BASE_URL}/api/search?q=${encodeURIComponent(ytMusicQuery)}`);
+          const ytData = await ytRes.json();
+          if (ytData.results && ytData.results.length > 0) {
+            let ytCandidates = ytData.results.filter((item: any) =>
+              item.duration >= 50 && item.duration <= 720
+            );
+            ytCandidates = rankAudioResults(ytCandidates, artist);
+            const studioYt = ytCandidates.filter((item: any) => !isUnwantedTrackVariant(item.title, item.artist));
+            const finalYt = (studioYt.length > 0 ? studioYt : ytCandidates).slice(0, 15);
+            if (finalYt.length > 0) {
+              // Deduplicate by clean title
+              const seenTitles = new Set<string>();
+              const uniqueYt: any[] = [];
+              for (const item of finalYt) {
+                const base = (item.title || '').toLowerCase().replace(/[^a-z0-9]/g, '');
+                if (!seenTitles.has(base)) {
+                  seenTitles.add(base);
+                  uniqueYt.push(formatTrackLikeSpotify(item, artist));
+                }
+              }
+              if (uniqueYt.length > 0) {
+                setArtistSongs(uniqueYt);
+                setIsArtistLoading(false);
+                return;
+              }
+            }
+          }
+        } catch (ytErr) {
+          console.error('YouTube Music artist fallback failed:', ytErr);
+        }
+      }
+
+      // Final fallback with broad queries
       if (queries.length === 0) {
         queries = filter === 'popular'
           ? [`${artist} official audio popular`, `${artist} hit songs audio`, `${artist} best songs`, `${artist} top hits`]
@@ -7666,17 +7798,30 @@ function App() {
                   <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
                     {currentCollabs.map(cid => {
                       const friend = onlineUsers.find(u => u.discordId === cid);
+                      // Fallback to cached info for offline users
+                      const cachedInfo = collabUserCacheRef.current[cid];
+                      const displayName = friend?.username || cachedInfo?.username || null;
+                      const displayAvatar = friend?.avatarUrl || cachedInfo?.avatarUrl || null;
+                      const isOnline = !!friend;
                       return (
                         <div key={cid} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '8px 12px', background: 'var(--bg-card-hover)', borderRadius: '8px' }}>
                           <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                            {friend?.avatarUrl ? (
-                              <img src={friend.avatarUrl || getDefaultDiscordAvatar(friend.discordId, friend.username)} alt="" style={{ width: 24, height: 24, borderRadius: '50%' }} onError={(e) => handleAvatarError(e, friend.discordId, friend.username)} />
+                            {displayAvatar ? (
+                              <div style={{ position: 'relative' }}>
+                                <img src={displayAvatar} alt="" style={{ width: 24, height: 24, borderRadius: '50%' }} onError={(e) => handleAvatarError(e, cid, displayName || '')} />
+                                {!isOnline && (
+                                  <div style={{ position: 'absolute', bottom: 0, right: 0, width: 8, height: 8, borderRadius: '50%', background: '#6b7280', border: '1.5px solid var(--bg-card-hover)' }} title="Offline" />
+                                )}
+                              </div>
                             ) : (
-                              <div style={{ width: 24, height: 24, borderRadius: '50%', background: 'var(--surface-color)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '10px' }}>
-                                {friend?.username?.charAt(0).toUpperCase() || 'U'}
+                              <div style={{ width: 24, height: 24, borderRadius: '50%', background: 'var(--surface-color)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '10px', position: 'relative' }}>
+                                {displayName?.charAt(0).toUpperCase() || 'U'}
+                                {!isOnline && (
+                                  <div style={{ position: 'absolute', bottom: 0, right: 0, width: 8, height: 8, borderRadius: '50%', background: '#6b7280', border: '1.5px solid var(--bg-card-hover)' }} title="Offline" />
+                                )}
                               </div>
                             )}
-                            <div style={{ fontSize: '13px', color: 'var(--text-primary)' }}>{friend?.username || cid}</div>
+                            <div style={{ fontSize: '13px', color: 'var(--text-primary)' }}>{displayName || <span style={{ color: 'var(--text-muted)', fontStyle: 'italic', fontSize: '12px' }}>{cid.slice(0, 8)}...</span>}</div>
                           </div>
                           {isMyPlaylist && (
                             <button className="btn-secondary" style={{ padding: '4px 8px', fontSize: '11px', color: '#ff5555' }} onClick={async () => {
