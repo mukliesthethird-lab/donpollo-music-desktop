@@ -761,20 +761,74 @@ ipcMain.handle('update-profile', async (event, profileData) => {
   if (!db) return false;
   try {
     const { discordId, username, avatarUrl, likedSongs, stats, privacySettings, savedPlaylists, following, bannerUrl } = profileData;
+    
+    // Safety: Retrieve existing record first to prevent accidental resets
+    const [existingRows] = await db.execute('SELECT stats, liked_songs, saved_playlists, following, privacy_settings, banner_url FROM user_profiles WHERE discord_id = ?', [discordId]);
+    const existing = (existingRows as any[])[0] || null;
+
+    let mergedStats = stats;
+    let mergedLiked = likedSongs;
+    let mergedSavedPlaylists = savedPlaylists;
+    let mergedFollowing = following;
+    let mergedPrivacy = privacySettings;
+    let mergedBanner = bannerUrl;
+
+    if (existing) {
+      // 1. Never overwrite stats with empty or smaller listen seconds!
+      let existingStats: any = {};
+      try { existingStats = JSON.parse(existing.stats || '{}'); } catch {}
+
+      if (!stats || Object.keys(stats).length === 0) {
+        mergedStats = existingStats;
+      } else {
+        const existingSeconds = typeof existingStats.totalListenSeconds === 'number' ? existingStats.totalListenSeconds : 0;
+        const newSeconds = typeof stats.totalListenSeconds === 'number' ? stats.totalListenSeconds : 0;
+        mergedStats = {
+          ...existingStats,
+          ...stats,
+          totalListenSeconds: Math.max(existingSeconds, newSeconds),
+          playHistory: (stats.playHistory && stats.playHistory.length > 0) ? stats.playHistory : (existingStats.playHistory || [])
+        };
+      }
+
+      // 2. Never overwrite likedSongs, savedPlaylists, following if undefined
+      if (likedSongs === undefined && existing.liked_songs) {
+        try { mergedLiked = JSON.parse(existing.liked_songs); } catch {}
+      }
+      if (savedPlaylists === undefined && existing.saved_playlists) {
+        try { mergedSavedPlaylists = JSON.parse(existing.saved_playlists); } catch {}
+      }
+      if (following === undefined && existing.following) {
+        try { mergedFollowing = JSON.parse(existing.following); } catch {}
+      }
+      if (privacySettings === undefined && existing.privacy_settings) {
+        try { mergedPrivacy = JSON.parse(existing.privacy_settings); } catch {}
+      }
+      if (!bannerUrl && existing.banner_url) {
+        mergedBanner = existing.banner_url;
+      }
+    }
+
     await db.execute(
       `INSERT INTO user_profiles (discord_id, username, avatar_url, liked_songs, stats, privacy_settings, saved_playlists, following, banner_url) 
        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
        ON DUPLICATE KEY UPDATE 
-       username = VALUES(username), avatar_url = VALUES(avatar_url), liked_songs = VALUES(liked_songs), 
-       stats = VALUES(stats), privacy_settings = VALUES(privacy_settings), saved_playlists = VALUES(saved_playlists), following = VALUES(following), banner_url = COALESCE(VALUES(banner_url), banner_url)`,
+       username = VALUES(username), 
+       avatar_url = COALESCE(VALUES(avatar_url), avatar_url), 
+       liked_songs = VALUES(liked_songs), 
+       stats = VALUES(stats), 
+       privacy_settings = VALUES(privacy_settings), 
+       saved_playlists = VALUES(saved_playlists), 
+       following = VALUES(following), 
+       banner_url = COALESCE(VALUES(banner_url), banner_url)`,
       [
         discordId, username, avatarUrl,
-        JSON.stringify(likedSongs || []),
-        JSON.stringify(stats || {}),
-        JSON.stringify(privacySettings || {}),
-        JSON.stringify(savedPlaylists || []),
-        JSON.stringify(following || []),
-        bannerUrl || null
+        JSON.stringify(mergedLiked || []),
+        JSON.stringify(mergedStats || {}),
+        JSON.stringify(mergedPrivacy || { publicLikedSongs: true, publicStats: true }),
+        JSON.stringify(mergedSavedPlaylists || []),
+        JSON.stringify(mergedFollowing || []),
+        mergedBanner || null
       ]
     );
     return true;
