@@ -2346,6 +2346,9 @@ function App() {
     setOriginalQueue([]);
     setCurrentIndex(-1);
     setLyricsData(null);
+    if (discordUser && (window as any).electronAPI?.notifyClosing) {
+      (window as any).electronAPI.notifyClosing(discordUser.id);
+    }
     setDiscordUser(null);
     localStorage.removeItem('donpollo_user');
     localStorage.removeItem('donpollo_discord_token');

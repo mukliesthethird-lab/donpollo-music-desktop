@@ -76,9 +76,31 @@ async function ensureGlobalStatsCache() {
   }
 }
 
-app.on('before-quit', async () => {
+let isCleanupDone = false;
+app.on('before-quit', async (e) => {
+  if (isCleanupDone) return;
   isQuitting = true;
-  if (db) {
+  if (db && currentActiveDiscordId) {
+    e.preventDefault();
+    isCleanupDone = true;
+    const targetId = currentActiveDiscordId;
+    try {
+      await Promise.all([
+        db.execute('DELETE FROM online_users WHERE discord_id = ?', [targetId]),
+        db.execute('DELETE FROM listen_parties WHERE host_discord_id = ?', [targetId]),
+        db.execute('DELETE FROM join_requests WHERE host_id = ? OR guest_id = ?', [targetId, targetId])
+      ]);
+    } catch (err) {
+      console.error('Cleanup on before-quit error:', err);
+    }
+    if (db) {
+      try {
+        await db.end();
+        db = null;
+      } catch { }
+    }
+    app.quit();
+  } else if (db) {
     try {
       await db.end();
       db = null;
@@ -108,7 +130,7 @@ function updateTrayMenu(songTitle: string, isPlaying: boolean) {
     { label: trayLabels.prev, click: () => mainWindow?.webContents.send('tray-control', 'prev') },
     { type: 'separator' },
     { label: trayLabels.showApp, click: () => mainWindow?.show() },
-    { label: trayLabels.quit, click: () => app.quit() }
+    { label: trayLabels.quit, click: () => { isQuitting = true; mainWindow && !mainWindow.isDestroyed() ? mainWindow.close() : app.quit(); } }
   ]);
   tray.setContextMenu(contextMenu);
   tray.setToolTip(songTitle || 'DonPollo Music');
@@ -204,8 +226,8 @@ async function initDB() {
       database: process.env.DB_NAME || 's9206_database',
       port: Number(process.env.DB_PORT) || 3306,
       waitForConnections: true,
-      connectionLimit: 1,
-      maxIdle: 1,
+      connectionLimit: 3,
+      maxIdle: 2,
       idleTimeout: 60000,
       queueLimit: 0,
       enableKeepAlive: true,
@@ -451,9 +473,10 @@ function createWindow() {
       return;
     }
 
-    if (currentActiveDiscordId && db && !isQuitting) {
+    if (currentActiveDiscordId && db && !isCleanupDone) {
       event.preventDefault();
       isQuitting = true;
+      isCleanupDone = true;
       const targetId = currentActiveDiscordId;
       try {
         await Promise.all([
@@ -904,6 +927,15 @@ ipcMain.handle('update-presence', async (event, data) => {
   }
 });
 
+function safeJsonParse<T>(str: any, fallback: T): T {
+  if (!str || typeof str !== 'string') return fallback;
+  try {
+    return JSON.parse(str);
+  } catch {
+    return fallback;
+  }
+}
+
 const discordAvatarCache = new Map<string, { avatarUrl: string, username?: string, globalName?: string, timestamp: number }>();
 
 async function fetchDiscordUserLive(discordId: string): Promise<{ avatarUrl: string, username?: string, globalName?: string } | null> {
@@ -967,18 +999,18 @@ ipcMain.handle('get-live-discord-user', async (event, discordId) => {
 ipcMain.handle('get-online-users', async (event, currentUserId) => {
   if (!db) return [];
   try {
-    // Delete users older than 45 seconds to clean up (10% chance per request to reduce load)
+    // Delete users older than 90 seconds to clean up (10% chance per request to reduce load)
     if (Math.random() < 0.1) {
-      await db.execute('DELETE FROM online_users WHERE last_seen < DATE_SUB(NOW(), INTERVAL 45 SECOND)').catch(() => { });
+      await db.execute('DELETE FROM online_users WHERE last_seen < DATE_SUB(NOW(), INTERVAL 90 SECOND)').catch(() => { });
     }
 
-    const [rows] = await db.execute('SELECT *, (UNIX_TIMESTAMP(NOW(3)) - UNIX_TIMESTAMP(last_seen)) as server_age FROM online_users WHERE discord_id != ? AND last_seen >= DATE_SUB(NOW(), INTERVAL 45 SECOND)', [currentUserId || '']);
+    const [rows] = await db.execute('SELECT *, (UNIX_TIMESTAMP(NOW(3)) - UNIX_TIMESTAMP(last_seen)) as server_age FROM online_users WHERE discord_id != ? AND last_seen >= DATE_SUB(NOW(), INTERVAL 60 SECOND)', [currentUserId || '']);
     return (rows as any[]).map(row => {
       let avatarUrl = row.avatar_url;
       const cached = discordAvatarCache.get(row.discord_id);
       if (cached && cached.avatarUrl) {
         avatarUrl = cached.avatarUrl;
-      } else if (process.env.DISCORD_TOKEN && row.discord_id && !cached) {
+      } else if (row.discord_id && !cached) {
         fetchDiscordUserLive(row.discord_id).catch(() => { });
       }
 
@@ -986,17 +1018,17 @@ ipcMain.handle('get-online-users', async (event, currentUserId) => {
         discordId: row.discord_id,
         username: row.username,
         avatarUrl: avatarUrl,
-        currentSong: row.current_song ? JSON.parse(row.current_song) : null,
+        currentSong: safeJsonParse(row.current_song, null),
         partyId: row.party_id,
         status: row.status,
         customStatus: row.custom_status || '',
-        queue: row.queue ? JSON.parse(row.queue) : [],
+        queue: safeJsonParse(row.queue, []),
         platform: row.platform || 'desktop',
         serverAge: parseFloat(row.server_age) || 0
       };
     });
   } catch (error) {
-    console.error(error);
+    console.error('get-online-users error:', error);
     return [];
   }
 });
@@ -1040,7 +1072,7 @@ ipcMain.handle('unified-presence-sync', async (event, payload: any) => {
 
     // 2. Run all queries in PARALLEL via Promise.all (Ultra-fast single round-trip)
     const [onlineUsersRows, incomingJoinRows, outgoingJoinRows, collabRows, queueRows] = await Promise.all([
-      db.execute('SELECT *, (UNIX_TIMESTAMP(NOW(3)) - UNIX_TIMESTAMP(last_seen)) as server_age FROM online_users WHERE discord_id != ? AND last_seen >= DATE_SUB(NOW(), INTERVAL 45 SECOND)', [discordId || '']),
+      db.execute('SELECT *, (UNIX_TIMESTAMP(NOW(3)) - UNIX_TIMESTAMP(last_seen)) as server_age FROM online_users WHERE discord_id != ? AND last_seen >= DATE_SUB(NOW(), INTERVAL 60 SECOND)', [discordId || '']),
       db.execute('SELECT * FROM join_requests WHERE host_id = ? AND status = "pending"', [discordId || '']),
       db.execute('SELECT * FROM join_requests WHERE guest_id = ?', [discordId || '']),
       db.execute('SELECT * FROM collab_invites WHERE guest_id = ? AND status = "pending"', [discordId || '']),
@@ -1049,7 +1081,7 @@ ipcMain.handle('unified-presence-sync', async (event, payload: any) => {
 
     // Periodically clean up stale offline users to keep DB clean (10% chance)
     if (Math.random() < 0.1) {
-      db.execute('DELETE FROM online_users WHERE last_seen < DATE_SUB(NOW(), INTERVAL 60 SECOND)').catch(() => { });
+      db.execute('DELETE FROM online_users WHERE last_seen < DATE_SUB(NOW(), INTERVAL 90 SECOND)').catch(() => { });
     }
 
     const onlineUsers = ((onlineUsersRows as any[])[0] as any[]).map(row => {
@@ -1062,11 +1094,11 @@ ipcMain.handle('unified-presence-sync', async (event, payload: any) => {
         discordId: row.discord_id,
         username: row.username,
         avatarUrl: avatarUrl,
-        currentSong: row.current_song ? JSON.parse(row.current_song) : null,
+        currentSong: safeJsonParse(row.current_song, null),
         partyId: row.party_id,
         status: row.status,
         customStatus: row.custom_status || '',
-        queue: row.queue ? JSON.parse(row.queue) : [],
+        queue: safeJsonParse(row.queue, []),
         platform: row.platform || 'desktop',
         serverAge: parseFloat(row.server_age) || 0
       };
@@ -1103,7 +1135,7 @@ ipcMain.handle('unified-presence-sync', async (event, payload: any) => {
       hostId: row.host_id,
       guestId: row.guest_id,
       guestName: row.guest_name,
-      songData: row.song_data ? JSON.parse(row.song_data) : null,
+      songData: safeJsonParse(row.song_data, null),
       status: row.status
     }));
 
