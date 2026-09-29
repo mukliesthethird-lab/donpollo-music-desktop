@@ -13,9 +13,11 @@ dotenv.config({ path: path.join(__dirname, '../.env') });
 
 let mainWindow: BrowserWindow | null = null;
 let db: mysql.Pool | null = null;
+let dbReconnecting = false;
 let minimizeToMiniPlayerEnabled = false; // kept for manual enter-mini-player IPC
 let closeToTrayEnabled = false;
 let isQuitting = false;
+let currentActiveDiscordId: string | null = null;
 
 let globalStatsCache = {
   percentileMap: new Map<string, number>(),
@@ -26,7 +28,7 @@ let globalStatsCache = {
 async function ensureGlobalStatsCache() {
   if (Date.now() - globalStatsCache.lastUpdated < 30 * 1000) return;
   if (!db) return;
-  
+
   try {
     const [[savedRows], [statsRows]] = await Promise.all([
       db.execute('SELECT saved_playlists FROM user_profiles WHERE saved_playlists IS NOT NULL AND saved_playlists != ?', ['[]']),
@@ -53,7 +55,7 @@ async function ensureGlobalStatsCache() {
       users.forEach((u, index) => {
         let percentile = Math.floor((index / totalUsers) * 100);
         if (percentile === 0 && totalUsers > 0) percentile = 1;
-        
+
         let p = 100;
         if (percentile <= 1) p = 1;
         else if (percentile <= 2) p = 2;
@@ -61,7 +63,7 @@ async function ensureGlobalStatsCache() {
         else if (percentile <= 10) p = 10;
         else if (percentile <= 20) p = 20;
         else if (percentile <= 50) p = 50;
-        
+
         percentileMap.set(u.id, p);
       });
     }
@@ -74,8 +76,14 @@ async function ensureGlobalStatsCache() {
   }
 }
 
-app.on('before-quit', () => {
+app.on('before-quit', async () => {
   isQuitting = true;
+  if (db) {
+    try {
+      await db.end();
+      db = null;
+    } catch { }
+  }
 });
 
 let isMiniPlayerMode = false;
@@ -192,14 +200,16 @@ async function initDB() {
     db = mysql.createPool({
       host: process.env.DB_HOST || 'ar-men-08.vexyhost.com',
       user: process.env.DB_USER || 'u9206_8NUrZJ5MBH',
-      password: process.env.DB_PASSWORD || '3TRwKW!7KX^e!rQkUt0SNQ2@',
+      password: process.env.DB_PASSWORD || 'uW@blF0qtSbshWbz!^xnjz+^',
       database: process.env.DB_NAME || 's9206_database',
       port: Number(process.env.DB_PORT) || 3306,
       waitForConnections: true,
       connectionLimit: 1,
       maxIdle: 1,
       idleTimeout: 60000,
-      queueLimit: 0
+      queueLimit: 0,
+      enableKeepAlive: true,
+      keepAliveInitialDelay: 10000
     });
 
     await db.execute(`
@@ -225,9 +235,10 @@ async function initDB() {
     `);
 
     try {
-      await db.execute("ALTER TABLE online_users ADD COLUMN status VARCHAR(20) DEFAULT 'online'").catch(() => {});
-      await db.execute("ALTER TABLE online_users ADD COLUMN queue LONGTEXT").catch(() => {});
-      await db.execute("ALTER TABLE online_users ADD COLUMN platform VARCHAR(20) DEFAULT 'desktop'").catch(() => {});
+      await db.execute("ALTER TABLE online_users ADD COLUMN status VARCHAR(20) DEFAULT 'online'").catch(() => { });
+      await db.execute("ALTER TABLE online_users ADD COLUMN queue LONGTEXT").catch(() => { });
+      await db.execute("ALTER TABLE online_users ADD COLUMN platform VARCHAR(20) DEFAULT 'desktop'").catch(() => { });
+      await db.execute("ALTER TABLE online_users ADD COLUMN custom_status VARCHAR(255) DEFAULT NULL").catch(() => { });
       console.log('Database connected and initialized.');
     } catch (e: any) { }
 
@@ -326,9 +337,32 @@ async function initDB() {
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
       )
     `);
-    console.log('MySQL connected and table initialized');
+
+    // ⚡ Optimasi Index B-Tree agar query presence, collab, & party secepat kilat (<1ms)
+    try { await db.execute("CREATE INDEX idx_collab_guest_status ON collab_invites (guest_id, status)"); } catch { }
+    try { await db.execute("CREATE INDEX idx_queue_host_status ON queue_requests (host_id, status)"); } catch { }
+    try { await db.execute("CREATE INDEX idx_join_host_status ON join_requests (host_id, status)"); } catch { }
+    try { await db.execute("CREATE INDEX idx_join_guest_status ON join_requests (guest_id, status)"); } catch { }
+    try { await db.execute("CREATE INDEX idx_online_last_seen ON online_users (last_seen)"); } catch { }
+    try { await db.execute("CREATE INDEX idx_playlists_discord_id ON playlists (discord_id)"); } catch { }
+
+    // 🧹 Auto-prune sampah request lama (> 10 menit atau consumed) agar tabel selalu ramping & enteng
+    try {
+      await db.execute("DELETE FROM join_requests WHERE status = 'consumed' OR created_at < DATE_SUB(NOW(), INTERVAL 10 MINUTE)");
+      await db.execute("DELETE FROM queue_requests WHERE status = 'consumed' OR created_at < DATE_SUB(NOW(), INTERVAL 10 MINUTE)");
+    } catch { }
+
+    console.log('MySQL connected, indexed, and table initialized');
   } catch (error) {
     console.error('MySQL connection error:', error);
+    db = null;
+    if (!dbReconnecting && !isQuitting) {
+      dbReconnecting = true;
+      setTimeout(() => {
+        dbReconnecting = false;
+        if (!isQuitting) initDB();
+      }, 10000);
+    }
   }
 }
 
@@ -410,10 +444,28 @@ function createWindow() {
   });
 
   if (isDev) console.log('Creating window...');
-  mainWindow.on('close', (event: any) => {
+  mainWindow.on('close', async (event: any) => {
     if (closeToTrayEnabled && !isQuitting) {
       event.preventDefault();
       mainWindow?.hide();
+      return;
+    }
+
+    if (currentActiveDiscordId && db && !isQuitting) {
+      event.preventDefault();
+      isQuitting = true;
+      const targetId = currentActiveDiscordId;
+      try {
+        await Promise.all([
+          db.execute('DELETE FROM online_users WHERE discord_id = ?', [targetId]),
+          db.execute('DELETE FROM listen_parties WHERE host_discord_id = ?', [targetId]),
+          db.execute('DELETE FROM join_requests WHERE host_id = ? OR guest_id = ?', [targetId, targetId])
+        ]);
+      } catch (e) {
+        console.error('Error cleaning up on window close:', e);
+      }
+      mainWindow?.destroy();
+      app.quit();
     }
   });
 
@@ -635,65 +687,6 @@ ipcMain.handle('update-banner', async (event, discordId, bannerUrl) => {
   }
 });
 
-// ─── TIME CAPSULE IPC ──────────────────────────────────────────────────────
-ipcMain.handle('create-time-capsule', async (event, data) => {
-  if (!db) return false;
-  try {
-    await db.execute(
-      'INSERT INTO time_capsules (discord_id, title, message, songs, unlock_date) VALUES (?, ?, ?, ?, ?)',
-      [data.discordId, data.title || '', data.message || '', JSON.stringify(data.songs || []), new Date(data.unlockDate)]
-    );
-    return true;
-  } catch (error) {
-    console.error('create-time-capsule error:', error);
-    return false;
-  }
-});
-
-ipcMain.handle('get-time-capsules', async (event, discordId) => {
-  if (!db) return [];
-  try {
-    const [rows] = await db.execute('SELECT * FROM time_capsules WHERE discord_id = ? ORDER BY created_at DESC', [discordId]);
-    return (rows as any[]).map(r => ({
-      id: r.id,
-      discordId: r.discord_id,
-      title: r.title,
-      message: r.message,
-      songs: JSON.parse(r.songs || '[]'),
-      unlockDate: r.unlock_date.toISOString(),
-      createdAt: r.created_at.toISOString()
-    }));
-  } catch (error) {
-    console.error('get-time-capsules error:', error);
-    return [];
-  }
-});
-
-ipcMain.handle('delete-time-capsule', async (event, id) => {
-  if (!db) return false;
-  try {
-    await db.execute('DELETE FROM time_capsules WHERE id = ?', [id]);
-    return true;
-  } catch (error) {
-    console.error('delete-time-capsule error:', error);
-    return false;
-  }
-});
-
-ipcMain.handle('update-time-capsule', async (event, data) => {
-  if (!db) return false;
-  try {
-    await db.execute(
-      'UPDATE time_capsules SET title = ?, message = ?, songs = ?, unlock_date = ? WHERE id = ?',
-      [data.title, data.message, JSON.stringify(data.songs || []), new Date(data.unlockDate), data.id]
-    );
-    return true;
-  } catch (error) {
-    console.error('update-time-capsule error:', error);
-    return false;
-  }
-});
-
 // Playlist Share Code
 function generateShareCode(): string {
   const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'; // No ambiguous chars (0,O,1,I)
@@ -761,7 +754,7 @@ ipcMain.handle('update-profile', async (event, profileData) => {
   if (!db) return false;
   try {
     const { discordId, username, avatarUrl, likedSongs, stats, privacySettings, savedPlaylists, following, bannerUrl } = profileData;
-    
+
     // Safety: Retrieve existing record first to prevent accidental resets
     const [existingRows] = await db.execute('SELECT stats, liked_songs, saved_playlists, following, privacy_settings, banner_url FROM user_profiles WHERE discord_id = ?', [discordId]);
     const existing = (existingRows as any[])[0] || null;
@@ -776,7 +769,7 @@ ipcMain.handle('update-profile', async (event, profileData) => {
     if (existing) {
       // 1. Never overwrite stats with empty or smaller listen seconds!
       let existingStats: any = {};
-      try { existingStats = JSON.parse(existing.stats || '{}'); } catch {}
+      try { existingStats = JSON.parse(existing.stats || '{}'); } catch { }
 
       if (!stats || Object.keys(stats).length === 0) {
         mergedStats = existingStats;
@@ -793,16 +786,16 @@ ipcMain.handle('update-profile', async (event, profileData) => {
 
       // 2. Never overwrite likedSongs, savedPlaylists, following if undefined
       if (likedSongs === undefined && existing.liked_songs) {
-        try { mergedLiked = JSON.parse(existing.liked_songs); } catch {}
+        try { mergedLiked = JSON.parse(existing.liked_songs); } catch { }
       }
       if (savedPlaylists === undefined && existing.saved_playlists) {
-        try { mergedSavedPlaylists = JSON.parse(existing.saved_playlists); } catch {}
+        try { mergedSavedPlaylists = JSON.parse(existing.saved_playlists); } catch { }
       }
       if (following === undefined && existing.following) {
-        try { mergedFollowing = JSON.parse(existing.following); } catch {}
+        try { mergedFollowing = JSON.parse(existing.following); } catch { }
       }
       if (privacySettings === undefined && existing.privacy_settings) {
-        try { mergedPrivacy = JSON.parse(existing.privacy_settings); } catch {}
+        try { mergedPrivacy = JSON.parse(existing.privacy_settings); } catch { }
       }
       if (!bannerUrl && existing.banner_url) {
         mergedBanner = existing.banner_url;
@@ -885,7 +878,8 @@ ipcMain.handle('delete-playlist', async (event, id) => {
 ipcMain.handle('update-presence', async (event, data) => {
   if (!db) return false;
   try {
-    const { discordId, username, avatarUrl, currentSong, partyId, status, queue } = data;
+    const { discordId, username, avatarUrl, currentSong, partyId, status, queue, customStatus } = data;
+    if (discordId) currentActiveDiscordId = discordId;
 
     if (currentSong) {
       updateTrayMenu(currentSong.title || 'Unknown', !!currentSong.isPlaying);
@@ -898,10 +892,10 @@ ipcMain.handle('update-presence', async (event, data) => {
     const songDataStr = currentSong ? JSON.stringify(currentSong) : '';
     const queueStr = queue ? JSON.stringify(queue) : '';
     await db.execute(
-      `INSERT INTO online_users (discord_id, username, avatar_url, current_song, party_id, status, queue, platform, last_seen) 
-       VALUES (?, ?, ?, ?, ?, ?, ?, 'desktop', NOW()) 
-       ON DUPLICATE KEY UPDATE username = ?, avatar_url = ?, current_song = ?, party_id = ?, status = ?, queue = ?, platform = 'desktop', last_seen = NOW()`,
-      [discordId, username, avatarUrl, songDataStr, partyId || '', status || 'online', queueStr, username, avatarUrl, songDataStr, partyId || '', status || 'online', queueStr]
+      `INSERT INTO online_users (discord_id, username, avatar_url, current_song, party_id, status, custom_status, queue, platform, last_seen) 
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'desktop', NOW()) 
+       ON DUPLICATE KEY UPDATE username = ?, avatar_url = ?, current_song = ?, party_id = ?, status = ?, custom_status = ?, queue = ?, platform = 'desktop', last_seen = NOW()`,
+      [discordId, username, avatarUrl, songDataStr, partyId || '', status || 'online', customStatus || null, queueStr, username, avatarUrl, songDataStr, partyId || '', status || 'online', customStatus || null, queueStr]
     );
     return true;
   } catch (error) {
@@ -935,10 +929,10 @@ async function fetchDiscordUserLive(discordId: string): Promise<{ avatarUrl: str
     });
     if (res.ok) {
       const data: any = await res.json();
-      const avatarUrl = data.avatar 
+      const avatarUrl = data.avatar
         ? `https://cdn.discordapp.com/avatars/${data.id}/${data.avatar}.png`
         : `https://cdn.discordapp.com/embed/avatars/${Number((BigInt(data.id) >> 22n) % 6n)}.png`;
-      
+
       const entry = {
         avatarUrl,
         username: data.username,
@@ -948,8 +942,8 @@ async function fetchDiscordUserLive(discordId: string): Promise<{ avatarUrl: str
       discordAvatarCache.set(discordId, entry);
 
       if (db && avatarUrl) {
-        db.execute('UPDATE online_users SET avatar_url = ? WHERE discord_id = ? AND avatar_url != ?', [avatarUrl, discordId, avatarUrl]).catch(() => {});
-        db.execute('UPDATE user_profiles SET avatar_url = ? WHERE discord_id = ? AND avatar_url != ?', [avatarUrl, discordId, avatarUrl]).catch(() => {});
+        db.execute('UPDATE online_users SET avatar_url = ? WHERE discord_id = ? AND avatar_url != ?', [avatarUrl, discordId, avatarUrl]).catch(() => { });
+        db.execute('UPDATE user_profiles SET avatar_url = ? WHERE discord_id = ? AND avatar_url != ?', [avatarUrl, discordId, avatarUrl]).catch(() => { });
       }
       return entry;
     }
@@ -973,19 +967,19 @@ ipcMain.handle('get-live-discord-user', async (event, discordId) => {
 ipcMain.handle('get-online-users', async (event, currentUserId) => {
   if (!db) return [];
   try {
-    // Delete users older than 30 seconds to clean up (5% chance per request to reduce load)
-    if (Math.random() < 0.05) {
-      await db.execute('DELETE FROM online_users WHERE last_seen < DATE_SUB(NOW(), INTERVAL 30 SECOND)');
+    // Delete users older than 45 seconds to clean up (10% chance per request to reduce load)
+    if (Math.random() < 0.1) {
+      await db.execute('DELETE FROM online_users WHERE last_seen < DATE_SUB(NOW(), INTERVAL 45 SECOND)').catch(() => { });
     }
 
-    const [rows] = await db.execute('SELECT * FROM online_users WHERE discord_id != ?', [currentUserId || '']);
+    const [rows] = await db.execute('SELECT *, (UNIX_TIMESTAMP(NOW(3)) - UNIX_TIMESTAMP(last_seen)) as server_age FROM online_users WHERE discord_id != ? AND last_seen >= DATE_SUB(NOW(), INTERVAL 45 SECOND)', [currentUserId || '']);
     return (rows as any[]).map(row => {
       let avatarUrl = row.avatar_url;
       const cached = discordAvatarCache.get(row.discord_id);
       if (cached && cached.avatarUrl) {
         avatarUrl = cached.avatarUrl;
       } else if (process.env.DISCORD_TOKEN && row.discord_id && !cached) {
-        fetchDiscordUserLive(row.discord_id).catch(() => {});
+        fetchDiscordUserLive(row.discord_id).catch(() => { });
       }
 
       return {
@@ -995,13 +989,150 @@ ipcMain.handle('get-online-users', async (event, currentUserId) => {
         currentSong: row.current_song ? JSON.parse(row.current_song) : null,
         partyId: row.party_id,
         status: row.status,
+        customStatus: row.custom_status || '',
         queue: row.queue ? JSON.parse(row.queue) : [],
-        platform: row.platform || 'desktop'
+        platform: row.platform || 'desktop',
+        serverAge: parseFloat(row.server_age) || 0
       };
     });
   } catch (error) {
     console.error(error);
     return [];
+  }
+});
+
+// UNIFIED PRESENCE SYNC: 1 single IPC trip instead of 5 serial network round-trips!
+ipcMain.handle('unified-presence-sync', async (event, payload: any) => {
+  if (!db) {
+    return {
+      onlineUsers: [],
+      joinRequests: { incoming: [], outgoing: [] },
+      collabInvites: [],
+      queueRequests: []
+    };
+  }
+
+  const { presenceData, discordId, isGuest } = payload || {};
+
+  try {
+    // 1. Update own presence
+    if (presenceData && discordId) {
+      currentActiveDiscordId = discordId;
+      const { username, avatarUrl, currentSong, partyId, status, queue, customStatus } = presenceData;
+
+      if (currentSong) {
+        updateTrayMenu(currentSong.title || 'Unknown', !!currentSong.isPlaying);
+        updateThumbar(!!currentSong.isPlaying, true);
+      } else {
+        updateTrayMenu('Not Playing', false);
+        updateThumbar(false, false);
+      }
+
+      const songDataStr = currentSong ? JSON.stringify(currentSong) : '';
+      const queueStr = queue ? JSON.stringify(queue) : '';
+      await db.execute(
+        `INSERT INTO online_users (discord_id, username, avatar_url, current_song, party_id, status, custom_status, queue, platform, last_seen) 
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'desktop', NOW()) 
+         ON DUPLICATE KEY UPDATE username = ?, avatar_url = ?, current_song = ?, party_id = ?, status = ?, custom_status = ?, queue = ?, platform = 'desktop', last_seen = NOW()`,
+        [discordId, username, avatarUrl, songDataStr, partyId || '', status || 'online', customStatus || null, queueStr, username, avatarUrl, songDataStr, partyId || '', status || 'online', customStatus || null, queueStr]
+      );
+    }
+
+    // 2. Run all queries in PARALLEL via Promise.all (Ultra-fast single round-trip)
+    const [onlineUsersRows, incomingJoinRows, outgoingJoinRows, collabRows, queueRows] = await Promise.all([
+      db.execute('SELECT *, (UNIX_TIMESTAMP(NOW(3)) - UNIX_TIMESTAMP(last_seen)) as server_age FROM online_users WHERE discord_id != ? AND last_seen >= DATE_SUB(NOW(), INTERVAL 45 SECOND)', [discordId || '']),
+      db.execute('SELECT * FROM join_requests WHERE host_id = ? AND status = "pending"', [discordId || '']),
+      db.execute('SELECT * FROM join_requests WHERE guest_id = ?', [discordId || '']),
+      db.execute('SELECT * FROM collab_invites WHERE guest_id = ? AND status = "pending"', [discordId || '']),
+      !isGuest ? db.execute('SELECT * FROM queue_requests WHERE host_id = ? AND status = "pending"', [discordId || '']) : Promise.resolve([[]])
+    ]);
+
+    // Periodically clean up stale offline users to keep DB clean (10% chance)
+    if (Math.random() < 0.1) {
+      db.execute('DELETE FROM online_users WHERE last_seen < DATE_SUB(NOW(), INTERVAL 60 SECOND)').catch(() => { });
+    }
+
+    const onlineUsers = ((onlineUsersRows as any[])[0] as any[]).map(row => {
+      let avatarUrl = row.avatar_url;
+      const cached = discordAvatarCache.get(row.discord_id);
+      if (cached && cached.avatarUrl) {
+        avatarUrl = cached.avatarUrl;
+      }
+      return {
+        discordId: row.discord_id,
+        username: row.username,
+        avatarUrl: avatarUrl,
+        currentSong: row.current_song ? JSON.parse(row.current_song) : null,
+        partyId: row.party_id,
+        status: row.status,
+        customStatus: row.custom_status || '',
+        queue: row.queue ? JSON.parse(row.queue) : [],
+        platform: row.platform || 'desktop',
+        serverAge: parseFloat(row.server_age) || 0
+      };
+    });
+
+    const joinRequests = {
+      incoming: (((incomingJoinRows as any[])[0] as any[]) || []).map(row => ({
+        id: row.id,
+        hostId: row.host_id,
+        guestId: row.guest_id,
+        guestName: row.guest_name,
+        status: row.status
+      })),
+      outgoing: (((outgoingJoinRows as any[])[0] as any[]) || []).map(row => ({
+        id: row.id,
+        hostId: row.host_id,
+        guestId: row.guest_id,
+        status: row.status
+      }))
+    };
+
+    const collabInvites = (((collabRows as any[])[0] as any[]) || []).map(row => ({
+      id: row.id,
+      playlistId: row.playlist_id,
+      playlistName: row.playlist_name,
+      hostId: row.host_id,
+      hostName: row.host_name,
+      guestId: row.guest_id,
+      status: row.status
+    }));
+
+    const queueRequests = (((queueRows as any[])[0] as any[]) || []).map(row => ({
+      id: row.id,
+      hostId: row.host_id,
+      guestId: row.guest_id,
+      guestName: row.guest_name,
+      songData: row.song_data ? JSON.parse(row.song_data) : null,
+      status: row.status
+    }));
+
+    return {
+      onlineUsers,
+      joinRequests,
+      collabInvites,
+      queueRequests
+    };
+  } catch (error) {
+    console.error('unified-presence-sync error:', error);
+    return {
+      onlineUsers: [],
+      joinRequests: { incoming: [], outgoing: [] },
+      collabInvites: [],
+      queueRequests: []
+    };
+  }
+});
+
+// SET CUSTOM STATUS IPC
+ipcMain.handle('set-custom-status', async (_event, { discordId, customStatus }: { discordId: string, customStatus: string }) => {
+  try {
+    if (!db || !discordId) return false;
+    await db.execute('UPDATE online_users SET custom_status = ? WHERE discord_id = ?', [customStatus || null, discordId]);
+    return true;
+  } catch (error) {
+    console.error('Error setting custom status:', error);
+    return false;
   }
 });
 
@@ -1186,7 +1317,7 @@ ipcMain.handle('respond-collab-invite', async (event, inviteId, status) => {
           let collaborators = [];
           try {
             collaborators = JSON.parse(playlist.collaborators || '[]');
-          } catch (e) {}
+          } catch (e) { }
           if (!collaborators.includes(invite.guest_id)) {
             collaborators.push(invite.guest_id);
             await db.execute('UPDATE playlists SET collaborators = ? WHERE id = ?', [JSON.stringify(collaborators), invite.playlist_id]);
@@ -1307,12 +1438,13 @@ ipcMain.on('set-activity', (event, song, extraData) => {
     const isInParty = d.isGuest || (d.partyId && d.partyId === d.discordId);
 
     currentActivity = {
+      type: 2, // 2 = Listening to
       details: cleanTitle,
       state: isInParty
         ? `🎧 with ${d.hostUsername || 'a friend'}`
         : (song.artist || 'Unknown Artist'),
       largeImageKey: song.thumbnail || 'logo',
-      largeImageText: cleanTitle,
+      ...(song.album && song.album.trim().toLowerCase() !== cleanTitle.toLowerCase() ? { largeImageText: song.album } : {}),
       smallImageKey: 'logo',
       smallImageText: 'Don Pollo Music',
       ...(startTimestamp ? { startTimestamp } : {}),
@@ -1542,7 +1674,7 @@ function enforceCacheLimit() {
   });
 }
 
-function downloadToCache(songData: any, urlStr: string, sender: any, isTemp: boolean = false) {
+function downloadToCache(songData: any, urlStr: string, sender: any, isTemp: boolean = false, maxRedirects: number = 5) {
   const songId = songData.id;
   const filePath = path.join(cacheDir, `${songId}.m4a`);
   const tempPath = path.join(cacheDir, `${songId}.tmp`);
@@ -1560,55 +1692,96 @@ function downloadToCache(songData: any, urlStr: string, sender: any, isTemp: boo
     return;
   }
 
-  // If currently downloading, just skip and let the active download finish
-  if (fs.existsSync(tempPath)) return;
-
-  const url = new URL(urlStr);
-  const client = url.protocol === 'https:' ? https : http;
-
-  client.get(urlStr, (response) => {
-    // Only save if status is OK and content is audio/video
-    if (response.statusCode === 200) {
-      const totalBytes = parseInt(response.headers['content-length'] || '0', 10);
-      let downloadedBytes = 0;
-
-      const fileStream = fs.createWriteStream(tempPath);
-      response.on('data', (chunk) => {
-        downloadedBytes += chunk.length;
-        if (totalBytes > 0 && sender) {
-          const progress = Math.round((downloadedBytes / totalBytes) * 100);
-          sender.send('download-cache-progress', { songId, progress, songData });
-        }
-      });
-      response.pipe(fileStream);
-
-      fileStream.on('finish', () => {
-        fileStream.close(async () => {
-          try {
-            await fs.promises.rename(tempPath, filePath);
-            if (!isTemp) {
-              const metadata = getCachedMetadata();
-              if (!metadata.find((s: any) => s.id === songId)) {
-                metadata.push(songData);
-                saveCachedMetadata(metadata);
-              }
-            }
-            enforceCacheLimit();
-            if (sender) sender.send('download-cache-complete', songData);
-          } catch (e) { }
-        });
-      });
-
-      fileStream.on('error', () => {
-        fs.unlink(tempPath, () => { });
-      });
-    } else {
-      // Consume response data to free up memory
-      response.resume();
+  // If tempPath exists, check if it's an abandoned/dead download (> 20s old)
+  if (fs.existsSync(tempPath)) {
+    try {
+      const stats = fs.statSync(tempPath);
+      if (Date.now() - stats.mtimeMs > 20000) {
+        fs.unlinkSync(tempPath);
+      } else {
+        // Active download still in progress
+        return;
+      }
+    } catch {
+      return;
     }
-  }).on('error', () => {
-    fs.unlink(tempPath, () => { });
-  });
+  }
+
+  const performDownload = (targetUrlStr: string, redirectsLeft: number) => {
+    let parsedUrl: URL;
+    try {
+      parsedUrl = new URL(targetUrlStr);
+    } catch {
+      if (fs.existsSync(tempPath)) fs.unlink(tempPath, () => { });
+      return;
+    }
+
+    const client = parsedUrl.protocol === 'https:' ? https : http;
+    const req = client.get(targetUrlStr, (response) => {
+      // Follow redirects (301, 302, 303, 307, 308)
+      if ([301, 302, 303, 307, 308].includes(response.statusCode || 0) && response.headers.location && redirectsLeft > 0) {
+        response.resume();
+        const nextUrl = new URL(response.headers.location, targetUrlStr).toString();
+        performDownload(nextUrl, redirectsLeft - 1);
+        return;
+      }
+
+      // Only save if status is OK
+      if (response.statusCode === 200) {
+        const totalBytes = parseInt(response.headers['content-length'] || '0', 10);
+        let downloadedBytes = 0;
+
+        const fileStream = fs.createWriteStream(tempPath);
+        response.on('data', (chunk) => {
+          downloadedBytes += chunk.length;
+          if (totalBytes > 0 && sender) {
+            const progress = Math.round((downloadedBytes / totalBytes) * 100);
+            sender.send('download-cache-progress', { songId, progress, songData });
+          }
+        });
+        response.pipe(fileStream);
+
+        fileStream.on('finish', () => {
+          fileStream.close(async () => {
+            try {
+              await fs.promises.rename(tempPath, filePath);
+              if (!isTemp) {
+                const metadata = getCachedMetadata();
+                if (!metadata.find((s: any) => s.id === songId)) {
+                  metadata.push(songData);
+                  saveCachedMetadata(metadata);
+                }
+              }
+              enforceCacheLimit();
+              if (sender) sender.send('download-cache-complete', songData);
+            } catch (e) {
+              if (fs.existsSync(tempPath)) fs.unlink(tempPath, () => { });
+            }
+          });
+        });
+
+        fileStream.on('error', () => {
+          if (fs.existsSync(tempPath)) fs.unlink(tempPath, () => { });
+        });
+      } else {
+        // Non-200 status: consume response data to free memory and clean temp
+        response.resume();
+        if (fs.existsSync(tempPath)) fs.unlink(tempPath, () => { });
+      }
+    });
+
+    req.on('error', () => {
+      if (fs.existsSync(tempPath)) fs.unlink(tempPath, () => { });
+    });
+
+    // 35s timeout safety against hanging connections
+    req.setTimeout(35000, () => {
+      req.destroy();
+      if (fs.existsSync(tempPath)) fs.unlink(tempPath, () => { });
+    });
+  };
+
+  performDownload(urlStr, maxRedirects);
 }
 
 ipcMain.handle('check-cache', async (event, songId) => {
@@ -1752,6 +1925,7 @@ ipcMain.on('set-thumbar-icons', (event, icons) => {
 });
 
 ipcMain.on('notify-closing', async (event, discordId) => {
+  if (discordId) currentActiveDiscordId = discordId;
   if (!db) return;
   try {
     await db.execute('DELETE FROM online_users WHERE discord_id = ?', [discordId]);
@@ -1802,24 +1976,24 @@ ipcMain.handle('get-analytics', async () => {
     let moods: any[] = [];
     if (fs.existsSync(analyticsPath)) history = JSON.parse(fs.readFileSync(analyticsPath, 'utf8'));
     if (fs.existsSync(moodPath)) moods = JSON.parse(fs.readFileSync(moodPath, 'utf8'));
-    
+
     const totalListenSeconds = history.reduce((acc, s) => acc + (s.duration || 0), 0);
-    
+
     const songCount: Record<string, any> = {};
     const artistCount: Record<string, { count: number, cover: string }> = {};
-    
+
     history.forEach(s => {
       if (!s.title || !s.artist) return; // Skip invalid entries
       if (!songCount[s.id]) songCount[s.id] = { song: s, count: 0 };
       songCount[s.id].count++;
-      
+
       if (!artistCount[s.artist]) artistCount[s.artist] = { count: 0, cover: s.cover || s.thumbnail || '' };
       artistCount[s.artist].count++;
     });
-    
+
     const topSongs = Object.values(songCount).sort((a: any, b: any) => b.count - a.count).slice(0, 5);
     const topArtists = Object.keys(artistCount).map(artist => ({ artist, count: artistCount[artist].count, cover: artistCount[artist].cover })).sort((a, b) => b.count - a.count);
-    
+
     const moodCount: Record<string, number> = {};
     moods.forEach(m => {
       moodCount[m.mood] = (moodCount[m.mood] || 0) + 1;
@@ -1827,14 +2001,14 @@ ipcMain.handle('get-analytics', async () => {
     let topMood = null;
     let max = 0;
     Object.keys(moodCount).forEach(k => {
-      if(moodCount[k] > max) { max = moodCount[k]; topMood = k; }
+      if (moodCount[k] > max) { max = moodCount[k]; topMood = k; }
     });
 
-    return { 
-      totalListenSeconds, 
-      topSongs, 
-      topArtists, 
-      topMood, 
+    return {
+      totalListenSeconds,
+      topSongs,
+      topArtists,
+      topMood,
       historyCount: history.length,
       uniqueSongsCount: Object.keys(songCount).length,
       uniqueArtistsCount: Object.keys(artistCount).length
@@ -1861,6 +2035,20 @@ if (!gotTheLock && !isDev) {
       mainWindow.focus();
     }
   });
+
+  protocol.registerSchemesAsPrivileged([
+    {
+      scheme: 'donpollo-cache',
+      privileges: {
+        standard: true,
+        secure: true,
+        supportFetchAPI: true,
+        corsEnabled: true,
+        stream: true,
+        bypassCSP: true
+      }
+    }
+  ]);
 
   app.whenReady().then(async () => {
     session.defaultSession.setPermissionCheckHandler((_webContents, permission) => {

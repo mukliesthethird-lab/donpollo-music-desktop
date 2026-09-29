@@ -585,6 +585,20 @@ type TranslationKeys = {
   shareCodeError: string;
   syncProfile: string;
   profileUpdated: string;
+
+  // Custom Status
+  customStatusTitle: string;
+  customStatusDesc: string;
+  customStatusPlaceholder: string;
+  customStatusDuration: string;
+  customStatus1h: string;
+  customStatus5h: string;
+  customStatus12h: string;
+  customStatus24h: string;
+  customStatusClear: string;
+  customStatusSet: string;
+  customStatusEdit: string;
+  customStatusTooltip: string;
 };
 
 const translations: Record<Language, TranslationKeys> = {
@@ -1171,6 +1185,20 @@ const translations: Record<Language, TranslationKeys> = {
     shareCodeError: 'Gagal membuat kode share',
     syncProfile: 'Perbarui Profil',
     profileUpdated: 'Profil Discord berhasil diperbarui!',
+
+    // Custom Status
+    customStatusTitle: 'Custom Status',
+    customStatusDesc: 'Tulis catatan status singkat. Teman akan melihat status ini saat mengarahkan kursor ke profilmu.',
+    customStatusPlaceholder: 'Tulis statusmu di sini...',
+    customStatusDuration: 'Durasi Status',
+    customStatus1h: '1 Jam',
+    customStatus5h: '5 Jam',
+    customStatus12h: '12 Jam',
+    customStatus24h: '24 Jam',
+    customStatusClear: 'Hapus Status',
+    customStatusSet: 'Pasang Status',
+    customStatusEdit: 'Ubah Custom Status',
+    customStatusTooltip: 'Klik untuk ubah status',
   },
 
   en: {
@@ -1756,6 +1784,20 @@ const translations: Record<Language, TranslationKeys> = {
     shareCodeError: 'Failed to create share code',
     syncProfile: 'Sync Profile',
     profileUpdated: 'Discord profile updated successfully!',
+
+    // Custom Status
+    customStatusTitle: 'Custom Status',
+    customStatusDesc: 'Set a brief status note. Friends will see this status when hovering over your profile.',
+    customStatusPlaceholder: 'What\'s on your mind?...',
+    customStatusDuration: 'Status Duration',
+    customStatus1h: '1 Hour',
+    customStatus5h: '5 Hours',
+    customStatus12h: '12 Hours',
+    customStatus24h: '24 Hours',
+    customStatusClear: 'Clear Status',
+    customStatusSet: 'Set Custom Status',
+    customStatusEdit: 'Edit Custom Status',
+    customStatusTooltip: 'Click to edit status',
   },
 
   ja: {
@@ -2341,6 +2383,20 @@ const translations: Record<Language, TranslationKeys> = {
     shareCodeError: '共有コードの作成に失敗しました',
     syncProfile: 'プロフィールを同期',
     profileUpdated: 'Discordプロフィールが正常に更新されました！',
+
+    // Custom Status
+    customStatusTitle: 'カスタムステータス',
+    customStatusDesc: '簡単なステータスメモを設定します。友達があなたのプロフィールにカーソルを合わせると表示されます。',
+    customStatusPlaceholder: '今なにしてる？...',
+    customStatusDuration: 'ステータスの期間',
+    customStatus1h: '1時間',
+    customStatus5h: '5時間',
+    customStatus12h: '12時間',
+    customStatus24h: '24時間',
+    customStatusClear: 'ステータスをクリア',
+    customStatusSet: 'カスタムステータスを設定',
+    customStatusEdit: 'カスタムステータスを編集',
+    customStatusTooltip: 'クリックしてステータスを編集',
   },
 
   ko: {
@@ -2927,6 +2983,20 @@ const translations: Record<Language, TranslationKeys> = {
     shareCodeError: '공유 코드 생성에 실패했습니다',
     syncProfile: '프로필 동기화',
     profileUpdated: 'Discord 프로필이 성공적으로 업데이트되었습니다!',
+
+    // Custom Status
+    customStatusTitle: '맞춤 상태',
+    customStatusDesc: '간단한 상태 메모를 설정하세요. 친구가 프로필에 마우스를 올리면 이 상태가 표시됩니다.',
+    customStatusPlaceholder: '지금 무슨 생각하세요?...',
+    customStatusDuration: '상태 유지 시간',
+    customStatus1h: '1시간',
+    customStatus5h: '5시간',
+    customStatus12h: '12시간',
+    customStatus24h: '24시간',
+    customStatusClear: '상태 지우기',
+    customStatusSet: '맞춤 상태 설정',
+    customStatusEdit: '맞춤 상태 변경',
+    customStatusTooltip: '클릭하여 상태 변경',
   }
 };
 

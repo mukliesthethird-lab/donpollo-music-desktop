@@ -1,5 +1,5 @@
-﻿import React, { useState, useRef, useEffect, useCallback, useMemo } from 'react';
-import { Home, Library, Plus, Mic2, Settings, Play, Pause, SkipBack, SkipForward, Repeat, Shuffle, Volume2, VolumeX, ListMusic, UserCircle, ChevronRight, Search, AlertCircle, Headset, Loader2, Maximize2, X, ChevronLeft, ChevronUp, ChevronDown, Music, PanelRight, Trash2, Heart, LogIn, LogOut, Check, FolderPlus, Globe, Headphones, Download, DownloadCloud, Database, WifiOff, CheckCircle2, Paintbrush, Clock, Trophy, Zap, Radio, Timer, Repeat1, MinusCircle, PlusCircle, Edit3, Share2, Copy, Smartphone, Hourglass, Lock, Map as MapIcon, Users, RotateCcw, FileText, Film, Sparkles, RefreshCw, Coffee, Sun, CloudRain, Compass, Flame, Upload } from 'lucide-react';
+import React, { useState, useRef, useEffect, useCallback, useMemo } from 'react';
+import { Home, Library, Plus, Mic2, Settings, Play, Pause, SkipBack, SkipForward, Repeat, Shuffle, Volume2, VolumeX, ListMusic, UserCircle, ChevronRight, Search, AlertCircle, Headset, Loader2, Maximize2, X, ChevronLeft, ChevronUp, ChevronDown, Music, PanelRight, Trash2, Heart, LogIn, LogOut, Check, FolderPlus, Globe, Headphones, Download, DownloadCloud, Database, WifiOff, CheckCircle2, Paintbrush, Clock, Trophy, Zap, Radio, Timer, Repeat1, MinusCircle, PlusCircle, Edit3, Share2, Copy, Smartphone, Lock, Map as MapIcon, Users, RotateCcw, FileText, Film, Sparkles, RefreshCw, Coffee, Sun, CloudRain, Compass, Flame, Upload, Keyboard, MessageSquare } from 'lucide-react';
 import './index.css';
 import './themes.css';
 import { createTranslator } from './translations';
@@ -19,7 +19,7 @@ const DISCORD_REDIRECT_URI = window.location.hostname === 'localhost'
   ? 'http://localhost:5173/callback.html'
   : 'https://donpollo-music-desktop.vercel.app/callback';
 
-type Page = 'home' | 'library' | 'playlist' | 'playlist-detail' | 'settings' | 'downloads' | 'artist' | 'profile' | 'time-capsule' | 'sound-map';
+type Page = 'home' | 'library' | 'playlist' | 'playlist-detail' | 'settings' | 'downloads' | 'artist' | 'profile' | 'sound-map';
 
 interface Playlist {
   id: string;
@@ -163,6 +163,11 @@ function App() {
   // ─── Page Navigation ────────────────────────────────────────
   const [activePage, setActivePage] = useState<Page>('home');
   const [activePlaylistId, setActivePlaylistId] = useState<string | null>(null);
+  const [activeProfileId, setActiveProfileId] = useState<string | null>(null);
+  const [activeArtist, setActiveArtist] = useState<string | null>(null);
+  const [showShortcutsModal, setShowShortcutsModal] = useState(false);
+  const searchInputRef = useRef<HTMLInputElement | null>(null);
+  const lyricsRequestIdRef = useRef(0);
   const [wrappedData, setWrappedData] = useState<any>(null);
 
   useEffect(() => {
@@ -179,6 +184,8 @@ function App() {
   const canGoBack = navIndex > 0;
   const canGoForward = navIndex < navHistory.length - 1;
 
+  const fetchArtistSongsRef = useRef<((artist: string, filter: 'popular' | 'newest', isPodcast?: boolean) => void) | null>(null);
+
   const navigate = (page: Page, opts?: { playlistId?: string | null; profileId?: string | null; artistName?: string | null }) => {
     const entry: NavEntry = { page, playlistId: opts?.playlistId ?? null, profileId: opts?.profileId ?? null, artistName: opts?.artistName ?? null };
     setNavHistory(prev => {
@@ -189,6 +196,7 @@ function App() {
     setActivePage(page);
     if (opts?.playlistId !== undefined) setActivePlaylistId(opts.playlistId ?? null);
     if (opts?.profileId !== undefined) setActiveProfileId(opts.profileId ?? null);
+    if (opts?.artistName !== undefined) setActiveArtist(opts.artistName ?? null);
   };
 
   const goBack = () => {
@@ -198,6 +206,12 @@ function App() {
     setActivePage(prev.page);
     if (prev.playlistId !== undefined) setActivePlaylistId(prev.playlistId ?? null);
     if (prev.profileId !== undefined) setActiveProfileId(prev.profileId ?? null);
+    if (prev.artistName !== undefined) {
+      setActiveArtist(prev.artistName ?? null);
+      if (prev.page === 'artist' && prev.artistName) {
+        fetchArtistSongsRef.current?.(prev.artistName, 'popular', false);
+      }
+    }
   };
 
   const goForward = () => {
@@ -207,6 +221,12 @@ function App() {
     setActivePage(next.page);
     if (next.playlistId !== undefined) setActivePlaylistId(next.playlistId ?? null);
     if (next.profileId !== undefined) setActiveProfileId(next.profileId ?? null);
+    if (next.artistName !== undefined) {
+      setActiveArtist(next.artistName ?? null);
+      if (next.page === 'artist' && next.artistName) {
+        fetchArtistSongsRef.current?.(next.artistName, 'popular', false);
+      }
+    }
   };
 
   const [isOffline, setIsOffline] = useState(!navigator.onLine);
@@ -227,7 +247,6 @@ function App() {
   }, []);
 
   // ─── Artist Page State ──────────────────────────────────────
-  const [activeArtist, setActiveArtist] = useState<string | null>(null);
   const [artistSongs, setArtistSongs] = useState<any[]>([]);
   const [artistFilter, setArtistFilter] = useState<'popular' | 'newest'>('popular');
   const [isArtistLoading, setIsArtistLoading] = useState(false);
@@ -435,6 +454,7 @@ function App() {
   const [cachePath, setCachePath] = useState<string>('');
   const [showClearCacheConfirm, setShowClearCacheConfirm] = useState(false);
   const [isGuest, setIsGuest] = useState(false);
+  const savedGuestCrossfadeRef = useRef<string | null>(null);
   // Cache Discord user info so offline collaborators still show username/avatar
   // Persisted in localStorage so it survives app restarts
   const collabUserCacheRef = useRef<Record<string, { username: string; avatarUrl: string }>>(
@@ -442,7 +462,6 @@ function App() {
   );
 
   // ─── Profile & Social State ────────────────────────────────
-  const [activeProfileId, setActiveProfileId] = useState<string | null>(null);
   const [profileData, setProfileData] = useState<any>(null);
   const [isLoadingProfile, setIsLoadingProfile] = useState(false);
   const [savedPlaylists, setSavedPlaylists] = useState<string[]>([]);
@@ -461,85 +480,6 @@ function App() {
   const [isEditingBanner, setIsEditingBanner] = useState(false);
   const [bannerInputUrl, setBannerInputUrl] = useState('');
   const [listenerPercentile, setListenerPercentile] = useState<number | null>(null);
-
-  // ─── Focus Mode / Pomodoro State ─────────────────────────────
-  const [isFocusMode, setIsFocusMode] = useState(false);
-  const [focusDuration, setFocusDuration] = useState(25 * 60); // in seconds
-  const [focusTimeLeft, setFocusTimeLeft] = useState(0);
-  const [focusSongsPlayed, setFocusSongsPlayed] = useState<string[]>([]);
-  const [showFocusSetup, setShowFocusSetup] = useState(false);
-  const [showFocusRecap, setShowFocusRecap] = useState(false);
-  const [focusCustomMinutes, setFocusCustomMinutes] = useState('');
-  const [focusRecapData, setFocusRecapData] = useState<{ duration: number; songsPlayed: number; startedAt: number } | null>(null);
-  const [focusSessionHistory, setFocusSessionHistory] = useState<any[]>(() => {
-    try {
-      const user = JSON.parse(localStorage.getItem('donpollo_user') || 'null');
-      const suffix = user ? `_${user.id}` : '';
-      return JSON.parse(localStorage.getItem(`donpollo_focus_history${suffix}`) || '[]');
-    } catch { return []; }
-  });
-  const focusStartedAtRef = useRef<number>(0);
-
-  // ─── Focus Mode / Pomodoro Logic ─────────────────────────────
-  useEffect(() => {
-    let timer: ReturnType<typeof setInterval>;
-    if (isFocusMode && focusTimeLeft > 0) {
-      timer = setInterval(() => {
-        setFocusTimeLeft(prev => {
-          if (prev <= 1) {
-            clearInterval(timer);
-            handleFocusComplete();
-            return 0;
-          }
-          return prev - 1;
-        });
-      }, 1000);
-    }
-    return () => {
-      if (timer) clearInterval(timer);
-    };
-  }, [isFocusMode, focusTimeLeft]);
-
-  const startFocusMode = (durationSeconds: number) => {
-    setFocusDuration(durationSeconds);
-    setFocusTimeLeft(durationSeconds);
-    setFocusSongsPlayed([]);
-    setIsFocusMode(true);
-    setShowFocusSetup(false);
-    focusStartedAtRef.current = Date.now();
-  };
-
-  const handleFocusComplete = () => {
-    setIsFocusMode(false);
-    setShowFocusRecap(true);
-    const durationMins = Math.round(focusDuration / 60);
-    const recap = {
-      duration: durationMins,
-      songsPlayed: focusSongsPlayed.length,
-      startedAt: focusStartedAtRef.current,
-    };
-    setFocusRecapData(recap);
-    
-    // Save to history
-    setFocusSessionHistory(prev => {
-      const newHistory = [recap, ...prev];
-      try {
-        const user = JSON.parse(localStorage.getItem('donpollo_user') || 'null');
-        const suffix = user ? `_${user.id}` : '';
-        localStorage.setItem(`donpollo_focus_history${suffix}`, JSON.stringify(newHistory));
-      } catch { }
-      return newHistory;
-    });
-  };
-
-  const stopFocusMode = () => {
-    setIsFocusMode(false);
-    setFocusTimeLeft(0);
-    // showToast is called below, but we can't use it before it's defined if not careful.
-    // It's defined at line 200+. We can use it.
-    showToast(t('focusStop'), 'music');
-  };
-
 
   // ─── Real Data ──────────────────────────────────────────────
   const [playHistory, setPlayHistory] = useState<any[]>(() => {
@@ -560,57 +500,6 @@ function App() {
   const [showCollabModal, setShowCollabModal] = useState(false);
   const [collabInvites, setCollabInvites] = useState<any[]>([]);
   const [collabPlaylistId, setCollabPlaylistId] = useState<string | null>(null);
-
-  // ─── Time Capsule ──────────────────────────────────────────────
-  const [showTimeCapsuleModal, setShowTimeCapsuleModal] = useState(false);
-  const [timeCapsules, setTimeCapsules] = useState<any[]>([]);
-  const [newCapsule, setNewCapsule] = useState({ id: undefined as number | undefined, title: '', message: '', unlockDate: '', songs: [] as any[] });
-  const [capsuleSearchQuery, setCapsuleSearchQuery] = useState('');
-  const [capsuleSearchResults, setCapsuleSearchResults] = useState<any[]>([]);
-  const [capsuleToDelete, setCapsuleToDelete] = useState<number | null>(null);
-
-  const fetchTimeCapsules = useCallback(async () => {
-    if (!discordUser?.id || !(window as any).electronAPI?.getTimeCapsules) return;
-    const caps = await (window as any).electronAPI.getTimeCapsules(discordUser.id);
-    setTimeCapsules(caps);
-  }, [discordUser?.id]);
-
-  useEffect(() => {
-    if (discordUser?.id && activePage === 'time-capsule') {
-      fetchTimeCapsules();
-    }
-  }, [discordUser?.id, activePage, fetchTimeCapsules]);
-
-  useEffect(() => {
-    if (capsuleSearchQuery.length < 2) {
-      setCapsuleSearchResults([]);
-      return;
-    }
-    const handler = setTimeout(async () => {
-      try {
-        const preferAudio = settings?.prioritizeOfficialAudio !== false;
-        const q = preferAudio ? buildSmartSearchQuery(capsuleSearchQuery) : capsuleSearchQuery;
-        const res = await fetch(`${API_BASE_URL}/api/search?q=${encodeURIComponent(q)}`);
-        const data = await res.json();
-        let results = (data.results || []).filter((r: any) => r.duration > 0);
-        if (preferAudio) {
-          results = rankAudioResults(results, capsuleSearchQuery);
-        }
-        const wantsVariant = userExplicitlyWantsAcoustic(capsuleSearchQuery) || userExplicitlyWantsRemix(capsuleSearchQuery) || userExplicitlyWantsLive(capsuleSearchQuery);
-        let cleaned = results.map((r: any) => formatTrackLikeSpotify(r, capsuleSearchQuery));
-        if (!wantsVariant) {
-          const studioOnly = cleaned.filter((r: any) => !isUnwantedTrackVariant(r.title, r.artist));
-          if (studioOnly.length > 0) cleaned = studioOnly;
-        }
-        setCapsuleSearchResults(cleaned.slice(0, 5));
-      } catch (e) {
-        console.error(e);
-      }
-    }, 500);
-    return () => clearTimeout(handler);
-  }, [capsuleSearchQuery]);
-
-
 
   // ─── Playlists ──────────────────────────────────────────────
   const [playlists, setPlaylists] = useState<Playlist[]>(() => {
@@ -936,7 +825,6 @@ function App() {
   const [newPlaylistAvatar, setNewPlaylistAvatar] = useState('');
   const [showLogoutDropdown, setShowLogoutDropdown] = useState(false);
   const [addToPlaylistSong, setAddToPlaylistSong] = useState<any | null>(null);
-  const [addToCapsuleSong, setAddToCapsuleSong] = useState<any | null>(null);
   const [playlistToDelete, setPlaylistToDelete] = useState<string | null>(null);
   const [isEditingPlaylistName, setIsEditingPlaylistName] = useState(false);
   const [editPlaylistNameValue, setEditPlaylistNameValue] = useState('');
@@ -1152,6 +1040,60 @@ function App() {
 
 
   const [userStatus, setUserStatus] = useState<'online' | 'idle' | 'dnd'>(localStorage.getItem('donpollo_status') as any || 'online');
+  const [myCustomStatus, setMyCustomStatus] = useState<string>(() => {
+    const exp = localStorage.getItem('donpollo_custom_status_expires');
+    if (exp && parseInt(exp, 10) < Date.now()) {
+      localStorage.removeItem('donpollo_custom_status');
+      localStorage.removeItem('donpollo_custom_status_expires');
+      return '';
+    }
+    return localStorage.getItem('donpollo_custom_status') || '';
+  });
+  const [customStatusDuration, setCustomStatusDuration] = useState<number>(24);
+  const [showStatusModal, setShowStatusModal] = useState<boolean>(false);
+  const [customStatusInput, setCustomStatusInput] = useState<string>('');
+
+  const handleSaveCustomStatus = async (newStatus: string, hours: number = 24) => {
+    const trimmed = newStatus.trim().slice(0, 60);
+    if (!trimmed) {
+      localStorage.removeItem('donpollo_custom_status');
+      localStorage.removeItem('donpollo_custom_status_expires');
+      setMyCustomStatus('');
+      if (discordUser?.id && (window as any).electronAPI?.setCustomStatus) {
+        await (window as any).electronAPI.setCustomStatus({ discordId: discordUser.id, customStatus: '' });
+      }
+      setShowStatusModal(false);
+      showToast('Status berhasil dihapus', 'success');
+      return;
+    }
+
+    const expiresAt = Date.now() + (hours * 3600 * 1000);
+    localStorage.setItem('donpollo_custom_status', trimmed);
+    localStorage.setItem('donpollo_custom_status_expires', expiresAt.toString());
+    setMyCustomStatus(trimmed);
+    if (discordUser?.id && (window as any).electronAPI?.setCustomStatus) {
+      await (window as any).electronAPI.setCustomStatus({ discordId: discordUser.id, customStatus: trimmed });
+    }
+    setShowStatusModal(false);
+    showToast(`Status aktif selama ${hours} jam!`, 'success');
+  };
+
+  useEffect(() => {
+    const checkExpiry = () => {
+      const exp = localStorage.getItem('donpollo_custom_status_expires');
+      if (exp && parseInt(exp, 10) < Date.now()) {
+        localStorage.removeItem('donpollo_custom_status');
+        localStorage.removeItem('donpollo_custom_status_expires');
+        setMyCustomStatus('');
+        if (discordUser?.id && (window as any).electronAPI?.setCustomStatus) {
+          (window as any).electronAPI.setCustomStatus({ discordId: discordUser.id, customStatus: '' });
+        }
+      }
+    };
+    checkExpiry();
+    const interval = setInterval(checkExpiry, 60000);
+    return () => clearInterval(interval);
+  }, [discordUser]);
   const [joinRequests, setJoinRequests] = useState<{ incoming: any[], outgoing: any[] }>({ incoming: [], outgoing: [] });
   const [showProfileStats, setShowProfileStats] = useState(false);
   const [totalListenSeconds, setTotalListenSeconds] = useState<number>(() => {
@@ -1370,27 +1312,73 @@ function App() {
             }
           }
 
-          await (window as any).electronAPI.updatePresence({
-            discordId: discordUser.id,
-            username: discordUser.global_name || discordUser.username,
-            avatarUrl: avatar,
-            currentSong: currentSong ? {
-              ...currentSong,
-              currentTime: audioRef.current?.currentTime || 0,
-              isPlaying: isPlayingNow,
-              timestamp: Date.now()
-            } : null,
-            partyId: activePartyId,
-            status: (document.hidden && userStatus === 'online') ? 'idle' : userStatus,
-            queue: queue
-          });
+          let users: any[] = [];
+          let reqs: any = { incoming: [], outgoing: [] };
+          let collabs: any[] = [];
+          let queueReqs: any[] = [];
+
+          if ((window as any).electronAPI.unifiedPresenceSync) {
+            const unified = await (window as any).electronAPI.unifiedPresenceSync({
+              discordId: discordUser.id,
+              presenceData: {
+                username: discordUser.global_name || discordUser.username,
+                avatarUrl: avatar,
+                currentSong: currentSong ? {
+                  ...currentSong,
+                  currentTime: audioRef.current?.currentTime || 0,
+                  isPlaying: isPlayingNow,
+                  timestamp: Date.now(),
+                  crossfade: parseInt(localStorage.getItem('donpollo_crossfade') || '0', 10)
+                } : null,
+                partyId: activePartyId,
+                status: (document.hidden && userStatus === 'online') ? 'idle' : userStatus,
+                customStatus: myCustomStatus,
+                queue: queue
+              },
+              isGuest
+            });
+
+            users = unified.onlineUsers || [];
+            reqs = unified.joinRequests || { incoming: [], outgoing: [] };
+            collabs = unified.collabInvites || [];
+            queueReqs = unified.queueRequests || [];
+          } else {
+            // Fallback for older electron main processes
+            await (window as any).electronAPI.updatePresence({
+              discordId: discordUser.id,
+              username: discordUser.global_name || discordUser.username,
+              avatarUrl: avatar,
+              currentSong: currentSong ? {
+                ...currentSong,
+                currentTime: audioRef.current?.currentTime || 0,
+                isPlaying: isPlayingNow,
+                timestamp: Date.now(),
+                crossfade: parseInt(localStorage.getItem('donpollo_crossfade') || '0', 10)
+              } : null,
+              partyId: activePartyId,
+              status: (document.hidden && userStatus === 'online') ? 'idle' : userStatus,
+              customStatus: myCustomStatus,
+              queue: queue
+            });
+            users = await (window as any).electronAPI.getOnlineUsers(discordUser.id);
+            reqs = await (window as any).electronAPI.pollJoinRequests(discordUser.id);
+            if ((window as any).electronAPI?.pollCollabInvites) {
+              collabs = await (window as any).electronAPI.pollCollabInvites(discordUser.id);
+            }
+            if (!isGuest) {
+              queueReqs = await (window as any).electronAPI.pollQueueRequests(discordUser.id);
+            }
+          }
 
           if (!isGuest) {
             if (currentSong) {
               await (window as any).electronAPI.hostParty(
                 discordUser.id,
                 discordUser.id,
-                currentSong,
+                {
+                  ...currentSong,
+                  crossfade: parseInt(localStorage.getItem('donpollo_crossfade') || '0', 10)
+                },
                 audioRef.current?.currentTime || 0,
                 isPlayingNow
               );
@@ -1398,7 +1386,6 @@ function App() {
               await (window as any).electronAPI.deleteParty(discordUser.id);
             }
           }
-          const users = await (window as any).electronAPI.getOnlineUsers(discordUser.id);
           setOnlineUsers(users);
 
           // Cache online users' info so we can display them even when offline
@@ -1432,13 +1419,8 @@ function App() {
           }
 
           // Poll requests
-          const reqs = await (window as any).electronAPI.pollJoinRequests(discordUser.id);
           setJoinRequests(reqs);
-
-          if ((window as any).electronAPI?.pollCollabInvites) {
-            const collabs = await (window as any).electronAPI.pollCollabInvites(discordUser.id);
-            setCollabInvites(collabs);
-          }
+          setCollabInvites(collabs);
 
           // Handle Guest acceptance automatically
           if (reqs.outgoing && reqs.outgoing.length > 0) {
@@ -1479,29 +1461,26 @@ function App() {
             }
           }
 
-          // Poll Queue requests
-          if (!isGuest) {
-            const queueReqs = await (window as any).electronAPI.pollQueueRequests(discordUser.id);
-            if (queueReqs && queueReqs.length > 0) {
-              const newSongs = queueReqs.map((r: any) => {
-                const guestUser = users.find((u: any) => u.discordId === r.guestId);
-                return {
-                  ...r.songData,
-                  addedBy: {
-                    id: r.guestId,
-                    name: r.guestName,
-                    avatarUrl: guestUser?.avatarUrl || `https://ui-avatars.com/api/?name=${encodeURIComponent(r.guestName)}`
-                  }
-                };
-              });
+          // Handle Queue requests
+          if (!isGuest && queueReqs && queueReqs.length > 0) {
+            const newSongs = queueReqs.map((r: any) => {
+              const guestUser = users.find((u: any) => u.discordId === r.guestId);
+              return {
+                ...r.songData,
+                addedBy: {
+                  id: r.guestId,
+                  name: r.guestName,
+                  avatarUrl: guestUser?.avatarUrl || `https://ui-avatars.com/api/?name=${encodeURIComponent(r.guestName)}`
+                }
+              };
+            });
 
-              setQueue((prevQueue: any[]) => [...prevQueue, ...newSongs]);
-              setOriginalQueue((prevQueue: any[]) => [...prevQueue, ...newSongs]);
+            setQueue((prevQueue: any[]) => [...prevQueue, ...newSongs]);
+            setOriginalQueue((prevQueue: any[]) => [...prevQueue, ...newSongs]);
 
-              for (const req of queueReqs) {
-                showToast(`${req.guestName} menambahkan lagu ke antrean!`, 'success');
-                await (window as any).electronAPI.respondQueueRequest(req.id, 'consumed');
-              }
+            for (const req of queueReqs) {
+              showToast(`${req.guestName} menambahkan lagu ke antrean!`, 'success');
+              await (window as any).electronAPI.respondQueueRequest(req.id, 'consumed');
             }
           }
 
@@ -1516,9 +1495,36 @@ function App() {
     };
 
     syncPresence();
-    const intervalMs = (isGuest || activePartyId) ? 1500 : 5000;
-    const presenceInterval = setInterval(syncPresence, intervalMs);
-    return () => clearInterval(presenceInterval);
+    let presenceInterval: ReturnType<typeof setInterval>;
+
+    const setupInterval = () => {
+      if (presenceInterval) clearInterval(presenceInterval);
+      const isParty = isGuest || !!activePartyId;
+      // Untuk Listen Along / Party: SELALU 1.5 detik (1500ms) agar sinkronisasi pemutaran dengan teman tetap instan dan presisi
+      const isHidden = !isParty && typeof document !== 'undefined' && document.visibilityState === 'hidden';
+      const intervalMs = isParty ? 1500 : (isHidden ? 20000 : 5000);
+      presenceInterval = setInterval(syncPresence, intervalMs);
+    };
+
+    setupInterval();
+
+    const handleVisibilityChange = () => {
+      if (typeof document !== 'undefined' && document.visibilityState === 'visible') {
+        syncPresence();
+      }
+      setupInterval();
+    };
+
+    if (typeof document !== 'undefined') {
+      document.addEventListener('visibilitychange', handleVisibilityChange);
+    }
+
+    return () => {
+      if (presenceInterval) clearInterval(presenceInterval);
+      if (typeof document !== 'undefined') {
+        document.removeEventListener('visibilitychange', handleVisibilityChange);
+      }
+    };
   }, [discordUser, currentSong, activePartyId, userStatus, isGuest, queue, settings.discordActivityEnabled]);
 
   // ─── Lyrics ──────────────────────────────────────────────────
@@ -1857,7 +1863,15 @@ function App() {
           if (p.savedPlaylists) setSavedPlaylists(p.savedPlaylists);
           if (p.following) setFollowing(p.following);
           if (p.stats && typeof p.stats.totalListenSeconds === 'number') {
-            setTotalListenSeconds(prev => Math.max(prev, p.stats.totalListenSeconds));
+            setTotalListenSeconds(prev => {
+              const next = Math.max(prev, p.stats.totalListenSeconds);
+              const suffix = discordUser ? `_${discordUser.id}` : '';
+              try {
+                localStorage.setItem(`donpollo_listen_seconds${suffix}`, String(next));
+                localStorage.setItem('donpollo_listen_seconds', String(next));
+              } catch (e) {}
+              return next;
+            });
           }
         }
         hasLoaded = true;
@@ -1866,9 +1880,21 @@ function App() {
       hasLoaded = true;
     }
 
+    let lastSyncedJson = '';
     const syncProfile = async () => {
       if (!hasLoaded) return;
       const payload = syncPayloadRef.current;
+      // Dirty check: only send update if user profile data meaningfully changed!
+      const currentJson = JSON.stringify({
+        likedCount: payload.likedSongs.length,
+        histCount: payload.playHistory.length,
+        listenMinutes: Math.floor(payload.totalListenSeconds / 60),
+        saved: payload.savedPlaylists,
+        following: payload.following
+      });
+      if (currentJson === lastSyncedJson) return;
+      lastSyncedJson = currentJson;
+
       const stats = { playHistory: payload.playHistory.slice(0, 100), totalListenSeconds: payload.totalListenSeconds };
       await (window as any).electronAPI.updateProfile({
         discordId: discordUser.id,
@@ -2112,7 +2138,10 @@ function App() {
   useEffect(() => {
     const interval = setInterval(() => {
       const audio = audioRef.current;
-      if (!audio || isGuest || isCrossfadingRef.current || queue.length <= currentIndex + 1) return;
+      if (!audio || isGuest || isCrossfadingRef.current || loopMode === 'one' || loopMode === 'all') return;
+
+      const hasNext = currentIndex < queue.length - 1;
+      if (!hasNext) return;
 
       const cfDurStr = localStorage.getItem('donpollo_crossfade');
       const cfDuration = cfDurStr ? parseInt(cfDurStr) : 0;
@@ -2160,7 +2189,7 @@ function App() {
           newAudio.volume = 0;
         }
 
-        handleNextRef.current();
+        handleNextRef.current(true);
       }
     }, 500);
     return () => clearInterval(interval);
@@ -2856,6 +2885,7 @@ function App() {
   };
 
   const fetchLyrics = async (title: string, artist: string, songDuration = 0) => {
+    const reqId = ++lyricsRequestIdRef.current;
     setPlainLyrics(t('lyricsSearching'));
     setLyricsData(null);
     try {
@@ -2886,6 +2916,7 @@ function App() {
       let allResults: any[] = [];
 
       for (const q of queriesToTry) {
+        if (lyricsRequestIdRef.current !== reqId) return;
         try {
           const res = await fetch(`https://lrclib.net/api/search?${q}`);
           const resData = await res.json();
@@ -2905,6 +2936,8 @@ function App() {
           }
         } catch (e) { }
       }
+
+      if (lyricsRequestIdRef.current !== reqId) return;
 
       // Remove duplicate results based on LRCLib ID
       const uniqueResults = Array.from(new Map(allResults.map(item => [item.id, item])).values());
@@ -2949,10 +2982,12 @@ function App() {
         if (bestMatch && bestMatch.syncedLyrics) {
           const parsed = parseLRC(bestMatch.syncedLyrics);
           if (parsed) {
+            if (lyricsRequestIdRef.current !== reqId) return;
             setLyricsData(parsed);
 
             // Auto Romanization
             setTimeout(async () => {
+              if (lyricsRequestIdRef.current !== reqId) return;
               try {
                 const textSample = parsed.map((p: any) => p.text).join(' ');
                 let lang: 'ko' | 'ja' | null = null;
@@ -2962,10 +2997,10 @@ function App() {
                 if (lang && (window as any).electronAPI) {
                   const combinedText = parsed.map((p: any) => p.text || '').join('\n');
                   const romText = await (window as any).electronAPI.romanizeLyrics(combinedText, lang);
-                  if (romText) {
+                  if (romText && lyricsRequestIdRef.current === reqId) {
                     const romLines = romText.split('\n');
                     setLyricsData(prev => {
-                      if (!prev) return prev;
+                      if (!prev || lyricsRequestIdRef.current !== reqId) return prev;
                       return prev.map((item, i) => ({
                         ...item,
                         romanizedText: romLines[i] ? romLines[i].trim() : undefined
@@ -2978,18 +3013,20 @@ function App() {
               }
             }, 100);
           } else {
-            setPlainLyrics(bestMatch.plainLyrics || t('lyricsNotLRC'));
+            if (lyricsRequestIdRef.current === reqId) {
+              setPlainLyrics(bestMatch.plainLyrics || t('lyricsNotLRC'));
+            }
           }
         } else if (bestMatch && bestMatch.plainLyrics) {
-          setPlainLyrics(bestMatch.plainLyrics);
+          if (lyricsRequestIdRef.current === reqId) setPlainLyrics(bestMatch.plainLyrics);
         } else {
-          setPlainLyrics(t('lyricsNotFound'));
+          if (lyricsRequestIdRef.current === reqId) setPlainLyrics(t('lyricsNotFound'));
         }
       } else {
-        setPlainLyrics(t('lyricsNotFound'));
+        if (lyricsRequestIdRef.current === reqId) setPlainLyrics(t('lyricsNotFound'));
       }
     } catch {
-      setPlainLyrics(t('lyricsFailed'));
+      if (lyricsRequestIdRef.current === reqId) setPlainLyrics(t('lyricsFailed'));
     }
   };
 
@@ -3111,11 +3148,6 @@ function App() {
       setCurrentSong(cleanSong);
       addToHistory(cleanSong);
       
-      // Track Focus Mode songs
-      if (isFocusMode && song.id && !focusSongsPlayed.includes(song.id)) {
-        setFocusSongsPlayed(prev => [...prev, song.id]);
-      }
-      
       setDuration(cleanSong.duration || song.duration || 0);
       setIsPlaying(true);
       if (settings.autoLyrics) {
@@ -3167,15 +3199,29 @@ function App() {
         } else {
           audioRef.current.src = streamUrl;
           if (cacheMode !== 'stream' && !forceStream) {
-            if ((window as any).electronAPI?.cacheAudio) {
-              const isTemp = cacheMode === 'temp';
-              (window as any).electronAPI.cacheAudio(song, streamUrl, true, isTemp);
-            }
+            // Delay background caching slightly (2.5s) so it doesn't compete with immediate playback bandwidth
+            setTimeout(() => {
+              if ((window as any).electronAPI?.cacheAudio && currentSongRef.current?.id === song.id) {
+                const isTemp = cacheMode === 'temp';
+                (window as any).electronAPI.cacheAudio(song, streamUrl, true, isTemp);
+              }
+            }, 2500);
           }
         }
 
-        if (startTime !== undefined) {
-          audioRef.current.currentTime = startTime;
+        if (startTime !== undefined && startTime > 0) {
+          const targetAudio = audioRef.current;
+          try {
+            targetAudio.currentTime = startTime;
+          } catch (e) { }
+          const seekOnMetadata = () => {
+            try {
+              if (targetAudio.duration && startTime < targetAudio.duration) {
+                targetAudio.currentTime = startTime;
+              }
+            } catch (e) { }
+          };
+          targetAudio.addEventListener('loadedmetadata', seekOnMetadata, { once: true });
         }
 
         if (!isCrossfadingRef.current) {
@@ -3183,25 +3229,42 @@ function App() {
         }
 
         audioRef.current.play().catch(async (err) => {
-          console.error("PLAY ERROR:", err.name, err.message, err);
+          console.warn("Primary play interrupted or delayed:", err.name, err.message);
           if (err.name === 'AbortError') return;
-          showToast(`Error Play: ${err.message || err.name}`, 'error');
+
+          // Priority 1: Fetch direct Google Video audio stream URL from backend JSON API
           try {
-            // Fallback Piped API
-            const pipedData = await (await fetch(`https://pipedapi.kavin.rocks/streams/${song.id}`)).json();
-            if (pipedData.error) throw new Error(pipedData.error);
-            const bestAudio = pipedData.audioStreams?.find((s: any) => s.mimeType?.includes('audio/mp4')) || pipedData.audioStreams?.[0];
-            if (bestAudio?.url) {
-              audioRef.current!.src = bestAudio.url;
-              await audioRef.current!.play();
-              setIsPlaying(true);
-              showToast(t('toastServerFallback'), 'music');
-            } else throw new Error('Format tidak didukung.');
-          } catch {
-            showToast(t('toastVideoLocked'), 'error');
-            setIsPlaying(false);
-            if (handleNextRef.current) setTimeout(() => handleNextRef.current(), 1500);
+            const rawRes = await fetch(`${API_BASE_URL}/api/stream?id=${song.id}&raw=true`);
+            if (rawRes.ok) {
+              const rawData = await rawRes.json();
+              if (rawData?.url && audioRef.current) {
+                audioRef.current.src = rawData.url;
+                await audioRef.current.play();
+                setIsPlaying(true);
+                return;
+              }
+            }
+          } catch (e) {
+            console.warn("Priority 1 raw fallback failed:", e);
           }
+
+          // Priority 2: Quick retry after 600ms (in case backend was still preparing stream)
+          try {
+            await new Promise(r => setTimeout(r, 600));
+            if (audioRef.current) {
+              audioRef.current.src = `${API_BASE_URL}/api/stream?id=${song.id}&nocache=true`;
+              await audioRef.current.play();
+              setIsPlaying(true);
+              return;
+            }
+          } catch (e) {
+            console.warn("Priority 2 retry failed:", e);
+          }
+
+          // If all recovery attempts fail
+          showToast(t('toastVideoLocked'), 'error');
+          setIsPlaying(false);
+          if (handleNextRef.current) setTimeout(() => handleNextRef.current(), 1500);
         });
       }
     } catch (err: any) {
@@ -3215,49 +3278,117 @@ function App() {
   useEffect(() => {
     if (isGuest && activePartyId) {
       const hostUser = onlineUsers.find(u => u.discordId === activePartyId);
-      if (hostUser && hostUser.currentSong) {
-        const hs = hostUser.currentSong;
-
-        // Calculate exact time based on elapsed time since host reported it
-        const elapsed = hs.timestamp ? (Date.now() - hs.timestamp) / 1000 : 0;
-        let targetTime = (hs.currentTime || 0);
-        if (hs.isPlaying) {
-          targetTime += elapsed;
-        }
-
-        if (!currentSong || currentSong.id !== hs.id) {
-          // Abaikan broadcast host jika host masih tertinggal (lagging) dari eager advance kita
-          const lastAdvance = (window as any).lastGuestAdvance || 0;
-          const isStaleHost = (Date.now() - lastAdvance < 15000) && queue[currentIndex - 1]?.id === hs.id;
-
-          if (!isStaleHost) {
-            executePlay(hs, targetTime);
+      if (hostUser) {
+        // Otomatis sinkronkan settingan Crossfade Host ke Guest
+        const hostCrossfadeVal = hostUser.currentSong?.crossfade ?? (hostUser as any).crossfade;
+        if (hostCrossfadeVal !== undefined && hostCrossfadeVal !== null) {
+          const hostCfStr = String(hostCrossfadeVal);
+          const currentCf = localStorage.getItem('donpollo_crossfade') || '0';
+          if (savedGuestCrossfadeRef.current === null) {
+            savedGuestCrossfadeRef.current = currentCf;
           }
-        } else {
-          // If already playing the same song, check if we need to sync time or play/pause state
-          if (audioRef.current) {
-            if (hs.isPlaying && audioRef.current.paused) {
-              audioRef.current.play().catch(() => { });
-            } else if (!hs.isPlaying && !audioRef.current.paused) {
-              audioRef.current.pause();
-            }
-
-            // Tighter sync: seek if out of sync by more than 1.5s (reduced from 3s)
-            // Only seek when host is playing to avoid unnecessary interruptions during pause
-            if (hs.isPlaying && Math.abs(audioRef.current.currentTime - targetTime) > 1.5) {
-              audioRef.current.currentTime = targetTime;
-            }
+          if (currentCf !== hostCfStr) {
+            localStorage.setItem('donpollo_crossfade', hostCfStr);
+            setSettings((prev: any) => ({ ...prev, crossfade: hostCfStr }));
           }
         }
 
-        // Sync queue for guest
-        if (hostUser.queue && hostUser.queue.length > 0) {
-          setQueue(prev => JSON.stringify(prev) === JSON.stringify(hostUser.queue) ? prev : hostUser.queue);
-          setOriginalQueue(prev => JSON.stringify(prev) === JSON.stringify(hostUser.queue) ? prev : hostUser.queue);
+        if (hostUser.currentSong) {
+          const hs = hostUser.currentSong;
+
+          // Calculate exact time based on elapsed time since host reported it
+          // Priority 1: Use serverAge (accurate to milliseconds calculated by MySQL, immune to local clock skew)
+          // Priority 2: Fallback to client timestamp
+          let elapsed = 0;
+          if (typeof (hostUser as any).serverAge === 'number' && !isNaN((hostUser as any).serverAge)) {
+            elapsed = Math.max(0, (hostUser as any).serverAge);
+          } else if (hs.timestamp) {
+            elapsed = Math.max(0, (Date.now() - hs.timestamp) / 1000);
+          }
+
+          let targetTime = (hs.currentTime || 0);
+          if (hs.isPlaying) {
+            targetTime += elapsed;
+          }
+
+          if (!currentSong || currentSong.id !== hs.id) {
+            // Abaikan broadcast host jika host masih tertinggal (lagging) dari eager advance kita
+            const lastAdvance = (window as any).lastGuestAdvance || 0;
+            const isStaleHost = (Date.now() - lastAdvance < 15000) && queue[currentIndex - 1]?.id === hs.id;
+
+            if (!isStaleHost) {
+              executePlay(hs, targetTime);
+              const hostQueue = hostUser.queue || queue;
+              const idx = hostQueue.findIndex((q: any) => q.id === hs.id || q.title === hs.title);
+              if (idx !== -1) {
+                setCurrentIndex(idx);
+              }
+            }
+          } else {
+            // If already playing the same song, check if we need to sync time or play/pause state
+            if (audioRef.current) {
+              if (hs.isPlaying && audioRef.current.paused) {
+                audioRef.current.play().catch(() => { });
+              } else if (!hs.isPlaying && !audioRef.current.paused) {
+                audioRef.current.pause();
+              }
+
+              if (hs.isPlaying) {
+                const diff = audioRef.current.currentTime - targetTime;
+                const absDiff = Math.abs(diff);
+
+                if (absDiff > 2.0) {
+                  // Large desync (> 2s, e.g. host scrubbed, initial seek, or network jump): hard seek
+                  audioRef.current.currentTime = targetTime;
+                  audioRef.current.playbackRate = 1.0;
+                } else if (absDiff > 0.15) {
+                  // Smooth micro-sync (Spotify/Discord style):
+                  // Dynamically nudge playback rate slightly without audible pitch change or stuttering
+                  if (diff > 0) {
+                    // Guest is ahead of host: slow down slightly by 4% to let host catch up
+                    audioRef.current.playbackRate = 0.96;
+                  } else {
+                    // Guest is behind host: speed up slightly by 4% to catch up with host
+                    audioRef.current.playbackRate = 1.04;
+                  }
+                } else {
+                  // Within 150ms: in tight phase lockstep!
+                  if (audioRef.current.playbackRate !== 1.0) {
+                    audioRef.current.playbackRate = 1.0;
+                  }
+                }
+              } else {
+                if (audioRef.current.playbackRate !== 1.0) {
+                  audioRef.current.playbackRate = 1.0;
+                }
+              }
+            }
+          }
+
+          // Sync queue for guest
+          if (hostUser.queue && hostUser.queue.length > 0) {
+            setQueue(prev => JSON.stringify(prev) === JSON.stringify(hostUser.queue) ? prev : hostUser.queue);
+            setOriginalQueue(prev => JSON.stringify(prev) === JSON.stringify(hostUser.queue) ? prev : hostUser.queue);
+          }
         }
       }
     }
   }, [onlineUsers, isGuest, activePartyId, currentSong]);
+
+  // Restore personal crossfade and playback rate setting when guest leaves party
+  useEffect(() => {
+    if (!isGuest || !activePartyId) {
+      if (audioRef.current && audioRef.current.playbackRate !== 1.0) {
+        audioRef.current.playbackRate = 1.0;
+      }
+      if (savedGuestCrossfadeRef.current !== null) {
+        const originalCf = savedGuestCrossfadeRef.current;
+        savedGuestCrossfadeRef.current = null;
+        localStorage.setItem('donpollo_crossfade', originalCf);
+        setSettings((prev: any) => ({ ...prev, crossfade: originalCf }));
+      }
+    }
+  }, [isGuest, activePartyId]);
 
   const augmentSongWithUser = (song: any) => {
     if (!discordUser) return song;
@@ -3343,11 +3474,30 @@ function App() {
 
   const handleNext = async (eOrAuto: boolean | React.MouseEvent = false) => {
     const isAutomatic = typeof eOrAuto === 'boolean' ? eOrAuto : false;
-    if (isGuest && activePartyId) return;
+    if (isGuest && activePartyId && !isAutomatic) return;
 
+    // Mode: Loop 1x (Ulangi 1 kali lalu otomatis mati dan lanjut antrean berikutnya)
     if (isAutomatic && loopMode === 'one') {
+      if (audioRef.current) {
+        audioRef.current.currentTime = 0;
+        audioRef.current.play().catch(() => { });
+        setProgress(0);
+        setIsPlaying(true);
+      } else if (currentSongRef.current) {
+        executePlay(currentSongRef.current);
+      }
       setLoopMode('off');
-      if (currentSongRef.current) {
+      return;
+    }
+
+    // Mode: Loop Biasa (Ulangi lagu ini terus-menerus tanpa henti sampai pengguna mematikan loop)
+    if (isAutomatic && loopMode === 'all') {
+      if (audioRef.current) {
+        audioRef.current.currentTime = 0;
+        audioRef.current.play().catch(() => { });
+        setProgress(0);
+        setIsPlaying(true);
+      } else if (currentSongRef.current) {
         executePlay(currentSongRef.current);
       }
       return;
@@ -3358,16 +3508,24 @@ function App() {
         (window as any).lastGuestAdvance = Date.now();
       }
 
+      if (loopMode === 'one') {
+        setLoopMode('off');
+      }
+
       // On-the-fly fetch for next song if id is null
       let nextSong = queue[currentIndex + 1];
       setCurrentIndex(currentIndex + 1);
       executePlay(nextSong);
-    } else if (loopMode === 'all' && queue.length > 0) {
+    } else if (queue.length > 0) {
       if (isGuest) {
         (window as any).lastGuestAdvance = Date.now();
       }
-      setCurrentIndex(0);
-      executePlay(queue[0]);
+      if (loopMode !== 'off') {
+        setCurrentIndex(0);
+        executePlay(queue[0]);
+      } else {
+        setIsPlaying(false);
+      }
     } else {
       setIsPlaying(false);
     }
@@ -3415,7 +3573,7 @@ function App() {
     } else if (currentIndex > 0) {
       setCurrentIndex(currentIndex - 1);
       executePlay(queue[currentIndex - 1]);
-    } else if (loopMode === 'all' && queue.length > 0) {
+    } else if (loopMode !== 'off' && queue.length > 0) {
       setCurrentIndex(queue.length - 1);
       executePlay(queue[queue.length - 1]);
     }
@@ -3875,6 +4033,136 @@ function App() {
     setShowSuggestions(false);
     fetchArtistSongs(cleanName, 'popular', isPodcastMode);
   };
+
+  fetchArtistSongsRef.current = fetchArtistSongs;
+
+  // ─── Global Keyboard Shortcuts ───
+  useEffect(() => {
+    const handleGlobalKeyDown = (e: KeyboardEvent) => {
+      const activeEl = document.activeElement as HTMLElement | null;
+      const isInput = activeEl && (
+        activeEl.tagName === 'INPUT' ||
+        activeEl.tagName === 'TEXTAREA' ||
+        activeEl.isContentEditable ||
+        activeEl.classList?.contains('search-input') ||
+        activeEl.classList?.contains('chat-input')
+      );
+
+      // Escape key behavior
+      if (e.key === 'Escape') {
+        if (showShortcutsModal) {
+          setShowShortcutsModal(false);
+          return;
+        }
+        if (isInput) {
+          activeEl?.blur();
+          return;
+        }
+      }
+
+      // If user is currently typing in an input, do not capture shortcuts
+      if (isInput) return;
+
+      // Toggle shortcuts modal (? or Ctrl+/)
+      if (e.key === '?' || (e.key === '/' && (e.ctrlKey || e.metaKey))) {
+        e.preventDefault();
+        setShowShortcutsModal(prev => !prev);
+        return;
+      }
+
+      // Focus search (/)
+      if (e.key === '/' && !e.ctrlKey && !e.metaKey) {
+        e.preventDefault();
+        searchInputRef.current?.focus();
+        return;
+      }
+
+      // Space: Play / Pause
+      if (e.key === ' ') {
+        e.preventDefault();
+        togglePlayRef.current?.();
+        return;
+      }
+
+      // Seek or Next/Prev:
+      if (e.key === 'ArrowRight') {
+        e.preventDefault();
+        if (e.ctrlKey || e.metaKey || e.shiftKey) {
+          handleNextRef.current?.();
+        } else if (audioRef.current) {
+          audioRef.current.currentTime = Math.min(audioRef.current.duration || 0, audioRef.current.currentTime + 5);
+          setProgress(audioRef.current.currentTime);
+        }
+        return;
+      }
+
+      if (e.key === 'ArrowLeft') {
+        e.preventDefault();
+        if (e.ctrlKey || e.metaKey || e.shiftKey) {
+          handlePrevRef.current?.();
+        } else if (audioRef.current) {
+          audioRef.current.currentTime = Math.max(0, audioRef.current.currentTime - 5);
+          setProgress(audioRef.current.currentTime);
+        }
+        return;
+      }
+
+      // Volume Up: ArrowUp
+      if (e.key === 'ArrowUp') {
+        e.preventDefault();
+        setVolume((v: number) => {
+          const next = Math.min(1, +(v + 0.05).toFixed(2));
+          if (audioRef.current) audioRef.current.volume = next;
+          return next;
+        });
+        return;
+      }
+
+      // Volume Down: ArrowDown
+      if (e.key === 'ArrowDown') {
+        e.preventDefault();
+        setVolume((v: number) => {
+          const next = Math.max(0, +(v - 0.05).toFixed(2));
+          if (audioRef.current) audioRef.current.volume = next;
+          return next;
+        });
+        return;
+      }
+
+      // M: Mute / Unmute
+      if (e.key === 'm' || e.key === 'M') {
+        e.preventDefault();
+        setIsMuted(m => !m);
+        return;
+      }
+
+      // L: Like current song
+      if (e.key === 'l' || e.key === 'L') {
+        if (currentSongRef.current) {
+          e.preventDefault();
+          toggleLike(currentSongRef.current);
+        }
+        return;
+      }
+
+      // S: Toggle Shuffle
+      if (e.key === 's' || e.key === 'S') {
+        e.preventDefault();
+        toggleShuffle();
+        return;
+      }
+
+      // R: Toggle Repeat
+      if (e.key === 'r' || e.key === 'R') {
+        e.preventDefault();
+        toggleLoopMode();
+        return;
+      }
+    };
+
+    window.addEventListener('keydown', handleGlobalKeyDown);
+    return () => window.removeEventListener('keydown', handleGlobalKeyDown);
+  }, [showShortcutsModal, toggleShuffle, toggleLoopMode, toggleLike]);
 
   // ═══════════════════════════════════════════════════════════════
   // PAGE RENDERERS
@@ -4761,7 +5049,38 @@ function App() {
             <img src={displayAvatar} alt={displayUsername} style={{ width: '160px', height: '160px', borderRadius: '50%', objectFit: 'cover', boxShadow: '0 8px 32px rgba(0,0,0,0.6)' }} onError={(e) => handleAvatarError(e, activeProfileId, displayUsername)} />
             <div style={{ flex: 1 }}>
               <div style={{ fontSize: '12px', fontWeight: '700', textTransform: 'uppercase', letterSpacing: '1px', marginBottom: '8px', color: 'var(--text-secondary)' }}>{t('profile') || 'Profil'}</div>
-              <h1 style={{ fontSize: '56px', fontWeight: '900', margin: '0 0 16px 0', letterSpacing: '-2px', lineHeight: '1', color: 'var(--text-primary)' }}>{displayUsername}</h1>
+              <h1 style={{ fontSize: '56px', fontWeight: '900', margin: '0 0 12px 0', letterSpacing: '-2px', lineHeight: '1', color: 'var(--text-primary)' }}>{displayUsername}</h1>
+
+              {/* Custom Status Cloud Thought Bubble */}
+              {(() => {
+                const userCustomStatus = isMe ? myCustomStatus : (onlineFriend?.customStatus || profileData?.customStatus || '');
+                if (userCustomStatus) {
+                  return (
+                    <div
+                      className={`profile-cloud-bubble ${isMe ? 'clickable' : ''}`}
+                      onClick={() => { if (isMe) { setCustomStatusInput(myCustomStatus); setShowStatusModal(true); } }}
+                      title={isMe ? t('customStatusTooltip') : ''}
+                      style={{ marginBottom: '14px' }}
+                    >
+                      <MessageSquare size={16} color="var(--accent-primary)" />
+                      <span style={{ fontWeight: 500 }}>{userCustomStatus}</span>
+                    </div>
+                  );
+                } else if (isMe) {
+                  return (
+                    <div
+                      className="profile-cloud-bubble clickable"
+                      onClick={() => { setCustomStatusInput(''); setShowStatusModal(true); }}
+                      style={{ marginBottom: '14px', opacity: 0.7, borderStyle: 'dashed' }}
+                    >
+                      <MessageSquare size={15} color="var(--text-secondary)" />
+                      <span style={{ fontSize: '12px' }}>{t('customStatusSet')}</span>
+                    </div>
+                  );
+                }
+                return null;
+              })()}
+
               <div style={{ display: 'flex', gap: '20px', color: 'var(--text-secondary)', fontSize: '14px', fontWeight: '500', alignItems: 'center' }}>
                 <span><strong style={{ color: 'var(--text-primary)' }}>{profileData?.followers?.length || 0}</strong> {t('followers')}</span>
                 {profileData?.playlists?.length > 0 && <span><strong style={{ color: 'var(--text-primary)' }}>{profileData.playlists.length}</strong> {t('publicPlaylists')}</span>}
@@ -5343,10 +5662,19 @@ function App() {
         </div>
         <div className="settings-row">
           <div>
-            <div className="settings-label">{t('crossfadeLabel')}</div>
+            <div className="settings-label">
+              {t('crossfadeLabel')}
+              {isGuest && activePartyId && (
+                <span style={{ marginLeft: '8px', fontSize: '11px', color: 'var(--accent-primary)', fontWeight: 'bold' }}>
+                  (Disinkronkan dari Host)
+                </span>
+              )}
+            </div>
             <div className="settings-desc">{t('crossfadeDesc')}</div>
           </div>
           <select className="settings-select"
+            disabled={isGuest && !!activePartyId}
+            style={isGuest && !!activePartyId ? { opacity: 0.6, cursor: 'not-allowed' } : {}}
             value={localStorage.getItem('donpollo_crossfade') || '0'}
             onChange={e => {
               localStorage.setItem('donpollo_crossfade', e.target.value);
@@ -5665,149 +5993,6 @@ function App() {
           <span style={{ color: 'var(--text-muted)', fontSize: '13px' }}>v{__APP_VERSION__ || '1.0.0-BETA'}</span>
         </div>
       </div>
-    </div>
-  );
-
-
-  const renderTimeCapsulePage = () => (
-    <div className="page-content offline-mode" style={{ minHeight: '100%', display: 'flex', flexDirection: 'column', background: 'var(--bg-primary)' }}>
-      <div style={{ padding: '32px 32px 16px 32px' }}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '24px' }}>
-          <h1 style={{ fontSize: '28px', fontWeight: '800', color: 'var(--text-primary)', margin: 0 }}>{t('timeCapsule')}</h1>
-          <button className="btn-primary" onClick={() => {
-            setNewCapsule({ id: undefined, title: '', message: '', unlockDate: '', songs: [] });
-            setShowTimeCapsuleModal(true);
-          }}>
-            <Plus size={16} /> {t('createCapsule') || 'Create Capsule'}
-          </button>
-        </div>
-
-        {/* Stat Cards */}
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(250px, 1fr))', gap: '16px', marginBottom: '32px' }}>
-          <div style={{ background: 'var(--bg-card)', padding: '20px', borderRadius: '12px', border: '1px solid var(--border-color)', display: 'flex', flexDirection: 'column', gap: '12px' }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', color: 'var(--accent-primary)' }}>
-              <Hourglass size={20} />
-              <h3 style={{ fontSize: '12px', fontWeight: '700', letterSpacing: '1px', textTransform: 'uppercase', margin: 0 }}>{t('timeCapsule')}</h3>
-            </div>
-            <div style={{ fontSize: '36px', fontWeight: '800' }}>{timeCapsules.length} <span style={{ fontSize: '16px', color: 'var(--text-secondary)', fontWeight: '600' }}>{t('capsules') || 'capsules'}</span></div>
-            <div style={{ fontSize: '12px', color: 'var(--text-secondary)' }}>{t('capsuleDesc') || 'Sealed musical memories'}</div>
-          </div>
-
-          <div style={{ background: 'var(--bg-card)', padding: '20px', borderRadius: '12px', border: '1px solid var(--border-color)', display: 'flex', flexDirection: 'column', gap: '12px' }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', color: 'var(--text-secondary)' }}>
-              <Lock size={20} />
-              <h3 style={{ fontSize: '12px', fontWeight: '700', letterSpacing: '1px', textTransform: 'uppercase', margin: 0 }}>{t('locked') || 'Locked'}</h3>
-            </div>
-            <div style={{ fontSize: '36px', fontWeight: '800' }}>
-              {timeCapsules.filter(c => new Date(c.unlockDate) > new Date()).length}{' '}
-              <span style={{ fontSize: '16px', color: 'var(--text-secondary)', fontWeight: '600' }}>{t('capsules') || 'capsules'}</span>
-            </div>
-            <div style={{ fontSize: '12px', color: 'var(--text-secondary)' }}>{t('waitingToBeOpened') || 'Waiting to be opened'}</div>
-          </div>
-
-          <div style={{ background: 'linear-gradient(135deg, #10b981, #065f46)', padding: '20px', borderRadius: '12px', display: 'flex', flexDirection: 'column', gap: '8px', justifyContent: 'center', position: 'relative', overflow: 'hidden' }}>
-            <div style={{ position: 'absolute', right: '-15px', bottom: '-15px', opacity: 0.15 }}>
-              <Hourglass size={100} />
-            </div>
-            <h3 style={{ fontSize: '16px', fontWeight: '800', color: '#fff', zIndex: 1, letterSpacing: '0.5px', margin: 0 }}>{t('sealYourMemories') || 'Seal Your\nMemories'}</h3>
-            <p style={{ fontSize: '12px', color: 'rgba(255,255,255,0.85)', zIndex: 1, margin: 0, marginTop: '4px', lineHeight: '1.4' }}>{t('sealYourMemoriesDesc') || 'Lock a playlist and message until a future date.'}</p>
-          </div>
-        </div>
-
-        {/* Capsule List */}
-        {timeCapsules.length === 0 ? (
-          <div className="empty-state" style={{ marginTop: '24px', color: 'var(--text-muted)' }}>
-            <Hourglass size={64} style={{ marginBottom: '16px', opacity: 0.3 }} />
-            <h3 style={{ color: 'var(--text-secondary)' }}>{t('noCapsules') || 'No capsules yet'}</h3>
-            <p style={{ fontSize: '13px' }}>{t('noCapsulesDesc') || 'Create your first time capsule!'}</p>
-          </div>
-        ) : (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '32px' }}>
-            <section>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
-                <h2 style={{ fontSize: '18px', fontWeight: '700', color: 'var(--text-primary)', display: 'flex', alignItems: 'center', gap: '8px', margin: 0 }}>
-                  <Hourglass size={20} color="var(--accent-primary)" /> {t('timeCapsule')}
-                </h2>
-              </div>
-
-              <div style={{ background: 'var(--bg-card)', borderRadius: '12px', border: '1px solid var(--border-color)', overflow: 'hidden' }}>
-                {/* Header Row */}
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 180px 120px 100px', padding: '16px 24px', borderBottom: '1px solid var(--border-color)', fontSize: '11px', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '1px', fontWeight: '700' }}>
-                  <span>{t('capsuleTitle') || 'Title'}</span>
-                  <span>{t('capsuleUnlockDate') || 'Unlock Date'}</span>
-                  <span>{t('songs') || 'Songs'}</span>
-                  <span></span>
-                </div>
-
-                <div style={{ display: 'flex', flexDirection: 'column' }}>
-                  {timeCapsules.map((cap, i) => {
-                    const isUnlocked = new Date(cap.unlockDate) <= new Date();
-                    return (
-                      <div key={cap.id} className="offline-row" style={{ display: 'grid', gridTemplateColumns: '1fr 180px 120px 100px', padding: '14px 24px', alignItems: 'center', transition: 'background 0.2s', borderBottom: i === timeCapsules.length - 1 ? 'none' : '1px solid rgba(255,255,255,0.03)' }}>
-                        {/* Title & message */}
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '14px', minWidth: 0 }}>
-                          <div style={{ width: '40px', height: '40px', borderRadius: '8px', background: isUnlocked ? 'linear-gradient(135deg, #10b981, #065f46)' : 'var(--bg-card-hover)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, border: '1px solid var(--border-color)' }}>
-                            {isUnlocked ? <Hourglass size={18} color="white" /> : <Lock size={18} color="var(--text-muted)" />}
-                          </div>
-                          <div style={{ overflow: 'hidden' }}>
-                            <div style={{ fontWeight: '600', fontSize: '14px', color: 'var(--text-primary)', whiteSpace: 'nowrap', textOverflow: 'ellipsis', overflow: 'hidden' }}>{cap.title}</div>
-                            {cap.message && <div style={{ fontSize: '12px', color: 'var(--text-secondary)', whiteSpace: 'nowrap', textOverflow: 'ellipsis', overflow: 'hidden' }}>{cap.message}</div>}
-                          </div>
-                        </div>
-
-                        {/* Unlock date */}
-                        <div>
-                          <span style={{ fontSize: '13px', color: isUnlocked ? 'var(--accent-primary)' : 'var(--text-secondary)', fontWeight: isUnlocked ? '600' : '400' }}>
-                            {isUnlocked ? `✓ ${t('unlocked') || 'Unlocked'}` : new Date(cap.unlockDate).toLocaleDateString()}
-                          </span>
-                        </div>
-
-                        {/* Songs count */}
-                        <div>
-                          <span style={{ fontSize: '13px', color: 'var(--text-secondary)' }}>{(cap.songs || []).length} {t('songs')}</span>
-                        </div>
-
-                        {/* Actions */}
-                        <div style={{ display: 'flex', gap: '8px', justifyContent: 'flex-end' }}>
-                          <button className="btn-icon" title={t('edit') || 'Edit'} onClick={() => {
-                            setNewCapsule({ id: cap.id, title: cap.title, message: cap.message || '', unlockDate: cap.unlockDate?.split('T')[0] || '', songs: cap.songs || [] });
-                            setShowTimeCapsuleModal(true);
-                          }} style={{ color: 'var(--text-secondary)' }} onMouseEnter={e => e.currentTarget.style.color = 'var(--accent-primary)'} onMouseLeave={e => e.currentTarget.style.color = 'var(--text-secondary)'}>
-                            <Edit3 size={15} />
-                          </button>
-                          <button className="btn-icon delete-btn" title={t('delete') || 'Delete'} onClick={() => setCapsuleToDelete(cap.id)} style={{ color: 'var(--text-secondary)' }} onMouseEnter={e => { e.currentTarget.style.color = '#ff4d4d'; }} onMouseLeave={e => { e.currentTarget.style.color = 'var(--text-secondary)'; }}>
-                            <Trash2 size={15} />
-                          </button>
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
-              </div>
-            </section>
-          </div>
-        )}
-      </div>
-
-      {/* Delete Confirm */}
-      {capsuleToDelete !== null && (
-        <div className="modal-overlay" onClick={() => setCapsuleToDelete(null)}>
-          <div className="modal" onClick={e => e.stopPropagation()}>
-            <h3 className="modal-title">{t('deletePlaylist')}</h3>
-            <p style={{ color: 'var(--text-secondary)', marginBottom: '24px' }}>{t('confirmDeletePlaylist') || 'Are you sure? This cannot be undone.'}</p>
-            <div className="modal-actions">
-              <button className="btn-secondary" onClick={() => setCapsuleToDelete(null)}>{t('cancel')}</button>
-              <button className="btn-primary" style={{ background: '#ff4d4d' }} onClick={async () => {
-                await (window as any).electronAPI?.deleteTimeCapsule(capsuleToDelete);
-                setCapsuleToDelete(null);
-                fetchTimeCapsules();
-              }}>{t('delete')}</button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      <style>{`.offline-row:hover { background: var(--bg-card-hover); }`}</style>
     </div>
   );
 
@@ -7073,60 +7258,192 @@ function App() {
 
 
   // ─── LOGIN SCREEN ────────────────────────────────────────────
+  // ─── LOGIN SCREEN (MODERN OBSIDIAN & AURORA) ──────────────────
   if (!discordUser) {
+    const continueAsGuest = () => {
+      const guestUser: DiscordUser = {
+        id: 'guest_' + Math.random().toString(36).substring(2, 9),
+        username: 'Tamu (Guest)',
+        discriminator: '0000',
+        avatar: null,
+        global_name: 'Guest Listener'
+      };
+      setDiscordUser(guestUser);
+      showToast('Masuk sebagai Tamu. Offline Vault & audio lokal siap digunakan!', 'music');
+    };
+
     return (
-      <div className="login-screen">
+      <div className="login-screen-v2">
+        {/* Dynamic Aurora Ambient Lighting */}
+        <div className="login-ambient-canvas">
+          <div className="aurora-orb aurora-orb-1" />
+          <div className="aurora-orb aurora-orb-2" />
+          <div className="aurora-orb aurora-orb-3" />
+          <div className="aurora-vinyl-grid" />
+          <div className="aurora-vignette" />
+        </div>
+
+        {/* Global Toast inside Login */}
         {toastData && (
-          <div className={`toast-popup ${toastData.type === 'error' ? 'toast-error' : 'toast-success'}`}>
+          <div className={`toast-popup ${toastData.type === 'error' ? 'toast-error' : 'toast-success'}`} style={{ zIndex: 1000 }}>
             {toastData.icon}
             {toastData.msg}
           </div>
         )}
-        <div className="login-hero">
-          <div className="login-hero-overlay" />
-          <div className="login-lang-picker">
-            <button className={`lang-flag ${language === 'id' ? 'active' : ''}`} onClick={() => setLanguage('id')} title="Bahasa Indonesia">
-              <img src="https://flagcdn.com/id.svg" alt="ID" />
-            </button>
-            <button className={`lang-flag ${language === 'en' ? 'active' : ''}`} onClick={() => setLanguage('en')} title="English">
-              <img src="https://flagcdn.com/us.svg" alt="EN" />
-            </button>
-            <button className={`lang-flag ${language === 'ja' ? 'active' : ''}`} onClick={() => setLanguage('ja')} title="日本語">
-              <img src="https://flagcdn.com/jp.svg" alt="JA" />
-            </button>
-            <button className={`lang-flag ${language === 'ko' ? 'active' : ''}`} onClick={() => setLanguage('ko')} title="한국어">
-              <img src="https://flagcdn.com/kr.svg" alt="KO" />
-            </button>
+
+        {/* Top Floating Navigation */}
+        <header className="login-topbar">
+          <div className="login-brand">
+            <img src="https://donpollobot.vercel.app/donpollo-icon.jpg" alt="Don Pollo" className="login-brand-logo" />
+            <span className="login-brand-title">Don Pollo Music</span>
+            <span className="login-version-pill">v1.3.4</span>
           </div>
-          <div className="login-hero-content">
-            <div className="login-hero-title">Don Pollo Music.</div>
-            <div className="login-hero-subtitle">
-              {t('loginHeroSubtitle')}
+
+          <div className="login-topbar-right">
+            {/* Minimalist Segmented Language Switcher */}
+            <div className="login-lang-switch">
+              {(['id', 'en', 'ja', 'ko'] as Language[]).map(lang => (
+                <button
+                  key={lang}
+                  className={`lang-btn ${language === lang ? 'active' : ''}`}
+                  onClick={() => setLanguage(lang)}
+                >
+                  {lang.toUpperCase()}
+                </button>
+              ))}
             </div>
           </div>
-        </div>
-        <div className="login-form-container">
-          <div className="login-card">
-            <div className="login-logo">
-              <img src="https://donpollobot.vercel.app/donpollo-icon.jpg" alt="Don Pollo" />
+        </header>
+
+        {/* Main Content Showcase */}
+        <main className="login-main-stage">
+          <div className="login-stage-grid">
+
+            {/* Left Column: Visual Music Stage & Interactive Deck */}
+            <div className="login-stage-left">
+              <h1 className="stage-hero-heading">
+                Musik Tanpa Batas.<br />
+                <span className="stage-hero-sub">Kualitas Audio Terbaik.</span>
+              </h1>
+
+              <p className="stage-hero-lead">
+                {t('loginHeroSubtitle') || 'Rasakan pengalaman mendengarkan musik tanpa batas dengan antarmuka yang elegan, fitur sinkronisasi lirik real-time, dan kualitas audio terbaik.'}
+              </p>
+
+              {/* Realistic Turntable & Playing Deck Card */}
+              <div className="interactive-deck-showcase">
+                <div className="vinyl-assembly">
+                  {/* Spinning Vinyl Record */}
+                  <div className="vinyl-disc">
+                    <div className="vinyl-center-label">
+                      <img
+                        src="https://is1-ssl.mzstatic.com/image/thumb/Music115/v4/b5/92/bb/b592bb72-52e3-e756-9b26-9f56d08f47ab/16UMGIM67864.rgb.jpg/600x600bb.jpg"
+                        alt="Starboy Vinyl Label"
+                        className="vinyl-label-art"
+                      />
+                      <div className="vinyl-spindle" />
+                    </div>
+                  </div>
+
+                  {/* Album Cover Card with Real Audio Visualizer */}
+                  <div className="deck-track-card">
+                    <div className="deck-cover-wrap">
+                      <img
+                        src="https://is1-ssl.mzstatic.com/image/thumb/Music115/v4/b5/92/bb/b592bb72-52e3-e756-9b26-9f56d08f47ab/16UMGIM67864.rgb.jpg/600x600bb.jpg"
+                        alt="Album Art"
+                        className="deck-cover-img"
+                      />
+                      <div className="deck-play-badge">
+                        <Play size={12} fill="white" />
+                      </div>
+                    </div>
+
+                    <div className="deck-track-details">
+                      <div className="deck-track-header">
+                        <div>
+                          <div className="deck-track-name">Starboy</div>
+                          <div className="deck-artist-name">The Weeknd • Daft Punk</div>
+                        </div>
+                      </div>
+
+                      {/* Equalizer Visualizer Bars */}
+                      <div className="deck-equalizer">
+                        {[40, 75, 55, 90, 60, 85, 45, 100, 70, 50, 95, 65, 80, 55, 90, 40].map((h, i) => (
+                          <div
+                            key={i}
+                            className="eq-bar"
+                            style={{
+                              animationDuration: `${0.6 + (i % 5) * 0.15}s`,
+                              animationDelay: `${(i % 4) * 0.1}s`,
+                              maxHeight: `${h}%`
+                            }}
+                          />
+                        ))}
+                      </div>
+
+                      <div className="deck-track-footer">
+                        <span className="deck-karaoke-preview">
+                          <Mic2 size={12} /> "I'm tryna put you in the worst mood..."
+                        </span>
+                        <span className="deck-time">3:50</span>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
             </div>
-            <div className="login-title">{t('loginWelcome')}</div>
-            <div className="login-subtitle">
-              {t('loginWelcomeDesc')}
+
+            {/* Right Column: Authentication Card */}
+            <div className="login-stage-right">
+              <div className="auth-gateway-card">
+                <div className="auth-card-header">
+                  <div className="auth-logo-badge">
+                    <img
+                      src="https://donpollobot.vercel.app/donpollo-icon.jpg"
+                      alt="Don Pollo Logo"
+                      className="auth-logo-img"
+                    />
+                  </div>
+                  <h2 className="auth-title">{t('loginWelcome')}</h2>
+                  <p className="auth-subtitle">{t('loginWelcomeDesc')}</p>
+                </div>
+
+                <div className="auth-card-body">
+                  {/* Primary Discord Button */}
+                  <button className="auth-btn-discord" onClick={loginWithDiscord}>
+                    <div className="auth-btn-shine" />
+                    <svg width="22" height="22" viewBox="0 0 127.14 96.36" fill="white" style={{ flexShrink: 0 }}>
+                      <path d="M107.7,8.07A105.15,105.15,0,0,0,81.47,0a72.06,72.06,0,0,0-3.36,6.83A97.68,97.68,0,0,0,49,6.83,72.37,72.37,0,0,0,45.64,0,105.89,105.89,0,0,0,19.39,8.09C2.79,32.65-1.71,56.6.54,80.21h0A105.73,105.73,0,0,0,32.71,96.36,77.7,77.7,0,0,0,39.6,85.25a68.42,68.42,0,0,1-10.85-5.18c.91-.66,1.8-1.34,2.66-2a75.57,75.57,0,0,0,64.32,0c.87.71,1.76,1.39,2.66,2a68.68,68.68,0,0,1-10.87,5.19,77,77,0,0,0,6.89,11.1A105.25,105.25,0,0,0,126.6,80.22h0C129.24,52.84,122.09,29.11,107.7,8.07ZM42.45,65.69C36.18,65.69,31,60,31,53s5-12.74,11.43-12.74S54,46,53.89,53,48.84,65.69,42.45,65.69Zm42.24,0C78.41,65.69,73.25,60,73.25,53s5-12.74,11.44-12.74S96.23,46,96.12,53,91.08,65.69,84.69,65.69Z" />
+                    </svg>
+                    <span>{t('loginBtn')}</span>
+                  </button>
+
+                  {/* Divider */}
+                  <div className="auth-divider">
+                    <span className="auth-divider-line" />
+                    <span className="auth-divider-text">atau</span>
+                    <span className="auth-divider-line" />
+                  </div>
+
+                  {/* Secondary Guest Button */}
+                  <button className="auth-btn-guest" onClick={continueAsGuest}>
+                    <Headphones size={17} />
+                    <span>Lanjutkan sebagai Tamu (Mode Offline)</span>
+                  </button>
+                </div>
+
+                {/* Footer security note */}
+                <div className="auth-card-footer">
+                  <div className="auth-security-badge">
+                    <Lock size={12} />
+                    <span>Autentikasi resmi aman melalui Discord OAuth2</span>
+                  </div>
+                </div>
+              </div>
             </div>
-            <div className="login-features">
-              <div className="login-feature"><Music size={20} color="var(--accent-primary)" /> {t('loginFeat1')}</div>
-              <div className="login-feature"><Mic2 size={20} color="var(--accent-primary)" /> {t('loginFeat2')}</div>
-              <div className="login-feature"><ListMusic size={20} color="var(--accent-primary)" /> {t('loginFeat3')}</div>
-            </div>
-            <button className="login-btn-discord" onClick={loginWithDiscord}>
-              <svg width="22" height="22" viewBox="0 0 127.14 96.36" fill="white" style={{ flexShrink: 0 }}>
-                <path d="M107.7,8.07A105.15,105.15,0,0,0,81.47,0a72.06,72.06,0,0,0-3.36,6.83A97.68,97.68,0,0,0,49,6.83,72.37,72.37,0,0,0,45.64,0,105.89,105.89,0,0,0,19.39,8.09C2.79,32.65-1.71,56.6.54,80.21h0A105.73,105.73,0,0,0,32.71,96.36,77.7,77.7,0,0,0,39.6,85.25a68.42,68.42,0,0,1-10.85-5.18c.91-.66,1.8-1.34,2.66-2a75.57,75.57,0,0,0,64.32,0c.87.71,1.76,1.39,2.66,2a68.68,68.68,0,0,1-10.87,5.19,77,77,0,0,0,6.89,11.1A105.25,105.25,0,0,0,126.6,80.22h0C129.24,52.84,122.09,29.11,107.7,8.07ZM42.45,65.69C36.18,65.69,31,60,31,53s5-12.74,11.43-12.74S54,46,53.89,53,48.84,65.69,42.45,65.69Zm42.24,0C78.41,65.69,73.25,60,73.25,53s5-12.74,11.44-12.74S96.23,46,96.12,53,91.08,65.69,84.69,65.69Z" />
-              </svg>
-              {t('loginBtn')}
-            </button>
+
           </div>
-        </div>
+        </main>
       </div>
     );
   }
@@ -7173,23 +7490,110 @@ function App() {
         </div>
       )}
 
-      {/* Modal: Hapus Capsule */}
-      {capsuleToDelete && (
-        <div className="modal-overlay" onClick={() => setCapsuleToDelete(null)}>
-          <div className="modal" onClick={e => e.stopPropagation()}>
-            <h3 className="modal-title">{t('delete')} Time Capsule?</h3>
-            <p style={{ color: 'var(--text-secondary)', marginBottom: '24px' }}>{t('cannotUndo')}</p>
-            <div className="modal-actions">
-              <button className="btn-secondary" onClick={() => setCapsuleToDelete(null)}>{t('cancel')}</button>
-              <button className="btn-primary" style={{ backgroundColor: '#ff5555', color: 'white' }} onClick={async () => {
-                const success = await (window as any).electronAPI.deleteTimeCapsule(capsuleToDelete);
-                if (success) fetchTimeCapsules();
-                setCapsuleToDelete(null);
-              }}>{t('delete')}</button>
+      {/* Modal: Keyboard Shortcuts Cheat Sheet */}
+      {showShortcutsModal && (
+        <div className="modal-overlay" onClick={() => setShowShortcutsModal(false)} style={{ zIndex: 99999 }}>
+          <div className="modal" onClick={e => e.stopPropagation()} style={{ maxWidth: '580px', width: '92%', padding: '24px 28px', borderRadius: '16px', background: 'var(--bg-modal, #18181b)', border: '1px solid var(--border-color, rgba(255,255,255,0.1))', boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.7)' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                <div style={{ background: 'var(--accent-primary, #6366f1)', color: 'white', borderRadius: '8px', padding: '6px', display: 'flex' }}>
+                  <Keyboard size={18} />
+                </div>
+                <div>
+                  <h3 className="modal-title" style={{ margin: 0, fontSize: '18px', fontWeight: '700' }}>Keyboard Shortcuts</h3>
+                  <p style={{ margin: '2px 0 0 0', fontSize: '12px', color: 'var(--text-secondary)' }}>Tekan shortcut di bawah untuk kontrol instan</p>
+                </div>
+              </div>
+              <button className="btn-icon" onClick={() => setShowShortcutsModal(false)} style={{ padding: '6px' }} title="Close">
+                <X size={18} />
+              </button>
+            </div>
+
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: '16px', maxHeight: '55vh', overflowY: 'auto', paddingRight: '4px' }}>
+              <div>
+                <div style={{ fontSize: '11px', fontWeight: '700', textTransform: 'uppercase', color: 'var(--accent-primary, #6366f1)', marginBottom: '10px', letterSpacing: '0.05em' }}>Playback</div>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '13px' }}>
+                    <span style={{ color: 'var(--text-primary)' }}>Play / Pause</span>
+                    <kbd style={{ background: 'rgba(255,255,255,0.08)', padding: '3px 8px', borderRadius: '5px', fontSize: '12px', border: '1px solid rgba(255,255,255,0.15)', fontFamily: 'monospace' }}>Space</kbd>
+                  </div>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '13px' }}>
+                    <span style={{ color: 'var(--text-primary)' }}>Lagu Berikutnya</span>
+                    <div style={{ display: 'flex', gap: '4px' }}>
+                      <kbd style={{ background: 'rgba(255,255,255,0.08)', padding: '3px 6px', borderRadius: '5px', fontSize: '12px', border: '1px solid rgba(255,255,255,0.15)', fontFamily: 'monospace' }}>Ctrl</kbd>
+                      <kbd style={{ background: 'rgba(255,255,255,0.08)', padding: '3px 6px', borderRadius: '5px', fontSize: '12px', border: '1px solid rgba(255,255,255,0.15)', fontFamily: 'monospace' }}>→</kbd>
+                    </div>
+                  </div>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '13px' }}>
+                    <span style={{ color: 'var(--text-primary)' }}>Lagu Sebelumnya</span>
+                    <div style={{ display: 'flex', gap: '4px' }}>
+                      <kbd style={{ background: 'rgba(255,255,255,0.08)', padding: '3px 6px', borderRadius: '5px', fontSize: '12px', border: '1px solid rgba(255,255,255,0.15)', fontFamily: 'monospace' }}>Ctrl</kbd>
+                      <kbd style={{ background: 'rgba(255,255,255,0.08)', padding: '3px 6px', borderRadius: '5px', fontSize: '12px', border: '1px solid rgba(255,255,255,0.15)', fontFamily: 'monospace' }}>←</kbd>
+                    </div>
+                  </div>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '13px' }}>
+                    <span style={{ color: 'var(--text-primary)' }}>Maju 5 Detik</span>
+                    <kbd style={{ background: 'rgba(255,255,255,0.08)', padding: '3px 8px', borderRadius: '5px', fontSize: '12px', border: '1px solid rgba(255,255,255,0.15)', fontFamily: 'monospace' }}>→</kbd>
+                  </div>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '13px' }}>
+                    <span style={{ color: 'var(--text-primary)' }}>Mundur 5 Detik</span>
+                    <kbd style={{ background: 'rgba(255,255,255,0.08)', padding: '3px 8px', borderRadius: '5px', fontSize: '12px', border: '1px solid rgba(255,255,255,0.15)', fontFamily: 'monospace' }}>←</kbd>
+                  </div>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '13px' }}>
+                    <span style={{ color: 'var(--text-primary)' }}>Toggle Acak (Shuffle)</span>
+                    <kbd style={{ background: 'rgba(255,255,255,0.08)', padding: '3px 8px', borderRadius: '5px', fontSize: '12px', border: '1px solid rgba(255,255,255,0.15)', fontFamily: 'monospace' }}>S</kbd>
+                  </div>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '13px' }}>
+                    <span style={{ color: 'var(--text-primary)' }}>Toggle Ulang (Repeat)</span>
+                    <kbd style={{ background: 'rgba(255,255,255,0.08)', padding: '3px 8px', borderRadius: '5px', fontSize: '12px', border: '1px solid rgba(255,255,255,0.15)', fontFamily: 'monospace' }}>R</kbd>
+                  </div>
+                </div>
+              </div>
+
+              <div>
+                <div style={{ fontSize: '11px', fontWeight: '700', textTransform: 'uppercase', color: 'var(--accent-primary, #6366f1)', marginBottom: '10px', letterSpacing: '0.05em' }}>Audio & Kontrol</div>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '13px' }}>
+                    <span style={{ color: 'var(--text-primary)' }}>Volume Naik (+5%)</span>
+                    <kbd style={{ background: 'rgba(255,255,255,0.08)', padding: '3px 8px', borderRadius: '5px', fontSize: '12px', border: '1px solid rgba(255,255,255,0.15)', fontFamily: 'monospace' }}>↑</kbd>
+                  </div>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '13px' }}>
+                    <span style={{ color: 'var(--text-primary)' }}>Volume Turun (-5%)</span>
+                    <kbd style={{ background: 'rgba(255,255,255,0.08)', padding: '3px 8px', borderRadius: '5px', fontSize: '12px', border: '1px solid rgba(255,255,255,0.15)', fontFamily: 'monospace' }}>↓</kbd>
+                  </div>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '13px' }}>
+                    <span style={{ color: 'var(--text-primary)' }}>Bisu (Mute)</span>
+                    <kbd style={{ background: 'rgba(255,255,255,0.08)', padding: '3px 8px', borderRadius: '5px', fontSize: '12px', border: '1px solid rgba(255,255,255,0.15)', fontFamily: 'monospace' }}>M</kbd>
+                  </div>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '13px' }}>
+                    <span style={{ color: 'var(--text-primary)' }}>Sukai Lagu (Like)</span>
+                    <kbd style={{ background: 'rgba(255,255,255,0.08)', padding: '3px 8px', borderRadius: '5px', fontSize: '12px', border: '1px solid rgba(255,255,255,0.15)', fontFamily: 'monospace' }}>L</kbd>
+                  </div>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '13px' }}>
+                    <span style={{ color: 'var(--text-primary)' }}>Fokus Pencarian</span>
+                    <kbd style={{ background: 'rgba(255,255,255,0.08)', padding: '3px 8px', borderRadius: '5px', fontSize: '12px', border: '1px solid rgba(255,255,255,0.15)', fontFamily: 'monospace' }}>/</kbd>
+                  </div>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '13px' }}>
+                    <span style={{ color: 'var(--text-primary)' }}>Shortcut Cheat Sheet</span>
+                    <kbd style={{ background: 'rgba(255,255,255,0.08)', padding: '3px 8px', borderRadius: '5px', fontSize: '12px', border: '1px solid rgba(255,255,255,0.15)', fontFamily: 'monospace' }}>?</kbd>
+                  </div>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '13px' }}>
+                    <span style={{ color: 'var(--text-primary)' }}>Tutup Modal / Batal</span>
+                    <kbd style={{ background: 'rgba(255,255,255,0.08)', padding: '3px 8px', borderRadius: '5px', fontSize: '12px', border: '1px solid rgba(255,255,255,0.15)', fontFamily: 'monospace' }}>Esc</kbd>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div style={{ marginTop: '20px', paddingTop: '16px', borderTop: '1px solid rgba(255,255,255,0.08)', display: 'flex', justifyContent: 'flex-end' }}>
+              <button className="btn-primary" onClick={() => setShowShortcutsModal(false)} style={{ padding: '8px 20px' }}>
+                Tutup
+              </button>
             </div>
           </div>
         </div>
       )}
+
 
       {/* Modal: Hapus Cache */}
       {showClearCacheConfirm && (
@@ -7319,6 +7723,191 @@ function App() {
                   });
                 }
               }}>{t('removeFromLibrary')}</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal: Set Custom Status */}
+      {showStatusModal && (
+        <div className="modal-overlay" onClick={() => setShowStatusModal(false)}>
+          <div className="modal" onClick={e => e.stopPropagation()} style={{ maxWidth: '420px', borderRadius: '16px', boxShadow: '0 16px 40px rgba(0, 0, 0, 0.5)' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '14px' }}>
+              <MessageSquare size={22} color="var(--accent-primary)" />
+              <h3 className="modal-title" style={{ margin: 0 }}>{t('customStatusTitle')}</h3>
+            </div>
+            <p style={{ color: 'var(--text-secondary)', fontSize: '13px', marginBottom: '18px', lineHeight: '1.4' }}>
+              {t('customStatusDesc')}
+            </p>
+
+            <div style={{ position: 'relative', marginBottom: '16px' }}>
+              <input
+                className="modal-input"
+                type="text"
+                maxLength={60}
+                placeholder={t('customStatusPlaceholder')}
+                value={customStatusInput}
+                onChange={e => setCustomStatusInput(e.target.value)}
+                onKeyDown={e => {
+                  if (e.key === 'Enter') handleSaveCustomStatus(customStatusInput, customStatusDuration);
+                }}
+                autoFocus
+                style={{
+                  paddingRight: '50px',
+                  margin: 0,
+                  height: '42px',
+                  fontSize: '14px',
+                  boxShadow: 'none',
+                  outline: 'none'
+                }}
+              />
+              <span style={{ position: 'absolute', right: '14px', top: '50%', transform: 'translateY(-50%)', fontSize: '11px', color: 'var(--text-muted)' }}>
+                {customStatusInput.length}/60
+              </span>
+            </div>
+
+            {/* Template Durasi Status */}
+            <div style={{ marginBottom: '22px' }}>
+              <div style={{ fontSize: '12px', fontWeight: 600, color: 'var(--text-secondary)', marginBottom: '8px', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                <Clock size={13} color="var(--text-secondary)" /> {t('customStatusDuration')}
+              </div>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '8px' }}>
+                {[
+                  { label: t('customStatus1h'), hours: 1 },
+                  { label: t('customStatus5h'), hours: 5 },
+                  { label: t('customStatus12h'), hours: 12 },
+                  { label: t('customStatus24h'), hours: 24 }
+                ].map(opt => {
+                  const isSelected = customStatusDuration === opt.hours;
+                  return (
+                    <button
+                      key={opt.hours}
+                      type="button"
+                      onClick={() => setCustomStatusDuration(opt.hours)}
+                      style={{
+                        height: '34px',
+                        padding: '0',
+                        borderRadius: '8px',
+                        fontSize: '12px',
+                        fontWeight: 600,
+                        cursor: 'pointer',
+                        border: isSelected ? '1px solid var(--accent-primary)' : '1px solid var(--border-color)',
+                        background: isSelected ? 'var(--accent-primary)' : 'rgba(255, 255, 255, 0.04)',
+                        color: isSelected ? '#ffffff' : 'var(--text-secondary)',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        boxShadow: 'none',
+                        outline: 'none',
+                        transition: 'background-color 0.15s ease, border-color 0.15s ease, color 0.15s ease'
+                      }}
+                      onMouseEnter={e => {
+                        if (customStatusDuration !== opt.hours) {
+                          e.currentTarget.style.background = 'rgba(255, 255, 255, 0.08)';
+                          e.currentTarget.style.borderColor = 'rgba(255, 255, 255, 0.16)';
+                          e.currentTarget.style.color = '#ffffff';
+                        }
+                      }}
+                      onMouseLeave={e => {
+                        if (customStatusDuration !== opt.hours) {
+                          e.currentTarget.style.background = 'rgba(255, 255, 255, 0.04)';
+                          e.currentTarget.style.borderColor = 'var(--border-color)';
+                          e.currentTarget.style.color = 'var(--text-secondary)';
+                        }
+                      }}
+                    >
+                      {opt.label}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+
+            {/* Uniform Action Buttons */}
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '10px' }}>
+              {myCustomStatus ? (
+                <button
+                  type="button"
+                  style={{
+                    height: '38px',
+                    padding: '0 16px',
+                    borderRadius: '8px',
+                    fontSize: '13px',
+                    fontWeight: 600,
+                    color: '#f23f43',
+                    background: 'rgba(237, 66, 69, 0.08)',
+                    border: '1px solid rgba(237, 66, 69, 0.25)',
+                    cursor: 'pointer',
+                    whiteSpace: 'nowrap',
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    boxShadow: 'none',
+                    outline: 'none',
+                    transition: 'background-color 0.15s ease'
+                  }}
+                  onMouseEnter={e => e.currentTarget.style.background = 'rgba(237, 66, 69, 0.18)'}
+                  onMouseLeave={e => e.currentTarget.style.background = 'rgba(237, 66, 69, 0.08)'}
+                  onClick={() => handleSaveCustomStatus('', customStatusDuration)}
+                >
+                  {t('customStatusClear')}
+                </button>
+              ) : <div />}
+              <div style={{ display: 'flex', gap: '10px', marginLeft: 'auto' }}>
+                <button
+                  type="button"
+                  style={{
+                    height: '38px',
+                    padding: '0 18px',
+                    borderRadius: '8px',
+                    fontSize: '13px',
+                    fontWeight: 600,
+                    color: 'var(--text-secondary)',
+                    background: 'transparent',
+                    border: '1px solid var(--border-color)',
+                    cursor: 'pointer',
+                    whiteSpace: 'nowrap',
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    boxShadow: 'none',
+                    outline: 'none',
+                    transition: 'background-color 0.15s ease, color 0.15s ease'
+                  }}
+                  onMouseEnter={e => { e.currentTarget.style.background = 'rgba(255, 255, 255, 0.06)'; e.currentTarget.style.color = '#ffffff'; }}
+                  onMouseLeave={e => { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.color = 'var(--text-secondary)'; }}
+                  onClick={() => setShowStatusModal(false)}
+                >
+                  {t('cancel')}
+                </button>
+                <button
+                  type="button"
+                  style={{
+                    height: '38px',
+                    padding: '0 22px',
+                    borderRadius: '8px',
+                    fontSize: '13px',
+                    fontWeight: 600,
+                    color: '#ffffff',
+                    background: 'var(--accent-primary)',
+                    border: 'none',
+                    cursor: 'pointer',
+                    whiteSpace: 'nowrap',
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    boxShadow: 'none',
+                    filter: 'none',
+                    outline: 'none',
+                    transition: 'background-color 0.15s ease'
+                  }}
+                  onMouseEnter={e => e.currentTarget.style.background = 'var(--accent-hover)'}
+                  onMouseLeave={e => e.currentTarget.style.background = 'var(--accent-primary)'}
+                  onClick={() => handleSaveCustomStatus(customStatusInput, customStatusDuration)}
+                >
+                  {t('save')}
+                </button>
+              </div>
             </div>
           </div>
         </div>
@@ -7625,148 +8214,6 @@ function App() {
         </div>
       )}
 
-      {/* Modal: Add to Time Capsule */}
-      {addToCapsuleSong && (
-        <div className="modal-overlay" onClick={() => setAddToCapsuleSong(null)}>
-          <div className="modal" onClick={e => e.stopPropagation()}>
-            <h3 className="modal-title">{t('timeCapsule')}</h3>
-            <p style={{ color: 'var(--text-secondary)', fontSize: '13px', marginBottom: '16px' }}>"{addToCapsuleSong.title}"</p>
-            {timeCapsules.length === 0 ? (
-              <div style={{ textAlign: 'center', padding: '20px 0' }}>
-                <p style={{ color: 'var(--text-muted)' }}>{t('noCapsules') || 'No capsules yet'}</p>
-                <button className="btn-primary" style={{ marginTop: '12px' }} onClick={() => { setAddToCapsuleSong(null); setNewCapsule({ id: undefined, title: '', message: '', unlockDate: '', songs: [addToCapsuleSong] }); setShowTimeCapsuleModal(true); }}>
-                  <Plus size={16} /> {t('createCapsule')}
-                </button>
-              </div>
-            ) : (
-              <div className="modal-playlist-list">
-                {timeCapsules.map(cap => (
-                  <div key={cap.id} className="modal-playlist-item" onClick={async () => {
-                    if (cap.songs?.some((s: any) => s.id === addToCapsuleSong.id)) {
-                       showToast(t('toastAlreadyInPlaylist') || 'Sudah ada', 'error');
-                       return;
-                    }
-                    const updated = { ...cap, songs: [...(cap.songs || []), addToCapsuleSong] };
-                    await (window as any).electronAPI.updateTimeCapsule({ ...updated, discordId: discordUser?.id });
-                    fetchTimeCapsules();
-                    setAddToCapsuleSong(null);
-                    showToast(t('toastAddedToPlaylist', { playlist: cap.title }) || 'Berhasil', 'success');
-                  }}>
-                    <div className="modal-playlist-art" style={{ background: 'var(--bg-card-hover)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                      <Hourglass size={16} color="var(--text-muted)" />
-                    </div>
-                    <div>
-                      <div style={{ fontWeight: 600, fontSize: '14px' }}>{cap.title}</div>
-                      <div style={{ fontSize: '12px', color: 'var(--text-secondary)' }}>{(cap.songs || []).length} {t('songs')}</div>
-                    </div>
-                    {cap.songs?.some((s: any) => s.id === addToCapsuleSong.id) && (
-                      <Check size={16} color="var(--accent-primary)" style={{ marginLeft: 'auto' }} />
-                    )}
-                  </div>
-                ))}
-              </div>
-            )}
-            <div className="modal-actions">
-              <button className="btn-secondary" onClick={() => setAddToCapsuleSong(null)}>{t('cancel')}</button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Modal: Time Capsule Setup */}
-      {showTimeCapsuleModal && (
-        <div className="modal-overlay" onClick={() => setShowTimeCapsuleModal(false)}>
-          <div className="modal" onClick={e => e.stopPropagation()}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '24px', color: 'var(--accent-primary)' }}>
-              <Hourglass size={24} />
-              <h3 className="modal-title" style={{ margin: 0 }}>{t('createCapsule')}</h3>
-            </div>
-            
-            <div style={{ marginBottom: '16px' }}>
-              <label style={{ display: 'block', fontSize: '12px', color: 'var(--text-secondary)', marginBottom: '8px' }}>{t('capsuleTitle')}</label>
-              <input type="text" className="modal-input" placeholder={t('capsuleTitle')} value={newCapsule.title} onChange={e => setNewCapsule({...newCapsule, title: e.target.value})} style={{ margin: 0, borderRadius: '12px' }} />
-            </div>
-
-            <div style={{ marginBottom: '16px' }}>
-              <label style={{ display: 'block', fontSize: '12px', color: 'var(--text-secondary)', marginBottom: '8px' }}>{t('capsuleMessage')}</label>
-              <textarea className="modal-input" placeholder={t('capsuleMessage')} rows={3} value={newCapsule.message} onChange={e => setNewCapsule({...newCapsule, message: e.target.value})} style={{ resize: 'none', margin: 0, borderRadius: '12px' }} />
-            </div>
-
-            <div style={{ marginBottom: '16px' }}>
-              <label style={{ display: 'block', fontSize: '12px', color: 'var(--text-secondary)', marginBottom: '8px' }}>{t('capsuleUnlockDate')}</label>
-              <input type="date" className="modal-input" value={newCapsule.unlockDate} onChange={e => setNewCapsule({...newCapsule, unlockDate: e.target.value})} min={new Date(Date.now() + 86400000).toISOString().split('T')[0]} style={{ margin: 0, borderRadius: '12px' }} />
-            </div>
-
-            <div style={{ marginBottom: '16px' }}>
-              <label style={{ display: 'block', fontSize: '12px', color: 'var(--text-secondary)', marginBottom: '8px' }}>Search & Add Songs</label>
-              <input type="text" className="modal-input" placeholder="Search a song..." value={capsuleSearchQuery} onChange={(e) => setCapsuleSearchQuery(e.target.value)} style={{ margin: 0, borderRadius: '12px' }} />
-              {capsuleSearchResults.length > 0 && (
-                  <div style={{ background: 'var(--bg-card)', border: '1px solid var(--border-color)', borderRadius: '8px', marginTop: '8px', maxHeight: '150px', overflowY: 'auto' }}>
-                      {capsuleSearchResults.map(s => (
-                           <div key={s.id} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '8px 12px', cursor: 'pointer', borderBottom: '1px solid rgba(255,255,255,0.05)' }} onClick={() => {
-                               if(!newCapsule.songs.some(existing => existing.id === s.id)) {
-                                   setNewCapsule(prev => ({ ...prev, songs: [...prev.songs, s] }));
-                               }
-                               setCapsuleSearchQuery('');
-                               setCapsuleSearchResults([]);
-                           }} onMouseEnter={e => e.currentTarget.style.background = 'var(--bg-card-hover)'} onMouseLeave={e => e.currentTarget.style.background = 'transparent'}>
-                              <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-                                  <img src={s.thumbnail} style={{ width: 28, height: 28, borderRadius: 4, objectFit: 'cover' }} />
-                                  <div style={{ fontSize: '13px', color: 'var(--text-primary)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: '200px' }}>{s.title}</div>
-                              </div>
-                              <Plus size={16} color="var(--accent-primary)" />
-                           </div>
-                      ))}
-                  </div>
-              )}
-            </div>
-
-            <div style={{ marginBottom: '24px', background: 'var(--bg-card-hover)', padding: '12px', borderRadius: '8px' }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
-                <span style={{ fontSize: '12px', color: 'var(--text-secondary)' }}>Playlist ({newCapsule.songs.length})</span>
-                {currentSong && !newCapsule.songs.some(s => s.id === currentSong.id) && (
-                  <button className="btn-secondary" style={{ padding: '4px 8px', fontSize: '11px' }} onClick={() => setNewCapsule({...newCapsule, songs: [...newCapsule.songs, currentSong]})}>
-                    + {t('capsuleAddCurrentSong')}
-                  </button>
-                )}
-              </div>
-              <div style={{ display: 'flex', gap: '8px', overflowX: 'auto', paddingBottom: '4px' }}>
-                {newCapsule.songs.length === 0 ? (
-                  <div style={{ fontSize: '12px', color: 'var(--text-muted)' }}>{t('capsuleNoSongs')}</div>
-                ) : (
-                  newCapsule.songs.map((s, i) => <img key={i} src={s.thumbnail || s.cover} style={{ width: '32px', height: '32px', borderRadius: '4px', objectFit: 'cover' }} title={s.title} />)
-                )}
-              </div>
-            </div>
-
-            <div className="modal-actions" style={{ marginTop: '24px' }}>
-              <button className="btn-secondary" onClick={() => {
-                setShowTimeCapsuleModal(false);
-                setNewCapsule({ id: undefined, title: '', message: '', unlockDate: '', songs: [] });
-                setCapsuleSearchQuery('');
-                setCapsuleSearchResults([]);
-              }}>{t('cancel')}</button>
-              <button className="btn-primary" onClick={async () => {
-                if (!newCapsule.title || !newCapsule.unlockDate || !discordUser) return;
-                let success = false;
-                if (newCapsule.id) {
-                  success = await (window as any).electronAPI.updateTimeCapsule({ ...newCapsule, discordId: discordUser.id });
-                } else {
-                  success = await (window as any).electronAPI.createTimeCapsule({ ...newCapsule, discordId: discordUser.id });
-                }
-                if (success) {
-                  showToast(t('capsuleSuccess'), 'success');
-                  setShowTimeCapsuleModal(false);
-                  setNewCapsule({ id: undefined, title: '', message: '', unlockDate: '', songs: [] });
-                  setCapsuleSearchQuery('');
-                  setCapsuleSearchResults([]);
-                  fetchTimeCapsules();
-                }
-              }} disabled={!newCapsule.title || !newCapsule.unlockDate}>{newCapsule.id ? t('save') : t('capsuleSeal')}</button>
-            </div>
-          </div>
-        </div>
-      )}
 
       {/* Modal: Collaborators Management */}
       {showCollabModal && collabPlaylistId && (() => {
@@ -7889,129 +8336,6 @@ function App() {
         );
       })()}
 
-      {/* Modal: Focus Setup */}
-      {showFocusSetup && (
-        <div className="modal-overlay" onClick={() => setShowFocusSetup(false)}>
-          <div className="modal" onClick={e => e.stopPropagation()}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '16px', color: 'var(--accent-primary)' }}>
-              <Timer size={24} />
-              <h3 className="modal-title" style={{ margin: 0 }}>{t('focusMode')}</h3>
-            </div>
-            <p style={{ color: 'var(--text-muted)', fontSize: '13px', marginBottom: '24px' }}>
-              {t('focusModeDesc')}
-            </p>
-            
-            <div style={{ display: 'flex', gap: '12px', marginBottom: '16px' }}>
-              <button 
-                className={`btn-secondary ${focusCustomMinutes === '25' ? 'active' : ''}`} 
-                onClick={() => { setFocusCustomMinutes('25'); startFocusMode(25 * 60); }} 
-                style={{ flex: 1, padding: '16px 8px', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '4px', borderColor: focusCustomMinutes === '25' ? 'var(--accent-primary)' : 'var(--border-color)', background: focusCustomMinutes === '25' ? 'rgba(0, 255, 170, 0.05)' : '' }}
-              >
-                <span style={{ fontSize: '24px', fontWeight: 'bold', color: focusCustomMinutes === '25' ? 'var(--accent-primary)' : 'var(--text-primary)' }}>25</span>
-                <span style={{ fontSize: '12px', color: 'var(--text-secondary)' }}>{t('focusMinutes')}</span>
-              </button>
-              <button 
-                className={`btn-secondary ${focusCustomMinutes === '45' ? 'active' : ''}`} 
-                onClick={() => { setFocusCustomMinutes('45'); startFocusMode(45 * 60); }} 
-                style={{ flex: 1, padding: '16px 8px', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '4px', borderColor: focusCustomMinutes === '45' ? 'var(--accent-primary)' : 'var(--border-color)', background: focusCustomMinutes === '45' ? 'rgba(0, 255, 170, 0.05)' : '' }}
-              >
-                <span style={{ fontSize: '24px', fontWeight: 'bold', color: focusCustomMinutes === '45' ? 'var(--accent-primary)' : 'var(--text-primary)' }}>45</span>
-                <span style={{ fontSize: '12px', color: 'var(--text-secondary)' }}>{t('focusMinutes')}</span>
-              </button>
-              <button 
-                className={`btn-secondary ${focusCustomMinutes === '60' ? 'active' : ''}`} 
-                onClick={() => { setFocusCustomMinutes('60'); startFocusMode(60 * 60); }} 
-                style={{ flex: 1, padding: '16px 8px', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '4px', borderColor: focusCustomMinutes === '60' ? 'var(--accent-primary)' : 'var(--border-color)', background: focusCustomMinutes === '60' ? 'rgba(0, 255, 170, 0.05)' : '' }}
-              >
-                <span style={{ fontSize: '24px', fontWeight: 'bold', color: focusCustomMinutes === '60' ? 'var(--accent-primary)' : 'var(--text-primary)' }}>60</span>
-                <span style={{ fontSize: '12px', color: 'var(--text-secondary)' }}>{t('focusMinutes')}</span>
-              </button>
-            </div>
-            
-            <div style={{ display: 'flex', gap: '8px', marginBottom: '24px', alignItems: 'stretch' }}>
-              <input 
-                type="number" 
-                className="modal-input" 
-                placeholder={t('focusCustom')} 
-                value={focusCustomMinutes}
-                onChange={e => setFocusCustomMinutes(e.target.value)}
-                style={{ flex: 1, textAlign: 'center', fontSize: '16px', fontWeight: 'bold', padding: '12px', margin: 0, borderRadius: '12px' }}
-              />
-              {focusCustomMinutes && !['25', '45', '60'].includes(focusCustomMinutes) && (
-                <button className="btn-primary" style={{ padding: '0 24px', fontWeight: 'bold', borderRadius: '12px', height: 'auto' }} onClick={() => {
-                  const mins = parseInt(focusCustomMinutes);
-                  if (!isNaN(mins) && mins > 0) startFocusMode(mins * 60);
-                }}>{t('focusStart')}</button>
-              )}
-            </div>
-
-            {isFocusMode && (
-              <div style={{ padding: '16px', background: 'rgba(255, 77, 77, 0.05)', borderRadius: '12px', border: '1px solid rgba(255, 77, 77, 0.2)', marginBottom: '24px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                <div>
-                  <div style={{ fontSize: '14px', fontWeight: 'bold', color: 'var(--text-primary)' }}>{t('focusActive')}</div>
-                  <div style={{ fontSize: '12px', color: 'var(--text-secondary)', marginTop: '2px' }}>{Math.floor(focusTimeLeft / 60)}:{String(focusTimeLeft % 60).padStart(2, '0')} {t('focusMinutes')} remaining</div>
-                </div>
-                <button className="btn-secondary" style={{ color: '#ff4d4d', borderColor: 'rgba(255, 77, 77, 0.3)', padding: '8px 16px' }} onClick={stopFocusMode}>
-                  {t('focusStop')}
-                </button>
-              </div>
-            )}
-            
-            {/* History Section */}
-            <div style={{ marginTop: '16px', paddingTop: '20px', borderTop: '1px solid var(--border-color)' }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '12px' }}>
-                <Clock size={16} color="var(--text-secondary)" />
-                <div style={{ fontSize: '12px', color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '0.5px', fontWeight: 'bold' }}>{t('focusSessionHistory')}</div>
-              </div>
-              {focusSessionHistory.length > 0 ? (
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
-                  <div style={{ background: 'var(--bg-card)', padding: '16px', borderRadius: '12px', border: '1px solid var(--border-color)', display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
-                    <div style={{ fontSize: '24px', fontWeight: '800', color: 'var(--text-primary)' }}>{focusSessionHistory.length}</div>
-                    <div style={{ fontSize: '12px', color: 'var(--text-secondary)', marginTop: '4px' }}>{t('focusTotalSessions')}</div>
-                  </div>
-                  <div style={{ background: 'var(--bg-card)', padding: '16px', borderRadius: '12px', border: '1px solid var(--border-color)', display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
-                    <div style={{ fontSize: '24px', fontWeight: '800', color: 'var(--text-primary)' }}>{(focusSessionHistory.reduce((acc, curr) => acc + curr.duration, 0) / 60).toFixed(1)}h</div>
-                    <div style={{ fontSize: '12px', color: 'var(--text-secondary)', marginTop: '4px' }}>{t('focusTotalFocusTime')}</div>
-                  </div>
-                </div>
-              ) : (
-                <div style={{ background: 'var(--bg-card)', padding: '16px', borderRadius: '12px', border: '1px dashed var(--border-color)', textAlign: 'center', fontSize: '13px', color: 'var(--text-muted)' }}>
-                  {t('focusNoSessions')}
-                </div>
-              )}
-            </div>
-            
-            <div className="modal-actions" style={{ marginTop: '24px' }}>
-              <button className="btn-secondary" onClick={() => setShowFocusSetup(false)}>{t('focusClose')}</button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Modal: Focus Recap */}
-      {showFocusRecap && focusRecapData && (
-        <div className="modal-overlay" onClick={() => setShowFocusRecap(false)}>
-          <div className="modal" onClick={e => e.stopPropagation()} style={{ textAlign: 'center' }}>
-            <div style={{ fontSize: '48px', marginBottom: '12px' }}>🎉</div>
-            <h3 className="modal-title" style={{ color: 'var(--accent-primary)', marginBottom: '8px' }}>{t('focusSessionComplete')}</h3>
-            
-            <div style={{ display: 'flex', gap: '16px', justifyContent: 'center', margin: '24px 0' }}>
-              <div style={{ background: 'var(--bg-card)', padding: '16px', borderRadius: '12px', border: '1px solid var(--border-color)', minWidth: '100px' }}>
-                <div style={{ fontSize: '28px', fontWeight: '800' }}>{focusRecapData.duration}</div>
-                <div style={{ fontSize: '12px', color: 'var(--text-secondary)' }}>{t('focusMinutes')}</div>
-              </div>
-              <div style={{ background: 'var(--bg-card)', padding: '16px', borderRadius: '12px', border: '1px solid var(--border-color)', minWidth: '100px' }}>
-                <div style={{ fontSize: '28px', fontWeight: '800' }}>{focusRecapData.songsPlayed}</div>
-                <div style={{ fontSize: '12px', color: 'var(--text-secondary)' }}>{t('focusSongsPlayed')}</div>
-              </div>
-            </div>
-
-            <div className="modal-actions" style={{ justifyContent: 'center' }}>
-              <button className="btn-primary" onClick={() => setShowFocusRecap(false)}>{t('focusClose')}</button>
-            </div>
-          </div>
-        </div>
-      )}
 
       {/* TOP SECTION */}
       <div className="app-top-section" style={{ display: 'flex', flex: 1, overflow: 'hidden' }}>
@@ -8079,15 +8403,6 @@ function App() {
                 </div>
               </button>
 
-              <button className={`sidebar-list-item ${activePage === 'time-capsule' ? 'active' : ''}`} onClick={() => navigate('time-capsule')}>
-                <div className="sidebar-item-img" style={{ background: 'linear-gradient(135deg, #10b981, #065f46)' }}>
-                  <Hourglass size={20} color="white" />
-                </div>
-                <div className="sidebar-item-info">
-                  <div className="sidebar-item-title">{t('timeCapsule')}</div>
-                  <div className="sidebar-item-subtitle">{timeCapsules.length} {t('capsules') || 'capsules'}</div>
-                </div>
-              </button>
 
               {/* Playlists */}
               {playlists.filter(pl => pl.discordId === discordUser?.id || savedPlaylists.includes(pl.id) || pl.collaborators?.includes(discordUser?.id || '')).map(pl => (
@@ -8444,6 +8759,16 @@ function App() {
                                     <div className="friend-avatar-container" style={{ position: 'relative' }}>
                                       <img src={user.avatarUrl || getDefaultDiscordAvatar(user.discordId, user.username)} alt={user.username} className="friend-avatar" onError={(e) => handleAvatarError(e, user.discordId, user.username)} />
                                       <div className={`status-dot-avatar status-dot ${user.status || 'online'}`}></div>
+                                      {user.customStatus && (
+                                        <>
+                                          <div className="friend-thought-badge" title={user.customStatus}>
+                                            <MessageSquare size={10} color="var(--accent-primary)" />
+                                          </div>
+                                          <div className="friend-cloud-popover">
+                                            {user.customStatus}
+                                          </div>
+                                        </>
+                                      )}
                                     </div>
                                     <div className="friend-info">
                                       <div className="friend-name" style={{ display: 'flex', alignItems: 'center' }}>
@@ -8511,6 +8836,10 @@ function App() {
                       <div className="status-dot dnd"></div> {t('statusDnd')}
                     </div>
                     <div className="dropdown-divider"></div>
+                    <div className="dropdown-item" onClick={() => { setCustomStatusInput(myCustomStatus); setShowStatusModal(true); setShowLogoutDropdown(false); }}>
+                      <MessageSquare size={16} style={{ marginRight: '8px', color: 'var(--text-secondary)' }} /> {myCustomStatus ? t('customStatusEdit') : t('customStatusSet')}
+                    </div>
+                    <div className="dropdown-divider"></div>
                     <div className="logout-item" onClick={handleLogout}>
                       <LogOut size={16} /> {t('logoutDropdown')}
                     </div>
@@ -8532,6 +8861,16 @@ function App() {
                 {discordUser && (
                   <div className={`status-dot-avatar status-dot ${userStatus}`}></div>
                 )}
+                {myCustomStatus && (
+                  <>
+                    <div className="friend-thought-badge" title={myCustomStatus}>
+                      <MessageSquare size={10} color="var(--accent-primary)" />
+                    </div>
+                    <div className="friend-cloud-popover" style={{ left: '0', transform: 'translateY(4px) scale(0.92)' }}>
+                      {myCustomStatus}
+                    </div>
+                  </>
+                )}
               </div>
               <span className="nav-label" style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                 {discordUser ? (discordUser.global_name || discordUser.username) : t('guest')}
@@ -8543,8 +8882,8 @@ function App() {
         {/* MAIN CONTENT */}
         <div className="main-area">
           {isOffline && (
-            <div className="offline-banner" style={{ background: 'var(--accent-primary)', color: 'black', textAlign: 'center', padding: '10px', fontWeight: 'bold', fontSize: '14px', display: 'flex', justifyContent: 'center', alignItems: 'center', gap: '8px' }}>
-              <WifiOff size={18} /> Anda sedang dalam Mode Offline. Fitur pencarian dan rekomendasi dinonaktifkan.
+            <div className="offline-banner" style={{ background: 'linear-gradient(90deg, #f59e0b, #ef4444)', color: 'white', textAlign: 'center', padding: '8px 16px', fontWeight: '600', fontSize: '13px', display: 'flex', justifyContent: 'center', alignItems: 'center', gap: '8px', boxShadow: '0 4px 12px rgba(239, 68, 68, 0.25)', zIndex: 10 }}>
+              <WifiOff size={16} /> <span>{t('offlineMode')} — Mode Offline aktif. Memutar musik dari Offline Vault / Cache lokal.</span>
             </div>
           )}
           {/* Top Bar */}
@@ -8586,6 +8925,7 @@ function App() {
               <form onSubmit={e => e.preventDefault()} style={{ display: 'flex', alignItems: 'center', position: 'relative', opacity: isOffline ? 0.5 : 1, pointerEvents: isOffline ? 'none' : 'auto' }}>
                 <Search size={16} className="search-icon" />
                 <input
+                  ref={searchInputRef}
                   disabled={isOffline}
                   type="text"
                   className="search-input"
@@ -8780,7 +9120,28 @@ function App() {
                 </div>
               )}
             </div>
-            <div className="topbar-right-actions" style={{ display: 'flex', alignItems: 'center', gap: '16px', minWidth: '60px', justifyContent: 'flex-end' }}>
+            <div className="topbar-right-actions" style={{ display: 'flex', alignItems: 'center', gap: '12px', minWidth: '60px', justifyContent: 'flex-end' }}>
+              <button
+                className="btn-icon"
+                onClick={() => setShowShortcutsModal(true)}
+                title="Keyboard Shortcuts (?)"
+                style={{
+                  color: 'var(--text-secondary)',
+                  padding: '8px',
+                  borderRadius: '50%',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  transition: 'all 0.2s',
+                  background: 'transparent',
+                  border: 'none',
+                  cursor: 'pointer'
+                }}
+                onMouseEnter={e => { (e.currentTarget as HTMLElement).style.color = 'var(--text-primary)'; (e.currentTarget as HTMLElement).style.background = 'rgba(255,255,255,0.06)'; }}
+                onMouseLeave={e => { (e.currentTarget as HTMLElement).style.color = 'var(--text-secondary)'; (e.currentTarget as HTMLElement).style.background = 'transparent'; }}
+              >
+                <Keyboard size={18} />
+              </button>
               {discordUser && (
                 <div
                   style={{
@@ -8827,9 +9188,6 @@ function App() {
           {activePage === 'home' && renderHomePage()}
           {activePage === 'artist' && renderArtistPage()}
           {activePage === 'profile' && renderProfilePage()}
-          {activePage === 'time-capsule' && (
-            <div className="main-scroll">{renderTimeCapsulePage()}</div>
-          )}
           {activePage === 'sound-map' && (
             <div className="main-scroll" style={{ padding: '24px' }}>
               <SoundMap t={t} onPlaySong={startPlayingFromList} theme={settings.theme || 'default'} onCountrySelect={(alpha2, name) => {
@@ -8871,19 +9229,6 @@ function App() {
                           transition: 'all 0.3s ease'
                         }}
                       />
-                      {isFocusMode && (
-                        <div className="focus-timer-ring" title={`${Math.floor(focusTimeLeft / 60)}:${String(focusTimeLeft % 60).padStart(2, '0')}`} style={{ position: 'absolute', top: '50%', left: '50%', transform: 'translate(-50%, -50%)', pointerEvents: 'none' }}>
-                          <svg width="64" height="64" viewBox="0 0 64 64" style={{ display: 'block', overflow: 'visible' }}>
-                            <circle cx="32" cy="32" r="30" fill="none" stroke="rgba(var(--accent-primary-rgb, 0,195,255), 0.2)" strokeWidth="3" />
-                            <circle cx="32" cy="32" r="30" fill="none" stroke="var(--accent-primary)" strokeWidth="3" 
-                              strokeDasharray="188.49" 
-                              strokeDashoffset={188.49 - (focusTimeLeft / focusDuration) * 188.49} 
-                              strokeLinecap="round" 
-                              style={{ transition: 'stroke-dashoffset 1s linear', transform: 'rotate(-90deg)', transformOrigin: '50% 50%' }} 
-                            />
-                          </svg>
-                        </div>
-                      )}
                     </div>
                     <div className="player-info">
                       <span className="player-title" title={currentSong.title}>{currentSong.title}</span>
@@ -8900,12 +9245,12 @@ function App() {
               <div className="player-center">
                 <div className="player-controls">
                   <button className="chat-btn" onClick={toggleShuffle} style={{ color: isShuffled ? 'var(--accent-primary)' : 'var(--text-secondary)' }} title={t('btnShuffle')}><Shuffle size={18} /></button>
-                  <button className="chat-btn" onClick={handlePrev} disabled={currentIndex <= 0 || (isGuest && !!activePartyId)} style={{ opacity: (currentIndex <= 0 || (isGuest && !!activePartyId)) ? 0.3 : 1, cursor: (isGuest && activePartyId) ? 'not-allowed' : 'pointer' }} title={t('btnPrevious')}><SkipBack size={22} fill="currentColor" /></button>
+                  <button className="chat-btn" onClick={handlePrev} disabled={(loopMode === 'off' && currentIndex <= 0) || (isGuest && !!activePartyId)} style={{ opacity: ((loopMode === 'off' && currentIndex <= 0) || (isGuest && !!activePartyId)) ? 0.3 : 1, cursor: (isGuest && activePartyId) ? 'not-allowed' : 'pointer' }} title={t('btnPrevious')}><SkipBack size={22} fill="currentColor" /></button>
                   <button className="chat-play-btn" onClick={togglePlay} disabled={!currentSong || (isGuest && !!activePartyId)} style={{ opacity: (!currentSong || (isGuest && !!activePartyId)) ? 0.3 : 1, cursor: (isGuest && activePartyId) ? 'not-allowed' : 'pointer' }} title={isPlaying ? t('btnPause') : t('btnPlay')}>
                     {isPlaying ? <Pause size={20} fill="currentColor" /> : <Play size={20} fill="currentColor" style={{ marginLeft: '4px' }} />}
                   </button>
-                  <button className="chat-btn" onClick={handleNext} disabled={currentIndex >= queue.length - 1 || (isGuest && !!activePartyId)} style={{ opacity: (currentIndex >= queue.length - 1 || (isGuest && !!activePartyId)) ? 0.3 : 1, cursor: (isGuest && activePartyId) ? 'not-allowed' : 'pointer' }} title={t('btnNext')}><SkipForward size={22} fill="currentColor" /></button>
-                  <button className="chat-btn" onClick={toggleLoopMode} style={{ color: loopMode !== 'off' ? 'var(--accent-primary)' : 'var(--text-secondary)' }} title={t('btnLoop')}>{loopMode === 'one' ? <Repeat1 size={18} /> : <Repeat size={18} />}</button>
+                  <button className="chat-btn" onClick={handleNext} disabled={(loopMode === 'off' && currentIndex >= queue.length - 1) || (isGuest && !!activePartyId)} style={{ opacity: ((loopMode === 'off' && currentIndex >= queue.length - 1) || (isGuest && !!activePartyId)) ? 0.3 : 1, cursor: (isGuest && activePartyId) ? 'not-allowed' : 'pointer' }} title={t('btnNext')}><SkipForward size={22} fill="currentColor" /></button>
+                  <button className="chat-btn" onClick={toggleLoopMode} style={{ color: loopMode !== 'off' ? 'var(--accent-primary)' : 'var(--text-secondary)' }} title={loopMode === 'one' ? 'Loop 1x: Ulangi 1 kali lalu lanjut antrean' : loopMode === 'all' ? 'Loop: Ulang lagu ini terus-menerus' : 'Loop Nonaktif'}>{loopMode === 'one' ? <Repeat1 size={18} /> : <Repeat size={18} />}</button>
                 </div>
                 <div className="player-progress-container">
                   <span className="chat-time">{formatTime(progress)}</span>
@@ -8923,9 +9268,6 @@ function App() {
                     <PanelRight size={20} />
                   </button>
                 )}
-                <button className="chat-btn" onClick={() => setShowFocusSetup(true)} style={{ color: isFocusMode ? '#ff6b9d' : 'var(--text-secondary)' }} title={isFocusMode ? `${t('focusActive')} — ${Math.floor(focusTimeLeft / 60)}:${String(focusTimeLeft % 60).padStart(2, '0')}` : t('focusMode')}>
-                  <Timer size={16} />
-                </button>
                 <button className="chat-btn" onClick={() => setIsWidgetMode(true)} title={t('btnFullscreen')}><Maximize2 size={16} /></button>
                 <div className="player-volume-container" style={{ display: 'flex', alignItems: 'center', gap: '8px', marginLeft: '16px' }} title={t('btnVolume')}>
                   <button className="chat-btn" onClick={() => setIsMuted(!isMuted)} title={isMuted || volume === 0 ? t('btnVolume') : t('btnMute')}>
@@ -9222,6 +9564,16 @@ function App() {
                                   <div className="friend-avatar-container" style={{ position: 'relative' }}>
                                     <img src={user.avatarUrl || getDefaultDiscordAvatar(user.discordId, user.username)} alt={user.username} className="friend-avatar" onError={(e) => handleAvatarError(e, user.discordId, user.username)} />
                                     <div className={`status-dot-avatar status-dot ${user.status || 'online'}`}></div>
+                                    {user.customStatus && (
+                                      <>
+                                        <div className="friend-thought-badge" title={user.customStatus}>
+                                          <MessageSquare size={10} color="var(--accent-primary)" />
+                                        </div>
+                                        <div className="friend-cloud-popover">
+                                          {user.customStatus}
+                                        </div>
+                                      </>
+                                    )}
                                   </div>
                                   <div className="friend-info">
                                     <div className="friend-name" style={{ display: 'flex', alignItems: 'center' }}>
@@ -9691,7 +10043,7 @@ function App() {
                         {isPlaying ? <Pause size={28} fill="black" /> : <Play size={28} fill="black" style={{ marginLeft: '6px' }} />}
                       </button>
                       <button onClick={handleNext}><SkipForward size={24} fill="currentColor" /></button>
-                      <button onClick={toggleLoopMode} style={{ color: loopMode !== 'off' ? 'var(--accent-primary)' : 'white' }}>{loopMode === 'one' ? <Repeat1 size={20} /> : <Repeat size={20} />}</button>
+                      <button onClick={toggleLoopMode} style={{ color: loopMode !== 'off' ? 'var(--accent-primary)' : 'white' }} title={loopMode === 'one' ? 'Loop 1x: Ulangi 1 kali lalu lanjut antrean' : loopMode === 'all' ? 'Loop: Ulang lagu ini terus-menerus' : 'Loop Nonaktif'}>{loopMode === 'one' ? <Repeat1 size={20} /> : <Repeat size={20} />}</button>
                     </div>
 
                     <div className="fs-overlay-progress">
@@ -9785,13 +10137,6 @@ function App() {
               setContextMenu(null);
             }}>
               <FolderPlus size={16} /> {t('addToPlaylist')}
-            </div>
-            <div className="context-menu-item" onClick={() => {
-              setNewCapsule(prev => ({ ...prev, songs: [...prev.songs, contextMenu.song] }));
-              setShowTimeCapsuleModal(true);
-              setContextMenu(null);
-            }}>
-              <Hourglass size={16} /> {t('timeCapsule')}
             </div>
             {!contextMenu.song.isPodcast && (
               <div className="context-menu-item" onClick={() => {
