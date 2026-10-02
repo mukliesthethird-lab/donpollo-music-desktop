@@ -450,6 +450,8 @@ function App() {
   const [onlineUsers, setOnlineUsers] = useState<any[]>([]);
   const [activePartyId, setActivePartyId] = useState<string | null>(null);
   const [popupPartyId, setPopupPartyId] = useState<string | null>(null);
+  const hostMissCountRef = useRef<number>(0);
+  const onlineUsersRef = useRef<any[]>([]);
   const [cacheSize, setCacheSize] = useState<number>(0);
   const [cachePath, setCachePath] = useState<string>('');
   const [showClearCacheConfirm, setShowClearCacheConfirm] = useState(false);
@@ -808,8 +810,12 @@ function App() {
     try {
       if ((window as any).electronAPI) {
         const dbPlaylists = await (window as any).electronAPI.getPlaylists(discordUser?.id);
-        if (dbPlaylists) {
+        if (dbPlaylists && Array.isArray(dbPlaylists)) {
           setPlaylists(dbPlaylists);
+          const suffix = discordUser ? `_${discordUser.id}` : '';
+          try {
+            localStorage.setItem(`donpollo_playlists${suffix}`, JSON.stringify(dbPlaylists));
+          } catch {}
         }
       }
     } catch (e) {
@@ -1287,10 +1293,16 @@ function App() {
             ? `${currentSong.id}-${Math.floor(progress / 5)}`
             : 'idle';
 
+          const isHosting = !isGuest && !!discordUser && (
+            activePartyId === discordUser.id || 
+            onlineUsersRef.current.some((u: any) => u.partyId === discordUser.id)
+          );
+          const currentPartyId = isGuest ? activePartyId : (isHosting ? discordUser.id : null);
+
           const extraData = {
             discordId: discordUser.id,
             username: discordUser.global_name || discordUser.username,
-            partyId: activePartyId,
+            partyId: currentPartyId,
             isGuest: isGuest,
             progress,
             duration,
@@ -1316,6 +1328,7 @@ function App() {
           let reqs: any = { incoming: [], outgoing: [] };
           let collabs: any[] = [];
           let queueReqs: any[] = [];
+          let syncError = false;
 
           if ((window as any).electronAPI.unifiedPresenceSync) {
             const unified = await (window as any).electronAPI.unifiedPresenceSync({
@@ -1330,7 +1343,7 @@ function App() {
                   timestamp: Date.now(),
                   crossfade: parseInt(localStorage.getItem('donpollo_crossfade') || '0', 10)
                 } : null,
-                partyId: activePartyId,
+                partyId: currentPartyId,
                 status: (document.hidden && userStatus === 'online') ? 'idle' : userStatus,
                 customStatus: myCustomStatus,
                 queue: queue
@@ -1338,6 +1351,7 @@ function App() {
               isGuest
             });
 
+            syncError = !!unified?.syncError;
             users = unified.onlineUsers || [];
             reqs = unified.joinRequests || { incoming: [], outgoing: [] };
             collabs = unified.collabInvites || [];
@@ -1355,7 +1369,7 @@ function App() {
                 timestamp: Date.now(),
                 crossfade: parseInt(localStorage.getItem('donpollo_crossfade') || '0', 10)
               } : null,
-              partyId: activePartyId,
+              partyId: currentPartyId,
               status: (document.hidden && userStatus === 'online') ? 'idle' : userStatus,
               customStatus: myCustomStatus,
               queue: queue
@@ -1370,7 +1384,7 @@ function App() {
             }
           }
 
-          if (!isGuest) {
+          if (!isGuest && (isHosting || activePartyId === discordUser.id)) {
             if (currentSong) {
               await (window as any).electronAPI.hostParty(
                 discordUser.id,
@@ -1382,11 +1396,19 @@ function App() {
                 audioRef.current?.currentTime || 0,
                 isPlayingNow
               );
-            } else {
-              await (window as any).electronAPI.deleteParty(discordUser.id);
             }
           }
-          setOnlineUsers(users);
+
+          const isSyncSuccess = !syncError && (users.length > 0 || (window as any).electronAPI.unifiedPresenceSync === undefined);
+          if (users.length > 0) {
+            onlineUsersRef.current = users;
+            setOnlineUsers(users);
+          } else if (!isSyncSuccess && onlineUsersRef.current.length > 0) {
+            // Keep previous online users during temporary sync error to avoid flickering / false disconnects
+            users = onlineUsersRef.current;
+          } else {
+            setOnlineUsers(users);
+          }
 
           // Cache online users' info so we can display them even when offline
           let cacheUpdated = false;
@@ -1404,18 +1426,28 @@ function App() {
             try { localStorage.setItem('donpollo_collab_user_cache', JSON.stringify(collabUserCacheRef.current)); } catch {}
           }
 
-          // ── Host-left detection ──
-          // If this client is a guest and the host is no longer in the online user list, kick them out
+          // ── Host-left detection with grace period ──
+          // If this client is a guest and the host is no longer in the online user list, handle with grace period
           if (isGuest && activePartyId) {
             const hostStillOnline = users.some((u: any) => u.discordId === activePartyId);
-            if (!hostStillOnline) {
-              showToast(t('hostLeftParty'), 'error');
-              setIsGuest(false);
-              setActivePartyId(null);
-              // Stop playback so the guest doesn't keep playing the host's song indefinitely
-              if (audioRef.current) audioRef.current.pause();
-              setIsPlaying(false);
+            if (hostStillOnline) {
+              hostMissCountRef.current = 0;
+            } else if (users.length > 0 && !syncError) {
+              // Only increment miss counter if sync actually succeeded and returned other users
+              hostMissCountRef.current += 1;
+              // 6 consecutive cycles (~9s) of host missing before declaring party ended
+              if (hostMissCountRef.current >= 6) {
+                showToast(t('hostLeftParty'), 'error');
+                setIsGuest(false);
+                setActivePartyId(null);
+                hostMissCountRef.current = 0;
+                // Stop playback so the guest doesn't keep playing the host's song indefinitely
+                if (audioRef.current) audioRef.current.pause();
+                setIsPlaying(false);
+              }
             }
+          } else {
+            hostMissCountRef.current = 0;
           }
 
           // Poll requests
@@ -1499,7 +1531,11 @@ function App() {
 
     const setupInterval = () => {
       if (presenceInterval) clearInterval(presenceInterval);
-      const isParty = isGuest || !!activePartyId;
+      const isHosting = !isGuest && !!discordUser && (
+        activePartyId === discordUser.id || 
+        onlineUsersRef.current.some((u: any) => u.partyId === discordUser.id)
+      );
+      const isParty = isGuest || !!activePartyId || isHosting;
       // Untuk Listen Along / Party: SELALU 1.5 detik (1500ms) agar sinkronisasi pemutaran dengan teman tetap instan dan presisi
       const isHidden = !isParty && typeof document !== 'undefined' && document.visibilityState === 'hidden';
       const intervalMs = isParty ? 1500 : (isHidden ? 20000 : 5000);
@@ -1820,14 +1856,16 @@ function App() {
       setLikedSongs(liked ? JSON.parse(liked) : []);
     } catch { setLikedSongs([]); }
 
-    // Only load playlists from localStorage for guest mode (no DB connection).
-    // When logged in with electronAPI, the DB fetch effect (above) handles loading.
-    if (!(window as any).electronAPI || !discordUser) {
-      try {
-        const pl = localStorage.getItem(`donpollo_playlists${suffix}`);
-        setPlaylists(pl ? JSON.parse(pl) : []);
-      } catch { setPlaylists([]); }
-    }
+    // Immediately hydrate playlists from cache so user sees them without delay
+    try {
+      const pl = localStorage.getItem(`donpollo_playlists${suffix}`);
+      if (pl) {
+        const parsed = JSON.parse(pl);
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          setPlaylists(parsed);
+        }
+      }
+    } catch { }
 
   }, [discordUser]);
 
@@ -8539,6 +8577,7 @@ function App() {
                         <div style={{ display: 'flex', gap: '8px' }}>
                           <button onClick={async () => {
                             await (window as any).electronAPI.respondJoinRequest(req.id, 'accepted');
+                            if (discordUser) setActivePartyId(discordUser.id);
                             setJoinRequests(prev => ({ ...prev, incoming: prev.incoming.filter(r => r.id !== req.id) }));
                           }} style={{ flex: 1, padding: '4px 0', backgroundColor: '#23a559', color: 'white', border: 'none', borderRadius: '4px', cursor: 'pointer', fontSize: '11px', fontWeight: 600 }}>{t('accept')}</button>
 
@@ -8604,15 +8643,20 @@ function App() {
                                   <div className="friend-song" style={{ fontSize: '12px', color: 'var(--text-muted)' }}>{t('browsing') || 'Browsing...'}</div>
                                 )}
                               </div>
-                              {isGuest && (
+                              {(isGuest || (discordUser && effectivePartyId === discordUser.id)) && (
                                 <button
                                   className="leave-party-icon-btn"
-                                  onClick={(e) => {
+                                  onClick={async (e) => {
                                     e.stopPropagation();
-                                    setIsGuest(false);
-                                    setActivePartyId(null);
-                                    if (audioRef.current) audioRef.current.pause();
-                                    setIsPlaying(false);
+                                    if (isGuest) {
+                                      setIsGuest(false);
+                                      setActivePartyId(null);
+                                      if (audioRef.current) audioRef.current.pause();
+                                      setIsPlaying(false);
+                                    } else if (discordUser) {
+                                      setActivePartyId(null);
+                                      await (window as any).electronAPI?.deleteParty(discordUser.id);
+                                    }
                                   }}
                                   title={t('leaveParty')}
                                   style={{ marginLeft: '8px' }}
@@ -9416,15 +9460,20 @@ function App() {
                               <div className="friend-song" style={{ fontSize: '12px', color: 'var(--text-muted)' }}>{t('browsing') || 'Browsing...'}</div>
                             )}
                           </div>
-                          {isGuest && (
+                          {(isGuest || (discordUser && effectivePartyId === discordUser.id)) && (
                             <button
                               className="leave-party-icon-btn"
-                              onClick={(e) => {
+                              onClick={async (e) => {
                                 e.stopPropagation();
-                                setIsGuest(false);
-                                setActivePartyId(null);
-                                if (audioRef.current) audioRef.current.pause();
-                                setIsPlaying(false);
+                                if (isGuest) {
+                                  setIsGuest(false);
+                                  setActivePartyId(null);
+                                  if (audioRef.current) audioRef.current.pause();
+                                  setIsPlaying(false);
+                                } else if (discordUser) {
+                                  setActivePartyId(null);
+                                  await (window as any).electronAPI?.deleteParty(discordUser.id);
+                                }
                               }}
                               title={t('leaveParty')}
                               style={{ marginLeft: '8px' }}

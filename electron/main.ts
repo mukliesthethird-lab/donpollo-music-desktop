@@ -226,8 +226,8 @@ async function initDB() {
       database: process.env.DB_NAME || 's9206_database',
       port: Number(process.env.DB_PORT) || 3306,
       waitForConnections: true,
-      connectionLimit: 3,
-      maxIdle: 2,
+      connectionLimit: 10,
+      maxIdle: 5,
       idleTimeout: 60000,
       queueLimit: 0,
       enableKeepAlive: true,
@@ -367,6 +367,8 @@ async function initDB() {
     try { await db.execute("CREATE INDEX idx_join_guest_status ON join_requests (guest_id, status)"); } catch { }
     try { await db.execute("CREATE INDEX idx_online_last_seen ON online_users (last_seen)"); } catch { }
     try { await db.execute("CREATE INDEX idx_playlists_discord_id ON playlists (discord_id)"); } catch { }
+    try { await db.execute("CREATE INDEX idx_listen_parties_host ON listen_parties (host_discord_id)"); } catch { }
+    try { await db.execute("CREATE INDEX idx_online_party_id ON online_users (party_id)"); } catch { }
 
     // 🧹 Auto-prune sampah request lama (> 10 menit atau consumed) agar tabel selalu ramping & enteng
     try {
@@ -597,30 +599,68 @@ ipcMain.on('set-close-to-tray', (event, enabled) => {
 ipcMain.handle('get-playlists', async (event, discordId) => {
   if (!db) return [];
   try {
-    const [rows] = await db.execute(`
-      SELECT p.*, u.username as author_name, u.avatar_url as author_avatar
-      FROM playlists p 
-      LEFT JOIN user_profiles u ON p.discord_id = u.discord_id 
-      WHERE p.discord_id = ? OR p.discord_id IS NULL OR p.discord_id = "" OR p.is_private = 0 OR p.collaborators LIKE ?
-    `, [discordId || '', `%${discordId}%`]);
-    const playlists = await Promise.all((rows as any[]).map(async row => {
-      const [saveRows] = await db!.execute('SELECT COUNT(*) as count FROM user_profiles WHERE saved_playlists LIKE ?', [`%"${row.id}"%`]);
+    await ensureGlobalStatsCache();
+
+    let savedPlaylistIds: string[] = [];
+    if (discordId) {
+      try {
+        const [uRows] = await db.execute('SELECT saved_playlists FROM user_profiles WHERE discord_id = ?', [discordId]);
+        if ((uRows as any[]).length > 0) {
+          savedPlaylistIds = safeJsonParse((uRows as any[])[0].saved_playlists, []);
+        }
+      } catch { }
+    }
+
+    let query: string;
+    let params: any[] = [];
+
+    if (discordId) {
+      query = `
+        SELECT p.*, u.username as author_name, u.avatar_url as author_avatar
+        FROM playlists p 
+        LEFT JOIN user_profiles u ON p.discord_id = u.discord_id 
+        WHERE (p.discord_id = ? OR p.discord_id IS NULL OR p.discord_id = "" OR p.collaborators LIKE ?
+      `;
+      params = [discordId, `%${discordId}%`];
+
+      if (savedPlaylistIds.length > 0) {
+        const placeholders = savedPlaylistIds.map(() => '?').join(',');
+        query += ` OR p.id IN (${placeholders}))`;
+        params.push(...savedPlaylistIds);
+      } else {
+        query += `)`;
+      }
+    } else {
+      query = `
+        SELECT p.*, u.username as author_name, u.avatar_url as author_avatar
+        FROM playlists p 
+        LEFT JOIN user_profiles u ON p.discord_id = u.discord_id 
+        WHERE p.discord_id IS NULL OR p.discord_id = "" OR p.is_private = 0
+        LIMIT 50
+      `;
+      params = [];
+    }
+
+    const [rows] = await db.execute(query, params);
+
+    const playlists = (rows as any[]).map(row => {
+      const saveCount = (globalStatsCache.saveCountMap && globalStatsCache.saveCountMap[row.id]) || 0;
       return {
         id: row.id,
         name: row.name,
         avatar: row.avatar,
-        songs: JSON.parse(row.songs || '[]'),
+        songs: safeJsonParse(row.songs, []),
         discordId: row.discord_id,
         authorName: row.author_name,
         authorAvatar: row.author_avatar,
-        saveCount: (saveRows as any[])[0].count,
+        saveCount,
         isPrivate: row.is_private === 1,
-        collaborators: JSON.parse(row.collaborators || '[]')
+        collaborators: safeJsonParse(row.collaborators, [])
       };
-    }));
+    });
     return playlists;
   } catch (error) {
-    console.error(error);
+    console.error('get-playlists error:', error);
     return [];
   }
 });
@@ -1151,7 +1191,8 @@ ipcMain.handle('unified-presence-sync', async (event, payload: any) => {
       onlineUsers: [],
       joinRequests: { incoming: [], outgoing: [] },
       collabInvites: [],
-      queueRequests: []
+      queueRequests: [],
+      syncError: true
     };
   }
 });
