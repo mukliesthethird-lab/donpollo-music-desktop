@@ -372,6 +372,7 @@ type TranslationKeys = {
   music: string;
   topPodcasts: string;
   podcastByHost: string;
+  loadingPodcasts: string;
   podcastLinking: string;
   searchPodcastPlaceholder: string;
   podcastNotFoundYt: string;
@@ -972,7 +973,8 @@ const translations: Record<Language, TranslationKeys> = {
     music: 'Musik',
     topPodcasts: 'Podcast Populer',
     podcastByHost: 'oleh',
-    podcastLinking: 'Mencari episode di YouTube...',
+    loadingPodcasts: 'Memuat podcast...',
+    podcastLinking: 'Memuat episode podcast...',
     searchPodcastPlaceholder: 'Cari podcast, host, topik...',
     podcastNotFoundYt: 'Tidak ditemukan di YouTube',
     profile: 'Profil',
@@ -1571,7 +1573,8 @@ const translations: Record<Language, TranslationKeys> = {
     music: 'Music',
     topPodcasts: 'Top Podcasts',
     podcastByHost: 'by',
-    podcastLinking: 'Finding episode on YouTube...',
+    loadingPodcasts: 'Loading podcasts...',
+    podcastLinking: 'Loading podcast episode...',
     searchPodcastPlaceholder: 'Search podcasts, hosts, topics...',
     podcastNotFoundYt: 'Not found on YouTube',
     profile: 'Profile',
@@ -2170,7 +2173,8 @@ const translations: Record<Language, TranslationKeys> = {
     music: '音楽',
     topPodcasts: 'トップポッドキャスト',
     podcastByHost: '著:',
-    podcastLinking: 'YouTubeでエピソードを検索中...',
+    loadingPodcasts: 'ポッドキャストを読み込み中...',
+    podcastLinking: 'ポッドキャストを読み込み中...',
     searchPodcastPlaceholder: 'ポッドキャスト・ホスト・トピックを検索...',
     podcastNotFoundYt: 'YouTubeで見つかりません',
     profile: 'プロフィール',
@@ -2770,7 +2774,8 @@ const translations: Record<Language, TranslationKeys> = {
     music: '음악',
     topPodcasts: '인기 팟캐스트',
     podcastByHost: '진행:',
-    podcastLinking: 'YouTube에서 에피소드 검색 중...',
+    loadingPodcasts: '팟캐스트 로드 중...',
+    podcastLinking: '팟캐스트 에피소드 로드 중...',
     searchPodcastPlaceholder: '팟캐스트, 진행자, 주제 검색...',
     podcastNotFoundYt: 'YouTube에서 찾을 수 없음',
     profile: '프로필',
