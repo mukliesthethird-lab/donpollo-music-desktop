@@ -261,6 +261,7 @@ async function initDB() {
       await db.execute("ALTER TABLE online_users ADD COLUMN queue LONGTEXT").catch(() => { });
       await db.execute("ALTER TABLE online_users ADD COLUMN platform VARCHAR(20) DEFAULT 'desktop'").catch(() => { });
       await db.execute("ALTER TABLE online_users ADD COLUMN custom_status VARCHAR(255) DEFAULT NULL").catch(() => { });
+      await db.execute("ALTER TABLE online_users MODIFY COLUMN last_seen TIMESTAMP(3) DEFAULT CURRENT_TIMESTAMP(3) ON UPDATE CURRENT_TIMESTAMP(3)").catch(() => { });
       console.log('Database connected and initialized.');
     } catch (e: any) { }
 
@@ -956,8 +957,8 @@ ipcMain.handle('update-presence', async (event, data) => {
     const queueStr = queue ? JSON.stringify(queue) : '';
     await db.execute(
       `INSERT INTO online_users (discord_id, username, avatar_url, current_song, party_id, status, custom_status, queue, platform, last_seen) 
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'desktop', NOW()) 
-       ON DUPLICATE KEY UPDATE username = ?, avatar_url = ?, current_song = ?, party_id = ?, status = ?, custom_status = ?, queue = ?, platform = 'desktop', last_seen = NOW()`,
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'desktop', NOW(3)) 
+       ON DUPLICATE KEY UPDATE username = ?, avatar_url = ?, current_song = ?, party_id = ?, status = ?, custom_status = ?, queue = ?, platform = 'desktop', last_seen = NOW(3)`,
       [discordId, username, avatarUrl, songDataStr, partyId || '', status || 'online', customStatus || null, queueStr, username, avatarUrl, songDataStr, partyId || '', status || 'online', customStatus || null, queueStr]
     );
     return true;
@@ -1104,8 +1105,8 @@ ipcMain.handle('unified-presence-sync', async (event, payload: any) => {
       const queueStr = queue ? JSON.stringify(queue) : '';
       await db.execute(
         `INSERT INTO online_users (discord_id, username, avatar_url, current_song, party_id, status, custom_status, queue, platform, last_seen) 
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'desktop', NOW()) 
-         ON DUPLICATE KEY UPDATE username = ?, avatar_url = ?, current_song = ?, party_id = ?, status = ?, custom_status = ?, queue = ?, platform = 'desktop', last_seen = NOW()`,
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'desktop', NOW(3)) 
+         ON DUPLICATE KEY UPDATE username = ?, avatar_url = ?, current_song = ?, party_id = ?, status = ?, custom_status = ?, queue = ?, platform = 'desktop', last_seen = NOW(3)`,
         [discordId, username, avatarUrl, songDataStr, partyId || '', status || 'online', customStatus || null, queueStr, username, avatarUrl, songDataStr, partyId || '', status || 'online', customStatus || null, queueStr]
       );
     }

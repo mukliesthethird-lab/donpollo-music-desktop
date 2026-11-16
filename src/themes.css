@@ -1,4 +1,4 @@
-/* =========================================
+﻿/* =========================================
    CUSTOM THEMES FOR DON POLLO MUSIC
    ========================================= */
 
@@ -267,7 +267,7 @@
   color: var(--accent-text, #000);
 }
 
-/* ── Minimalist Overrides for Made For You & Daily Mix ── */
+/* â”€â”€ Minimalist Overrides for Made For You & Daily Mix â”€â”€ */
 .theme-minimalist .mfy-shelf-container .mfy-header-icon,
 .theme-minimalist .daily-shelf-container .daily-header-icon {
   color: #ffffff !important;
@@ -526,7 +526,7 @@
   --nav-height: 72px;
 }
 
-/* ── Root Background ── */
+/* â”€â”€ Root Background â”€â”€ */
 .theme-vibrant.app-layout {
   background: linear-gradient(135deg, #050b14 0%, #08121f 40%, #06111a 70%, #050b14 100%) !important;
   position: relative;
@@ -556,14 +556,14 @@
   z-index: 0;
 }
 
-/* ── Layout Override: Swapped Sidebars & Bento Box ── */
+/* â”€â”€ Layout Override: Swapped Sidebars & Bento Box â”€â”€ */
 .theme-vibrant .app-top-section {
   flex-direction: row-reverse !important;
   padding: 120px 20px 20px 20px !important;
   gap: 20px !important;
 }
 
-/* ── Left Sidebar Styling ── */
+/* â”€â”€ Left Sidebar Styling â”€â”€ */
 .theme-vibrant .nav-sidebar {
   background: rgba(8, 16, 26, 0.6) !important;
   border: 1px dashed var(--accent-primary) !important;
@@ -574,7 +574,7 @@
   overflow: hidden !important;
 }
 
-/* ── Right Sidebar Styling ── */
+/* â”€â”€ Right Sidebar Styling â”€â”€ */
 .theme-vibrant .right-sidebar {
   background: rgba(8, 16, 26, 0.6) !important;
   border: 1px dashed var(--accent-primary) !important;
@@ -602,7 +602,7 @@
   padding-bottom: 24px !important;
 }
 
-/* ── Top Bar: slim, floating style ── */
+/* â”€â”€ Top Bar: slim, floating style â”€â”€ */
 .theme-vibrant .top-bar {
   background: rgba(10, 10, 26, 0.7) !important;
   backdrop-filter: var(--glass-blur) !important;
@@ -613,7 +613,7 @@
   z-index: 100 !important;
 }
 
-/* ── Content Cards — Glassmorphism ── */
+/* â”€â”€ Content Cards â€” Glassmorphism â”€â”€ */
 .theme-vibrant .song-card,
 .theme-vibrant .rec-card {
   background: rgba(255, 255, 255, 0.04) !important;
@@ -642,7 +642,7 @@
   box-shadow: 0 0 12px rgba(0, 240, 255, 0.2) !important;
 }
 
-/* ── Bottom Navigation Bar ── */
+/* â”€â”€ Bottom Navigation Bar â”€â”€ */
 .vibrant-bottom-nav {
   display: none !important;
 }
@@ -690,7 +690,7 @@
   letter-spacing: 0.3px;
 }
 
-/* ── Vibrant Player (Top Dashboard) ── */
+/* â”€â”€ Vibrant Player (Top Dashboard) â”€â”€ */
 .theme-vibrant .bottom-player-bar {
   position: fixed !important;
   top: 20px !important;
@@ -714,7 +714,7 @@
   box-shadow: 0 8px 32px rgba(0, 240, 255, 0.2);
 }
 
-/* ── Big spinning album art in player ── */
+/* â”€â”€ Big spinning album art in player â”€â”€ */
 .theme-vibrant .player-cover {
   width: 56px !important;
   height: 56px !important;
@@ -726,7 +726,7 @@
   border-radius: 12px !important;
 }
 
-/* ── Player progress glowing accent ── */
+/* â”€â”€ Player progress glowing accent â”€â”€ */
 .theme-vibrant .chat-progress-fill {
   background: linear-gradient(90deg, #00d4ff, #00f0ff) !important;
   box-shadow: 0 0 8px rgba(0, 240, 255, 0.6) !important;
@@ -741,20 +741,20 @@
   background: rgba(255, 255, 255, 0.08) !important;
 }
 
-/* ── Accent buttons in player ── */
+/* â”€â”€ Accent buttons in player â”€â”€ */
 .theme-vibrant .chat-btn:hover {
   color: #00f0ff !important;
   background: rgba(0, 240, 255, 0.12) !important;
   border-radius: 8px;
 }
 
-/* ── Nav Items glow when active ── */
+/* â”€â”€ Nav Items glow when active â”€â”€ */
 .theme-vibrant .nav-item.active {
   color: #00f0ff;
   text-shadow: 0 0 12px rgba(0, 240, 255, 0.5);
 }
 
-/* ── Settings card glass ── */
+/* â”€â”€ Settings card glass â”€â”€ */
 .theme-vibrant .settings-section {
   background: rgba(255, 255, 255, 0.03) !important;
   border: 1px solid rgba(0, 240, 255, 0.15) !important;
@@ -762,7 +762,7 @@
   backdrop-filter: blur(8px) !important;
 }
 
-/* ── Home section headers ── */
+/* â”€â”€ Home section headers â”€â”€ */
 .theme-vibrant .section-header h2,
 .theme-vibrant .section-header-title {
   background: linear-gradient(90deg, #00bfff, #00f0ff, #55ffff);
@@ -771,7 +771,7 @@
   background-clip: text;
 }
 
-/* ── Scrollbar ── */
+/* â”€â”€ Scrollbar â”€â”€ */
 .theme-vibrant ::-webkit-scrollbar {
   width: 4px;
 }
@@ -789,7 +789,7 @@
   background: rgba(0, 240, 255, 0.5);
 }
 
-/* ── Home mode toggle ── */
+/* â”€â”€ Home mode toggle â”€â”€ */
 .theme-vibrant .home-mode-toggle {
   background: rgba(255, 255, 255, 0.06);
   border: 1px solid rgba(0, 240, 255, 0.2);
@@ -801,14 +801,14 @@
   color: white;
 }
 
-/* ── Modal glass ── */
+/* â”€â”€ Modal glass â”€â”€ */
 .theme-vibrant .modal {
   background: rgba(15, 10, 35, 0.95) !important;
   border: 1px solid rgba(0, 240, 255, 0.3) !important;
   backdrop-filter: blur(24px) !important;
 }
 
-/* ── Search bar ── */
+/* â”€â”€ Search bar â”€â”€ */
 .theme-vibrant .search-input {
   background: rgba(255, 255, 255, 0.06) !important;
   border: 1px solid rgba(0, 240, 255, 0.25) !important;
@@ -821,14 +821,14 @@
   box-shadow: 0 0 0 3px rgba(0, 240, 255, 0.15) !important;
 }
 
-/* ── Pill/Tag glow for active items ── */
+/* â”€â”€ Pill/Tag glow for active items â”€â”€ */
 .theme-vibrant .library-pill {
   background: linear-gradient(135deg, rgba(0, 212, 255, 0.2), rgba(0, 240, 255, 0.2)) !important;
   border: 1px solid rgba(0, 240, 255, 0.3) !important;
   color: #55ffff !important;
 }
 
-/* ── Button primary ── */
+/* â”€â”€ Button primary â”€â”€ */
 .theme-vibrant .btn-primary {
   background: linear-gradient(135deg, #00d4ff, #00f0ff) !important;
   border: none !important;
@@ -841,7 +841,7 @@
   transform: translateY(-1px) !important;
 }
 
-/* ── Toast ── */
+/* â”€â”€ Toast â”€â”€ */
 .theme-vibrant .toast-popup {
   background: rgba(15, 10, 35, 0.95) !important;
   border: 1px solid rgba(0, 240, 255, 0.3) !important;

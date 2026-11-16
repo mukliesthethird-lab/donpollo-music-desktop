@@ -882,6 +882,7 @@ function App() {
     if (!api?.onListenAlongInvite) return;
     const unsub = api.onListenAlongInvite(({ userId, username }: { userId: string; username: string | null }) => {
       if (!userId) return;
+      if (discordUserRef.current?.id === userId) return;
       setActivePartyId(userId);
       setIsGuest(true);
       showToast(`Joining ${username ? username + "'s" : ''} session...`, 'success');
@@ -1339,6 +1340,16 @@ function App() {
       const nextSong = queue[currentIndex + 1];
       if (!nextSong) return;
 
+      const prepareNext = () => {
+        const isStreamingOnly = !!nextSong.isPodcast || homeMode === 'podcast' || (nextSong.duration && nextSong.duration >= 900);
+        if (isStreamingOnly) return;
+        let prepareUrl = `${API_BASE_URL}/api/prepare?id=${nextSong.id}`;
+        if (settings.audioQuality && settings.audioQuality !== 'auto') {
+          prepareUrl += `&quality=${settings.audioQuality}`;
+        }
+        fetch(prepareUrl).catch(() => { });
+      };
+
       const prefetch = async () => {
         if ((window as any).electronAPI?.checkCache) {
           const isCached = await (window as any).electronAPI.checkCache(nextSong.id);
@@ -1358,21 +1369,38 @@ function App() {
           }
         }
       };
-      // Delay sedikit agar tidak mengganggu proses load lagu utama
+      // Pre-resolve URL lebih awal (2.5s) dan download cache lokal setelah 8s agar tidak mengganggu playback utama
+      const prepareTimer = setTimeout(prepareNext, 2500);
       const timer = setTimeout(prefetch, 8000);
-      return () => clearTimeout(timer);
+      return () => {
+        clearTimeout(prepareTimer);
+        clearTimeout(timer);
+      };
     }
   }, [currentIndex, queue]);
 
   // ─── Listen Along & Presence Sync ───
   const isSyncingRef = useRef(false);
+  const pendingSyncRef = useRef(false);
+  const syncPresenceRef = useRef<(() => void) | null>(null);
+  const queueRef = useRef<any[]>(queue);
+  queueRef.current = queue;
+  const myCustomStatusRef = useRef(myCustomStatus);
+  myCustomStatusRef.current = myCustomStatus;
+  const lastHostPartySyncRef = useRef<{ time: number; songId: string | null; isPlaying: boolean }>({ time: 0, songId: null, isPlaying: false });
   const lastActivityRef = useRef<string>('');
   useEffect(() => {
     if (!discordUser) return;
 
     const syncPresence = async () => {
-      if (isSyncingRef.current) return;
+      if (isSyncingRef.current) {
+        pendingSyncRef.current = true;
+        return;
+      }
       isSyncingRef.current = true;
+
+      const activeSong = currentSongRef.current;
+      const activeQueue = isGuest ? [] : (queueRef.current || []).slice(0, 50);
 
       if ((window as any).electronAPI) {
         try {
@@ -1383,14 +1411,11 @@ function App() {
           const duration = audioRef.current?.duration || 0;
 
           // Bucket to ~5s to avoid flooding IPC, but still keep progress bar accurate
-          const bucket = isPlayingNow && currentSong
-            ? `${currentSong.id}-${Math.floor(progress / 5)}`
+          const bucket = isPlayingNow && activeSong
+            ? `${activeSong.id}-${Math.floor(progress / 5)}`
             : 'idle';
 
-          const isHosting = !isGuest && !!discordUser && (
-            activePartyId === discordUser.id || 
-            onlineUsersRef.current.some((u: any) => u.partyId === discordUser.id)
-          );
+          const isHosting = !isGuest && !!discordUser && activePartyId === discordUser.id;
           const currentPartyId = isGuest ? activePartyId : (isHosting ? discordUser.id : null);
 
           const extraData = {
@@ -1410,8 +1435,8 @@ function App() {
           } else {
             if (lastActivityRef.current !== bucket) {
               lastActivityRef.current = bucket;
-              if (isPlayingNow && currentSong) {
-                (window as any).electronAPI.setActivity(currentSong, extraData);
+              if (isPlayingNow && activeSong) {
+                (window as any).electronAPI.setActivity(activeSong, extraData);
               } else {
                 (window as any).electronAPI.setActivity(null, extraData);
               }
@@ -1430,8 +1455,8 @@ function App() {
               presenceData: {
                 username: discordUser.global_name || discordUser.username,
                 avatarUrl: avatar,
-                currentSong: currentSong ? {
-                  ...currentSong,
+                currentSong: activeSong ? {
+                  ...activeSong,
                   currentTime: audioRef.current?.currentTime || 0,
                   isPlaying: isPlayingNow,
                   timestamp: Date.now(),
@@ -1439,8 +1464,8 @@ function App() {
                 } : null,
                 partyId: currentPartyId,
                 status: (document.hidden && userStatus === 'online') ? 'idle' : userStatus,
-                customStatus: myCustomStatus,
-                queue: queue
+                customStatus: myCustomStatusRef.current,
+                queue: activeQueue
               },
               isGuest
             });
@@ -1456,8 +1481,8 @@ function App() {
               discordId: discordUser.id,
               username: discordUser.global_name || discordUser.username,
               avatarUrl: avatar,
-              currentSong: currentSong ? {
-                ...currentSong,
+              currentSong: activeSong ? {
+                ...activeSong,
                 currentTime: audioRef.current?.currentTime || 0,
                 isPlaying: isPlayingNow,
                 timestamp: Date.now(),
@@ -1465,8 +1490,8 @@ function App() {
               } : null,
               partyId: currentPartyId,
               status: (document.hidden && userStatus === 'online') ? 'idle' : userStatus,
-              customStatus: myCustomStatus,
-              queue: queue
+              customStatus: myCustomStatusRef.current,
+              queue: activeQueue
             });
             users = await (window as any).electronAPI.getOnlineUsers(discordUser.id);
             reqs = await (window as any).electronAPI.pollJoinRequests(discordUser.id);
@@ -1478,13 +1503,17 @@ function App() {
             }
           }
 
-          if (!isGuest && (isHosting || activePartyId === discordUser.id)) {
-            if (currentSong) {
+          if (isHosting && activeSong) {
+            const nowMs = Date.now();
+            const lastHp = lastHostPartySyncRef.current;
+            const songOrStateChanged = lastHp.songId !== activeSong.id || lastHp.isPlaying !== isPlayingNow;
+            if (songOrStateChanged || nowMs - lastHp.time >= 5000) {
+              lastHostPartySyncRef.current = { time: nowMs, songId: activeSong.id, isPlaying: isPlayingNow };
               await (window as any).electronAPI.hostParty(
                 discordUser.id,
                 discordUser.id,
                 {
-                  ...currentSong,
+                  ...activeSong,
                   crossfade: parseInt(localStorage.getItem('donpollo_crossfade') || '0', 10)
                 },
                 audioRef.current?.currentTime || 0,
@@ -1493,7 +1522,7 @@ function App() {
             }
           }
 
-          const isSyncSuccess = !syncError && (users.length > 0 || (window as any).electronAPI.unifiedPresenceSync === undefined);
+          const isSyncSuccess = !syncError;
           if (users.length > 0) {
             onlineUsersRef.current = users;
             setOnlineUsers(users);
@@ -1501,7 +1530,8 @@ function App() {
             // Keep previous online users during temporary sync error to avoid flickering / false disconnects
             users = onlineUsersRef.current;
           } else {
-            setOnlineUsers(users);
+            onlineUsersRef.current = [];
+            setOnlineUsers([]);
           }
 
           // Cache online users' info so we can display them even when offline
@@ -1526,8 +1556,8 @@ function App() {
             const hostStillOnline = users.some((u: any) => u.discordId === activePartyId);
             if (hostStillOnline) {
               hostMissCountRef.current = 0;
-            } else if (users.length > 0 && !syncError) {
-              // Only increment miss counter if sync actually succeeded and returned other users
+            } else if (!syncError) {
+              // Increment miss counter even when users.length === 0 so guest doesn't get stuck in a ghost party
               hostMissCountRef.current += 1;
               // 6 consecutive cycles (~9s) of host missing before declaring party ended
               if (hostMissCountRef.current >= 6) {
@@ -1614,21 +1644,23 @@ function App() {
           console.error('Failed to sync presence', e);
         } finally {
           isSyncingRef.current = false;
+          if (pendingSyncRef.current) {
+            pendingSyncRef.current = false;
+            syncPresence();
+          }
         }
       } else {
         isSyncingRef.current = false;
       }
     };
 
+    syncPresenceRef.current = syncPresence;
     syncPresence();
     let presenceInterval: ReturnType<typeof setInterval>;
 
     const setupInterval = () => {
       if (presenceInterval) clearInterval(presenceInterval);
-      const isHosting = !isGuest && !!discordUser && (
-        activePartyId === discordUser.id || 
-        onlineUsersRef.current.some((u: any) => u.partyId === discordUser.id)
-      );
+      const isHosting = !isGuest && !!discordUser && activePartyId === discordUser.id;
       const isParty = isGuest || !!activePartyId || isHosting;
       // Untuk Listen Along / Party: SELALU 1.5 detik (1500ms) agar sinkronisasi pemutaran dengan teman tetap instan dan presisi
       const isHidden = !isParty && typeof document !== 'undefined' && document.visibilityState === 'hidden';
@@ -1650,12 +1682,22 @@ function App() {
     }
 
     return () => {
+      if (syncPresenceRef.current === syncPresence) {
+        syncPresenceRef.current = null;
+      }
       if (presenceInterval) clearInterval(presenceInterval);
       if (typeof document !== 'undefined') {
         document.removeEventListener('visibilitychange', handleVisibilityChange);
       }
     };
-  }, [discordUser, currentSong, activePartyId, userStatus, isGuest, queue, settings.discordActivityEnabled]);
+  }, [discordUser, activePartyId, userStatus, isGuest, settings.discordActivityEnabled]);
+
+  // Segera broadcast ke party saat Host ganti lagu atau play/pause tanpa mereset timer interval
+  useEffect(() => {
+    if (!isGuest && discordUser && activePartyId === discordUser.id) {
+      syncPresenceRef.current?.();
+    }
+  }, [currentSong?.id, isPlaying, isGuest, discordUser, activePartyId]);
 
   // ─── Lyrics ──────────────────────────────────────────────────
   const [lyricsData, setLyricsData] = useState<{ time: number, text: string, romanizedText?: string, isInstrumental?: boolean }[] | null>(null);
@@ -1708,6 +1750,8 @@ function App() {
   currentSongRef.current = currentSong;
   const executePlayRef = useRef<any>(null);
   const recoveryAttemptsRef = useRef<Record<string, number>>({});
+  const playSessionIdRef = useRef<number>(0);
+  const initialPlayHandlingRef = useRef<number>(0);
   const lastPausedAtRef = useRef<number>(0);
   const audioContextRef = useRef<AudioContext | null>(null);
   const sourceNodeRef = useRef<MediaElementAudioSourceNode | null>(null);
@@ -2180,6 +2224,8 @@ function App() {
     };
     const handleError = () => {
       if (audioRef.current !== audio) return;
+      // Jangan tabrakan dengan recovery awal di play().catch() untuk sesi pemutaran yang sama
+      if (initialPlayHandlingRef.current === playSessionIdRef.current) return;
       if (audio.error && currentSongRef.current && executePlayRef.current) {
         const songId = currentSongRef.current.id;
         const attempts = recoveryAttemptsRef.current[songId] || 0;
@@ -3368,19 +3414,29 @@ function App() {
         }
 
         const cacheMode = settings.cacheMode || 'smart';
+        playSessionIdRef.current += 1;
+        const sessionId = playSessionIdRef.current;
 
         if (isCached && !forceStream) {
           audioRef.current.src = `donpollo-cache://${song.id}`;
         } else {
-          audioRef.current.src = streamUrl;
+          const targetAudio = audioRef.current;
+          targetAudio.src = streamUrl;
           if (cacheMode !== 'stream' && !forceStream) {
-            // Delay background caching slightly (2.5s) so it doesn't compete with immediate playback bandwidth
-            setTimeout(() => {
-              if ((window as any).electronAPI?.cacheAudio && currentSongRef.current?.id === song.id) {
-                const isTemp = cacheMode === 'temp';
-                (window as any).electronAPI.cacheAudio(song, streamUrl, true, isTemp);
-              }
-            }, 2500);
+            // Tunggu sampai stream utama selesai buffer (canplaythrough) agar tidak double-download ke server saat klik pertama
+            const scheduleLocalCache = () => {
+              setTimeout(() => {
+                if (
+                  (window as any).electronAPI?.cacheAudio &&
+                  playSessionIdRef.current === sessionId &&
+                  currentSongRef.current?.id === song.id
+                ) {
+                  const isTemp = cacheMode === 'temp';
+                  (window as any).electronAPI.cacheAudio(song, streamUrl, true, isTemp);
+                }
+              }, 1500);
+            };
+            targetAudio.addEventListener('canplaythrough', scheduleLocalCache, { once: true });
           }
         }
 
@@ -3405,39 +3461,36 @@ function App() {
 
         audioRef.current.play().catch(async (err) => {
           console.warn("Primary play interrupted or delayed:", err.name, err.message);
-          if (err.name === 'AbortError') return;
+          if (err.name === 'AbortError' || playSessionIdRef.current !== sessionId) return;
 
-          // Priority 1: Fetch direct Google Video audio stream URL from backend JSON API
+          initialPlayHandlingRef.current = sessionId;
+
+          // Retry 1: Minta backend refresh URL stream (hindari raw=true yang terkena IP-lock VPS)
           try {
-            const rawRes = await fetch(`${API_BASE_URL}/api/stream?id=${song.id}&raw=true`);
-            if (rawRes.ok) {
-              const rawData = await rawRes.json();
-              if (rawData?.url && audioRef.current) {
-                audioRef.current.src = rawData.url;
-                await audioRef.current.play();
-                setIsPlaying(true);
-                return;
-              }
-            }
-          } catch (e) {
-            console.warn("Priority 1 raw fallback failed:", e);
+            await new Promise(r => setTimeout(r, 400));
+            if (playSessionIdRef.current !== sessionId || !audioRef.current) return;
+            const refreshSep = streamUrl.includes('?') ? '&' : '?';
+            audioRef.current.src = `${streamUrl}${refreshSep}refresh=true`;
+            await audioRef.current.play();
+            initialPlayHandlingRef.current = 0;
+            setIsPlaying(true);
+            return;
+          } catch (retryErr) {
+            console.warn("Stream refresh retry failed:", retryErr);
           }
 
-          // Priority 2: Quick retry after 600ms (in case backend was still preparing stream)
-          try {
-            await new Promise(r => setTimeout(r, 600));
-            if (audioRef.current) {
-              audioRef.current.src = `${API_BASE_URL}/api/stream?id=${song.id}&nocache=true`;
-              await audioRef.current.play();
-              setIsPlaying(true);
-              return;
-            }
-          } catch (e) {
-            console.warn("Priority 2 retry failed:", e);
-          }
+          if (playSessionIdRef.current !== sessionId) return;
 
-          // If all recovery attempts fail
-          showToast(t('toastVideoLocked'), 'error');
+          // Cek alasan kegagalan dari backend agar pesan toast akurat
+          let isRestricted = false;
+          try {
+            const probeRes = await fetch(`${API_BASE_URL}/api/prepare?id=${song.id}`);
+            if (probeRes.status === 403 || probeRes.status === 404 || probeRes.status === 410) {
+              isRestricted = true;
+            }
+          } catch { }
+
+          showToast(isRestricted ? t('toastVideoLocked') : 'Gagal memutar audio dari server. Mencoba lagu berikutnya...', 'error');
           setIsPlaying(false);
           if (handleNextRef.current) setTimeout(() => handleNextRef.current(), 1500);
         });
@@ -3450,22 +3503,19 @@ function App() {
   };
 
   // ─── Listen Along Sync Effect ───
+  const syncingGuestSongIdRef = useRef<string | null>(null);
   useEffect(() => {
     if (isGuest && activePartyId) {
       const hostUser = onlineUsers.find(u => u.discordId === activePartyId);
       if (hostUser) {
-        // Otomatis sinkronkan settingan Crossfade Host ke Guest
+        // Otomatis sinkronkan settingan Crossfade Host ke state Guest (tanpa menimpa localStorage permanen)
         const hostCrossfadeVal = hostUser.currentSong?.crossfade ?? (hostUser as any).crossfade;
         if (hostCrossfadeVal !== undefined && hostCrossfadeVal !== null) {
           const hostCfStr = String(hostCrossfadeVal);
-          const currentCf = localStorage.getItem('donpollo_crossfade') || '0';
           if (savedGuestCrossfadeRef.current === null) {
-            savedGuestCrossfadeRef.current = currentCf;
+            savedGuestCrossfadeRef.current = localStorage.getItem('donpollo_crossfade') || '0';
           }
-          if (currentCf !== hostCfStr) {
-            localStorage.setItem('donpollo_crossfade', hostCfStr);
-            setSettings((prev: any) => ({ ...prev, crossfade: hostCfStr }));
-          }
+          setSettings((prev: any) => (String(prev.crossfade ?? '0') === hostCfStr ? prev : { ...prev, crossfade: hostCfStr }));
         }
 
         if (hostUser.currentSong) {
@@ -3487,12 +3537,17 @@ function App() {
           }
 
           if (!currentSong || currentSong.id !== hs.id) {
-            // Abaikan broadcast host jika host masih tertinggal (lagging) dari eager advance kita
+            // Abaikan broadcast host jika host masih tertinggal (lagging) dari eager advance kita (maks 5s)
             const lastAdvance = (window as any).lastGuestAdvance || 0;
-            const isStaleHost = (Date.now() - lastAdvance < 15000) && queue[currentIndex - 1]?.id === hs.id;
+            const isStaleHost = (Date.now() - lastAdvance < 5000) && queue[currentIndex - 1]?.id === hs.id;
 
-            if (!isStaleHost) {
-              executePlay(hs, targetTime);
+            if (!isStaleHost && syncingGuestSongIdRef.current !== hs.id) {
+              syncingGuestSongIdRef.current = hs.id;
+              Promise.resolve(executePlay(hs, targetTime)).finally(() => {
+                if (syncingGuestSongIdRef.current === hs.id) {
+                  syncingGuestSongIdRef.current = null;
+                }
+              });
               const hostQueue = hostUser.queue || queue;
               const idx = hostQueue.findIndex((q: any) => q.id === hs.id || q.title === hs.title);
               if (idx !== -1) {
@@ -3500,6 +3555,7 @@ function App() {
               }
             }
           } else {
+            syncingGuestSongIdRef.current = null;
             // If already playing the same song, check if we need to sync time or play/pause state
             if (audioRef.current) {
               if (hs.isPlaying && audioRef.current.paused) {
@@ -3540,11 +3596,23 @@ function App() {
             }
           }
 
-          // Sync queue for guest
+          // Sync queue for guest secara ringan tanpa JSON.stringify tiap 1.5 detik
           if (hostUser.queue && hostUser.queue.length > 0) {
-            setQueue(prev => JSON.stringify(prev) === JSON.stringify(hostUser.queue) ? prev : hostUser.queue);
-            setOriginalQueue(prev => JSON.stringify(prev) === JSON.stringify(hostUser.queue) ? prev : hostUser.queue);
+            const hq = hostUser.queue;
+            const isSameQueue = (prev: any[]) =>
+              prev.length === hq.length &&
+              prev[0]?.id === hq[0]?.id &&
+              prev[prev.length - 1]?.id === hq[hq.length - 1]?.id;
+            setQueue(prev => (isSameQueue(prev) ? prev : hq));
+            setOriginalQueue(prev => (isSameQueue(prev) ? prev : hq));
           }
+        } else {
+          // Host menghentikan pemutaran (currentSong === null) -> ikut pause guest
+          syncingGuestSongIdRef.current = null;
+          if (audioRef.current && !audioRef.current.paused) {
+            audioRef.current.pause();
+          }
+          setIsPlaying(false);
         }
       }
     }
@@ -3651,8 +3719,10 @@ function App() {
     const isAutomatic = typeof eOrAuto === 'boolean' ? eOrAuto : false;
     if (isGuest && activePartyId && !isAutomatic) return;
 
-    // Mode: Loop 1x (Ulangi 1 kali lalu otomatis mati dan lanjut antrean berikutnya)
-    if (isAutomatic && loopMode === 'one') {
+    const isPartyGuest = isGuest && !!activePartyId;
+
+    // Mode: Loop 1x (Ulangi 1 kali lalu otomatis mati dan lanjut antrean berikutnya) — dinonaktifkan untuk Guest agar mengikuti Host
+    if (!isPartyGuest && isAutomatic && loopMode === 'one') {
       if (audioRef.current) {
         audioRef.current.currentTime = 0;
         audioRef.current.play().catch(() => { });
@@ -3665,8 +3735,8 @@ function App() {
       return;
     }
 
-    // Mode: Loop Biasa (Ulangi lagu ini terus-menerus tanpa henti sampai pengguna mematikan loop)
-    if (isAutomatic && loopMode === 'all') {
+    // Mode: Loop Biasa (Ulangi lagu ini terus-menerus tanpa henti sampai pengguna mematikan loop) — dinonaktifkan untuk Guest
+    if (!isPartyGuest && isAutomatic && loopMode === 'all') {
       if (audioRef.current) {
         audioRef.current.currentTime = 0;
         audioRef.current.play().catch(() => { });
@@ -3804,9 +3874,13 @@ function App() {
   togglePlayRef.current = togglePlay;
 
   const handleSeek = (e: React.MouseEvent<HTMLDivElement>) => {
+    if (isGuest && activePartyId) return;
     if (!audioRef.current || !duration) return;
     const rect = e.currentTarget.getBoundingClientRect();
     audioRef.current.currentTime = ((e.clientX - rect.left) / rect.width) * duration;
+    if (discordUser && activePartyId === discordUser.id) {
+      syncPresenceRef.current?.();
+    }
   };
 
   const toggleShuffle = () => {
