@@ -234,148 +234,129 @@ async function initDB() {
       keepAliveInitialDelay: 10000
     });
 
-    await db.execute(`
-      CREATE TABLE IF NOT EXISTS playlists (
-        id VARCHAR(255) PRIMARY KEY,
-        name VARCHAR(255) NOT NULL,
-        avatar LONGTEXT,
-        songs LONGTEXT,
-        discord_id VARCHAR(255)
-      )
-    `);
+    // Buat pool terlebih dahulu secara sinkron agar IPC bisa langsung menggunakannya tanpa menunggu DDL selesai
+    await Promise.allSettled([
+      db.execute(`
+        CREATE TABLE IF NOT EXISTS playlists (
+          id VARCHAR(255) PRIMARY KEY,
+          name VARCHAR(255) NOT NULL,
+          avatar LONGTEXT,
+          songs LONGTEXT,
+          discord_id VARCHAR(255)
+        )
+      `),
+      db.execute(`
+        CREATE TABLE IF NOT EXISTS online_users (
+          discord_id VARCHAR(255) PRIMARY KEY,
+          username VARCHAR(255),
+          avatar_url VARCHAR(255),
+          current_song LONGTEXT,
+          party_id VARCHAR(255),
+          status VARCHAR(20) DEFAULT 'online',
+          last_seen TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+        )
+      `),
+      db.execute(`
+        CREATE TABLE IF NOT EXISTS user_profiles (
+          discord_id VARCHAR(255) PRIMARY KEY,
+          username VARCHAR(255),
+          avatar_url VARCHAR(255),
+          liked_songs LONGTEXT,
+          stats LONGTEXT,
+          privacy_settings LONGTEXT,
+          saved_playlists LONGTEXT,
+          following LONGTEXT,
+          created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+          updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+        )
+      `),
+      db.execute(`
+        CREATE TABLE IF NOT EXISTS queue_requests (
+          id INT AUTO_INCREMENT PRIMARY KEY,
+          host_id VARCHAR(255),
+          guest_id VARCHAR(255),
+          guest_name VARCHAR(255),
+          song_data LONGTEXT,
+          status VARCHAR(20) DEFAULT 'pending',
+          created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )
+      `),
+      db.execute(`
+        CREATE TABLE IF NOT EXISTS join_requests (
+          id INT AUTO_INCREMENT PRIMARY KEY,
+          host_id VARCHAR(255),
+          guest_id VARCHAR(255),
+          guest_name VARCHAR(255),
+          status VARCHAR(20) DEFAULT 'pending',
+          created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )
+      `),
+      db.execute(`
+        CREATE TABLE IF NOT EXISTS listen_parties (
+          id VARCHAR(255) PRIMARY KEY,
+          host_discord_id VARCHAR(255),
+          song_data LONGTEXT,
+          playback_time FLOAT,
+          is_playing BOOLEAN,
+          updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+        )
+      `),
+      db.execute(`
+        CREATE TABLE IF NOT EXISTS playlist_shares (
+          code VARCHAR(12) PRIMARY KEY,
+          playlist_id VARCHAR(255) NOT NULL,
+          discord_id VARCHAR(255),
+          playlist_data LONGTEXT NOT NULL,
+          created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+          expires_at TIMESTAMP NOT NULL
+        )
+      `),
+      db.execute(`
+        CREATE TABLE IF NOT EXISTS collab_invites (
+          id INT AUTO_INCREMENT PRIMARY KEY,
+          playlist_id VARCHAR(255) NOT NULL,
+          playlist_name VARCHAR(255) NOT NULL,
+          host_id VARCHAR(255) NOT NULL,
+          host_name VARCHAR(255) NOT NULL,
+          guest_id VARCHAR(255) NOT NULL,
+          status VARCHAR(20) DEFAULT 'pending',
+          created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )
+      `),
+      db.execute(`
+        CREATE TABLE IF NOT EXISTS time_capsules (
+          id INT AUTO_INCREMENT PRIMARY KEY,
+          discord_id VARCHAR(255) NOT NULL,
+          title VARCHAR(255),
+          message LONGTEXT,
+          songs LONGTEXT,
+          unlock_date TIMESTAMP NOT NULL,
+          created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )
+      `)
+    ]);
 
-    await db.execute(`
-      CREATE TABLE IF NOT EXISTS online_users (
-        discord_id VARCHAR(255) PRIMARY KEY,
-        username VARCHAR(255),
-        avatar_url VARCHAR(255),
-        current_song LONGTEXT,
-        party_id VARCHAR(255),
-        status VARCHAR(20) DEFAULT 'online',
-        last_seen TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
-      )
-    `);
-
-    try {
-      await db.execute("ALTER TABLE online_users ADD COLUMN status VARCHAR(20) DEFAULT 'online'").catch(() => { });
-      await db.execute("ALTER TABLE online_users ADD COLUMN queue LONGTEXT").catch(() => { });
-      await db.execute("ALTER TABLE online_users ADD COLUMN platform VARCHAR(20) DEFAULT 'desktop'").catch(() => { });
-      await db.execute("ALTER TABLE online_users ADD COLUMN custom_status VARCHAR(255) DEFAULT NULL").catch(() => { });
-      await db.execute("ALTER TABLE online_users MODIFY COLUMN last_seen TIMESTAMP(3) DEFAULT CURRENT_TIMESTAMP(3) ON UPDATE CURRENT_TIMESTAMP(3)").catch(() => { });
-      console.log('Database connected and initialized.');
-    } catch (e: any) { }
-
-    await db.execute(`
-      CREATE TABLE IF NOT EXISTS user_profiles (
-        discord_id VARCHAR(255) PRIMARY KEY,
-        username VARCHAR(255),
-        avatar_url VARCHAR(255),
-        liked_songs LONGTEXT,
-        stats LONGTEXT,
-        privacy_settings LONGTEXT,
-        saved_playlists LONGTEXT,
-        following LONGTEXT,
-        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
-      )
-    `);
-
-    try {
-      await db.execute("ALTER TABLE playlists ADD COLUMN is_private BOOLEAN DEFAULT FALSE");
-    } catch (e: any) { }
-
-    try {
-      await db.execute("ALTER TABLE playlists ADD COLUMN collaborators LONGTEXT");
-    } catch (e: any) { }
-
-    try {
-      await db.execute("ALTER TABLE user_profiles ADD COLUMN banner_url VARCHAR(1000)");
-    } catch (e: any) { }
-
-    await db.execute(`
-      CREATE TABLE IF NOT EXISTS queue_requests (
-        id INT AUTO_INCREMENT PRIMARY KEY,
-        host_id VARCHAR(255),
-        guest_id VARCHAR(255),
-        guest_name VARCHAR(255),
-        song_data LONGTEXT,
-        status VARCHAR(20) DEFAULT 'pending',
-        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-      )
-    `);
-
-    await db.execute(`
-      CREATE TABLE IF NOT EXISTS join_requests (
-        id INT AUTO_INCREMENT PRIMARY KEY,
-        host_id VARCHAR(255),
-        guest_id VARCHAR(255),
-        guest_name VARCHAR(255),
-        status VARCHAR(20) DEFAULT 'pending',
-        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-      )
-    `);
-
-    await db.execute(`
-      CREATE TABLE IF NOT EXISTS listen_parties (
-        id VARCHAR(255) PRIMARY KEY,
-        host_discord_id VARCHAR(255),
-        song_data LONGTEXT,
-        playback_time FLOAT,
-        is_playing BOOLEAN,
-        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
-      )
-    `);
-    await db.execute(`
-      CREATE TABLE IF NOT EXISTS playlist_shares (
-        code VARCHAR(12) PRIMARY KEY,
-        playlist_id VARCHAR(255) NOT NULL,
-        discord_id VARCHAR(255),
-        playlist_data LONGTEXT NOT NULL,
-        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-        expires_at TIMESTAMP NOT NULL
-      )
-    `);
-
-    await db.execute(`
-      CREATE TABLE IF NOT EXISTS collab_invites (
-        id INT AUTO_INCREMENT PRIMARY KEY,
-        playlist_id VARCHAR(255) NOT NULL,
-        playlist_name VARCHAR(255) NOT NULL,
-        host_id VARCHAR(255) NOT NULL,
-        host_name VARCHAR(255) NOT NULL,
-        guest_id VARCHAR(255) NOT NULL,
-        status VARCHAR(20) DEFAULT 'pending',
-        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-      )
-    `);
-
-    await db.execute(`
-      CREATE TABLE IF NOT EXISTS time_capsules (
-        id INT AUTO_INCREMENT PRIMARY KEY,
-        discord_id VARCHAR(255) NOT NULL,
-        title VARCHAR(255),
-        message LONGTEXT,
-        songs LONGTEXT,
-        unlock_date TIMESTAMP NOT NULL,
-        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-      )
-    `);
-
-    // ⚡ Optimasi Index B-Tree agar query presence, collab, & party secepat kilat (<1ms)
-    try { await db.execute("CREATE INDEX idx_collab_guest_status ON collab_invites (guest_id, status)"); } catch { }
-    try { await db.execute("CREATE INDEX idx_queue_host_status ON queue_requests (host_id, status)"); } catch { }
-    try { await db.execute("CREATE INDEX idx_join_host_status ON join_requests (host_id, status)"); } catch { }
-    try { await db.execute("CREATE INDEX idx_join_guest_status ON join_requests (guest_id, status)"); } catch { }
-    try { await db.execute("CREATE INDEX idx_online_last_seen ON online_users (last_seen)"); } catch { }
-    try { await db.execute("CREATE INDEX idx_playlists_discord_id ON playlists (discord_id)"); } catch { }
-    try { await db.execute("CREATE INDEX idx_listen_parties_host ON listen_parties (host_discord_id)"); } catch { }
-    try { await db.execute("CREATE INDEX idx_online_party_id ON online_users (party_id)"); } catch { }
-
-    // 🧹 Auto-prune sampah request lama (> 10 menit atau consumed) agar tabel selalu ramping & enteng
-    try {
-      await db.execute("DELETE FROM join_requests WHERE status = 'consumed' OR created_at < DATE_SUB(NOW(), INTERVAL 10 MINUTE)");
-      await db.execute("DELETE FROM queue_requests WHERE status = 'consumed' OR created_at < DATE_SUB(NOW(), INTERVAL 10 MINUTE)");
-    } catch { }
+    // Migrasi kolom, index, & pembersihan request lama dijalankan paralel di background
+    await Promise.allSettled([
+      db.execute("ALTER TABLE online_users ADD COLUMN status VARCHAR(20) DEFAULT 'online'"),
+      db.execute("ALTER TABLE online_users ADD COLUMN queue LONGTEXT"),
+      db.execute("ALTER TABLE online_users ADD COLUMN platform VARCHAR(20) DEFAULT 'desktop'"),
+      db.execute("ALTER TABLE online_users ADD COLUMN custom_status VARCHAR(255) DEFAULT NULL"),
+      db.execute("ALTER TABLE online_users MODIFY COLUMN last_seen TIMESTAMP(3) DEFAULT CURRENT_TIMESTAMP(3) ON UPDATE CURRENT_TIMESTAMP(3)"),
+      db.execute("ALTER TABLE playlists ADD COLUMN is_private BOOLEAN DEFAULT FALSE"),
+      db.execute("ALTER TABLE playlists ADD COLUMN collaborators LONGTEXT"),
+      db.execute("ALTER TABLE user_profiles ADD COLUMN banner_url VARCHAR(1000)"),
+      db.execute("CREATE INDEX idx_collab_guest_status ON collab_invites (guest_id, status)"),
+      db.execute("CREATE INDEX idx_queue_host_status ON queue_requests (host_id, status)"),
+      db.execute("CREATE INDEX idx_join_host_status ON join_requests (host_id, status)"),
+      db.execute("CREATE INDEX idx_join_guest_status ON join_requests (guest_id, status)"),
+      db.execute("CREATE INDEX idx_online_last_seen ON online_users (last_seen)"),
+      db.execute("CREATE INDEX idx_playlists_discord_id ON playlists (discord_id)"),
+      db.execute("CREATE INDEX idx_listen_parties_host ON listen_parties (host_discord_id)"),
+      db.execute("CREATE INDEX idx_online_party_id ON online_users (party_id)"),
+      db.execute("DELETE FROM join_requests WHERE status = 'consumed' OR created_at < DATE_SUB(NOW(), INTERVAL 10 MINUTE)"),
+      db.execute("DELETE FROM queue_requests WHERE status = 'consumed' OR created_at < DATE_SUB(NOW(), INTERVAL 10 MINUTE)")
+    ]);
 
     console.log('MySQL connected, indexed, and table initialized');
   } catch (error) {
@@ -2163,7 +2144,8 @@ if (!gotTheLock && !isDev) {
     });
 
     Menu.setApplicationMenu(null);
-    await initDB();
+    // Buka window secara instan; inisialisasi/migrasi DB berjalan paralel di background tanpa memblokir UI
+    void initDB();
     createWindow();
 
 
