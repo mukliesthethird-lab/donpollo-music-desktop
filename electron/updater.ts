@@ -88,16 +88,22 @@ export function setupUpdater() {
   // ================================
   ipcMain.handle("check-for-updates", async () => {
     console.log("📡 Manual update check triggered");
+    if (!app.isPackaged) {
+      return false;
+    }
 
     try {
       const result = await autoUpdater.checkForUpdates();
-      if (!result) return false; // Dev mode / skipped
-      // result.updateInfo.version gives the latest version from GitHub
+      if (!result) return false;
       const isNewVersion = result.updateInfo.version !== app.getVersion();
       return isNewVersion;
-    } catch (err) {
-      console.error("❌ checkForUpdates failed:", err);
-      throw err;
+    } catch (err: any) {
+      const msg = err?.message || String(err);
+      console.error("❌ checkForUpdates failed:", msg);
+      if (msg.includes("404") || msg.includes("releases.atom")) {
+        throw new Error("No published versions on GitHub");
+      }
+      throw new Error("Gagal memeriksa pembaruan. Periksa koneksi internet Anda.");
     }
   });
 

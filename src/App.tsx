@@ -274,9 +274,10 @@ function App() {
         prioritizeOfficialAudio: true,
         vibeCheckEnabled: true,
         vibeCheckInterval: 15,
+        autoplay: true,
         ...saved
       };
-    } catch { return { theme: 'default', audioOutputDeviceId: 'default', searchCountry: 'auto', prioritizeOfficialAudio: true, vibeCheckEnabled: true, vibeCheckInterval: 15 }; }
+    } catch { return { theme: 'default', audioOutputDeviceId: 'default', searchCountry: 'auto', prioritizeOfficialAudio: true, vibeCheckEnabled: true, vibeCheckInterval: 15, autoplay: true }; }
   });
 
   // ─── Search ─────────────────────────────────────────────────
@@ -2088,24 +2089,40 @@ function App() {
     return () => clearInterval(interval);
   }, [discordUser]);
 
+  const profileCacheRef = useRef<Record<string, { data: any; percentile: any; ts: number }>>({});
+
   useEffect(() => {
     if (activePage !== 'profile' || !activeProfileId) return;
-    setIsLoadingProfile(true);
+    const cached = profileCacheRef.current[activeProfileId];
+    const isFresh = cached && Date.now() - cached.ts < 20000;
+    if (cached) {
+      setProfileData(cached.data);
+      setListenerPercentile(cached.percentile);
+      setIsLoadingProfile(false);
+    } else {
+      setIsLoadingProfile(true);
+    }
+
     if ((window as any).electronAPI?.getProfile) {
-      (window as any).electronAPI.getProfile(activeProfileId).then((data: any) => {
+      if (isFresh) return;
+      let cancelled = false;
+      const profilePromise = (window as any).electronAPI.getProfile(activeProfileId);
+      const percPromise = (window as any).electronAPI.getUserPercentile
+        ? (window as any).electronAPI.getUserPercentile(activeProfileId).catch(() => null)
+        : Promise.resolve(null);
+
+      Promise.all([profilePromise, percPromise]).then(([data, perc]) => {
+        if (cancelled) return;
+        profileCacheRef.current[activeProfileId] = { data, percentile: perc, ts: Date.now() };
         setProfileData(data);
-        if ((window as any).electronAPI.getUserPercentile) {
-          (window as any).electronAPI.getUserPercentile(activeProfileId).then((perc: number) => {
-            setListenerPercentile(perc);
-            setIsLoadingProfile(false);
-          }).catch(() => setIsLoadingProfile(false));
-        } else {
-          setIsLoadingProfile(false);
-        }
+        if (perc !== null) setListenerPercentile(perc);
+        setIsLoadingProfile(false);
       }).catch(() => {
-        setProfileData(null);
+        if (cancelled) return;
+        if (!cached) setProfileData(null);
         setIsLoadingProfile(false);
       });
+      return () => { cancelled = true; };
     } else {
       setIsLoadingProfile(false);
     }
@@ -2316,9 +2333,9 @@ function App() {
   useEffect(() => {
     const interval = setInterval(() => {
       const audio = audioRef.current;
-      if (!audio || isGuest || isCrossfadingRef.current || loopMode === 'one' || loopMode === 'all') return;
+      if (!audio || isGuest || isCrossfadingRef.current || loopMode === 'one') return;
 
-      const hasNext = currentIndex < queue.length - 1;
+      const hasNext = currentIndex < queue.length - 1 || (loopMode === 'all' && queue.length > 0);
       if (!hasNext) return;
 
       const cfDurStr = localStorage.getItem('donpollo_crossfade');
@@ -2347,7 +2364,7 @@ function App() {
           }
         }, 100);
 
-        const nextSong = queue[currentIndex + 1];
+        const nextSong = currentIndex < queue.length - 1 ? queue[currentIndex + 1] : queue[0];
         ensureAudioType(!!nextSong?.isPodcast, true);
         const newAudio = audioRef.current!;
         newAudio.volume = 0;
@@ -3715,28 +3732,128 @@ function App() {
   const handlePrevRef = useRef<() => void>(() => { });
   const togglePlayRef = useRef<() => void>(() => { });
 
+  const autoplayFetchingRef = useRef<string | null>(null);
+
+  const fetchAutoplayTracks = useCallback(async (seedSong: any): Promise<any[]> => {
+    if (!seedSong) return [];
+    const existingIds = new Set(queueRef.current.map((s: any) => s?.id).filter(Boolean));
+    const recentTitles = new Set(
+      (playHistory || []).slice(0, 20).map((h: any) => cleanBaseSongTitle(h?.title || '').toLowerCase()).filter(Boolean)
+    );
+    queueRef.current.forEach((q: any) => {
+      const base = cleanBaseSongTitle(q?.title || '').toLowerCase();
+      if (base) recentTitles.add(base);
+    });
+
+    const filterCandidates = (list: any[]) => {
+      const picked: any[] = [];
+      for (const raw of list) {
+        if (!raw || !raw.id || existingIds.has(raw.id)) continue;
+        const base = cleanBaseSongTitle(raw.title || '').toLowerCase();
+        if (base && recentTitles.has(base)) continue;
+        if (raw.duration && (raw.duration < 45 || raw.duration > 720)) continue;
+        if (isUnwantedTrackVariant(raw.title || '', raw.artist || '')) continue;
+        const formatted = formatTrackLikeSpotify(raw);
+        if (!formatted) continue;
+        existingIds.add(formatted.id);
+        if (base) recentTitles.add(base);
+        picked.push({ ...formatted, isAutoplay: true });
+        if (picked.length >= 3) break;
+      }
+      return picked;
+    };
+
+    try {
+      let candidates: any[] = [];
+      if (isOffline) {
+        const pool = [...(downloadedSongs || [])].sort(() => Math.random() - 0.5);
+        candidates = filterCandidates(pool);
+      } else {
+        if (seedSong.id) {
+          try {
+            const res = await fetch(`${API_BASE_URL}/api/autoplay?id=${encodeURIComponent(seedSong.id)}&limit=10`);
+            if (res.ok) {
+              const data = await res.json();
+              if (Array.isArray(data?.results)) {
+                candidates = filterCandidates(data.results);
+              }
+            }
+          } catch { }
+        }
+        if (candidates.length === 0) {
+          const query = seedSong.artist && seedSong.artist !== 'Unknown'
+            ? `${seedSong.artist} songs`
+            : seedSong.title;
+          if (query) {
+            try {
+              const res = await fetch(`${API_BASE_URL}/api/search?q=${encodeURIComponent(query)}&limit=10`);
+              if (res.ok) {
+                const data = await res.json();
+                if (Array.isArray(data?.results)) {
+                  candidates = filterCandidates(data.results);
+                }
+              }
+            } catch { }
+          }
+        }
+      }
+
+      if (candidates.length > 0) {
+        setQueue(prev => [...prev, ...candidates]);
+        setOriginalQueue(prev => [...prev, ...candidates]);
+        // Pre-warm lagu autoplay pertama di background agar transisi instan
+        if (!isOffline && candidates[0]?.id) {
+          let prepareUrl = `${API_BASE_URL}/api/prepare?id=${candidates[0].id}`;
+          if (settingsRef.current?.audioQuality && settingsRef.current.audioQuality !== 'auto') {
+            prepareUrl += `&quality=${settingsRef.current.audioQuality}`;
+          }
+          fetch(prepareUrl).catch(() => { });
+        }
+      }
+      return candidates;
+    } catch {
+      return [];
+    }
+  }, [isOffline, downloadedSongs, playHistory]);
+
+  // Pre-fetch Autoplay saat lagu terakhir di antrean sedang diputar (loopMode === 'off')
+  useEffect(() => {
+    const canAutoplay =
+      settings.autoplay !== false &&
+      loopMode === 'off' &&
+      !isGuest &&
+      !!currentSong &&
+      !currentSong.isPodcast &&
+      homeMode !== 'podcast' &&
+      !(currentSong.duration && currentSong.duration >= 900) &&
+      queue.length > 0 &&
+      currentIndex === queue.length - 1;
+
+    if (!canAutoplay || !currentSong?.id) return;
+    if (autoplayFetchingRef.current === currentSong.id) return;
+
+    autoplayFetchingRef.current = currentSong.id;
+    const timer = setTimeout(() => {
+      if (
+        settingsRef.current?.autoplay !== false &&
+        queueRef.current.length > 0 &&
+        currentSongRef.current?.id === currentSong.id
+      ) {
+        fetchAutoplayTracks(currentSong);
+      }
+    }, 2000);
+
+    return () => clearTimeout(timer);
+  }, [currentSong?.id, currentIndex, queue.length, loopMode, settings.autoplay, isGuest, homeMode, fetchAutoplayTracks]);
+
   const handleNext = async (eOrAuto: boolean | React.MouseEvent = false) => {
     const isAutomatic = typeof eOrAuto === 'boolean' ? eOrAuto : false;
     if (isGuest && activePartyId && !isAutomatic) return;
 
     const isPartyGuest = isGuest && !!activePartyId;
 
-    // Mode: Loop 1x (Ulangi 1 kali lalu otomatis mati dan lanjut antrean berikutnya) — dinonaktifkan untuk Guest agar mengikuti Host
+    // Mode: Loop 1 Lagu (Ulangi lagu ini terus-menerus) — dinonaktifkan untuk Guest agar mengikuti Host
     if (!isPartyGuest && isAutomatic && loopMode === 'one') {
-      if (audioRef.current) {
-        audioRef.current.currentTime = 0;
-        audioRef.current.play().catch(() => { });
-        setProgress(0);
-        setIsPlaying(true);
-      } else if (currentSongRef.current) {
-        executePlay(currentSongRef.current);
-      }
-      setLoopMode('off');
-      return;
-    }
-
-    // Mode: Loop Biasa (Ulangi lagu ini terus-menerus tanpa henti sampai pengguna mematikan loop) — dinonaktifkan untuk Guest
-    if (!isPartyGuest && isAutomatic && loopMode === 'all') {
       if (audioRef.current) {
         audioRef.current.currentTime = 0;
         audioRef.current.play().catch(() => { });
@@ -3753,11 +3870,6 @@ function App() {
         (window as any).lastGuestAdvance = Date.now();
       }
 
-      if (loopMode === 'one') {
-        setLoopMode('off');
-      }
-
-      // On-the-fly fetch for next song if id is null
       let nextSong = queue[currentIndex + 1];
       setCurrentIndex(currentIndex + 1);
       executePlay(nextSong);
@@ -3765,9 +3877,20 @@ function App() {
       if (isGuest) {
         (window as any).lastGuestAdvance = Date.now();
       }
-      if (loopMode !== 'off') {
+      if (loopMode === 'all') {
+        // Loop Playlist: kembali ke lagu pertama di antrean
         setCurrentIndex(0);
         executePlay(queue[0]);
+      } else if (!isPartyGuest && settingsRef.current?.autoplay !== false && currentSongRef.current && !currentSongRef.current.isPodcast && homeMode !== 'podcast') {
+        // Fallback jika user klik Next sebelum pre-fetch Autoplay selesai
+        const added = await fetchAutoplayTracks(currentSongRef.current);
+        if (added.length > 0) {
+          const nextIdx = queueRef.current.length;
+          setCurrentIndex(nextIdx);
+          executePlay(added[0]);
+        } else {
+          setIsPlaying(false);
+        }
       } else {
         setIsPlaying(false);
       }
@@ -3777,8 +3900,8 @@ function App() {
   };
 
   const toggleLoopMode = () => {
-    if (loopMode === 'off') setLoopMode('one');
-    else if (loopMode === 'one') setLoopMode('all');
+    if (loopMode === 'off') setLoopMode('all');
+    else if (loopMode === 'all') setLoopMode('one');
     else setLoopMode('off');
   };
   handleNextRef.current = handleNext;
@@ -3813,6 +3936,7 @@ function App() {
   };
 
   const handlePrev = () => {
+    if (isGuest && activePartyId) return;
     if (progress > 3) {
       if (audioRef.current) audioRef.current.currentTime = 0;
     } else if (currentIndex > 0) {
@@ -3827,6 +3951,7 @@ function App() {
   executePlayRef.current = executePlay;
 
   const togglePlay = () => {
+    if (isGuest && activePartyId) return;
     if (audioContextRef.current && audioContextRef.current.state === 'suspended') {
       audioContextRef.current.resume();
     }
@@ -5749,6 +5874,21 @@ function App() {
             }
           }}>
             {settings.discordActivityEnabled !== false && <Check size={14} />}
+          </button>
+        </div>
+        <div style={{ height: '1px', backgroundColor: 'var(--border-color)', margin: '16px 0' }}></div>
+        <div className="settings-row">
+          <div>
+            <div className="settings-label">{t('autoplayLabel')}</div>
+            <div className="settings-desc">{t('autoplayDesc')}</div>
+          </div>
+          <button className={`settings-toggle ${settings.autoplay !== false ? 'on' : ''}`} onClick={() => {
+            const newVal = !(settings.autoplay !== false);
+            const nextSettings = { ...settings, autoplay: newVal };
+            setSettings(nextSettings);
+            localStorage.setItem('donpollo_settings', JSON.stringify(nextSettings));
+          }}>
+            {settings.autoplay !== false && <Check size={14} />}
           </button>
         </div>
       </div>
@@ -9575,8 +9715,8 @@ function App() {
                   <button className="chat-play-btn" onClick={togglePlay} disabled={!currentSong || (isGuest && !!activePartyId)} style={{ opacity: (!currentSong || (isGuest && !!activePartyId)) ? 0.3 : 1, cursor: (isGuest && activePartyId) ? 'not-allowed' : 'pointer' }} title={isPlaying ? t('btnPause') : t('btnPlay')}>
                     {isPlaying ? <Pause size={20} fill="currentColor" /> : <Play size={20} fill="currentColor" style={{ marginLeft: '4px' }} />}
                   </button>
-                  <button className="chat-btn" onClick={handleNext} disabled={(loopMode === 'off' && currentIndex >= queue.length - 1) || (isGuest && !!activePartyId)} style={{ opacity: ((loopMode === 'off' && currentIndex >= queue.length - 1) || (isGuest && !!activePartyId)) ? 0.3 : 1, cursor: (isGuest && activePartyId) ? 'not-allowed' : 'pointer' }} title={t('btnNext')}><SkipForward size={22} fill="currentColor" /></button>
-                  <button className="chat-btn" onClick={toggleLoopMode} style={{ color: loopMode !== 'off' ? 'var(--accent-primary)' : 'var(--text-secondary)' }} title={loopMode === 'one' ? 'Loop 1x: Ulangi 1 kali lalu lanjut antrean' : loopMode === 'all' ? 'Loop: Ulang lagu ini terus-menerus' : 'Loop Nonaktif'}>{loopMode === 'one' ? <Repeat1 size={18} /> : <Repeat size={18} />}</button>
+                  <button className="chat-btn" onClick={handleNext} disabled={(loopMode === 'off' && settings.autoplay === false && currentIndex >= queue.length - 1) || (isGuest && !!activePartyId)} style={{ opacity: ((loopMode === 'off' && settings.autoplay === false && currentIndex >= queue.length - 1) || (isGuest && !!activePartyId)) ? 0.3 : 1, cursor: (isGuest && activePartyId) ? 'not-allowed' : 'pointer' }} title={t('btnNext')}><SkipForward size={22} fill="currentColor" /></button>
+                  <button className="chat-btn" onClick={toggleLoopMode} style={{ color: loopMode !== 'off' ? 'var(--accent-primary)' : 'var(--text-secondary)' }} title={loopMode === 'all' ? t('loopPlaylist') : loopMode === 'one' ? t('loopOne') : t('loopOff')}>{loopMode === 'one' ? <Repeat1 size={18} /> : <Repeat size={18} />}</button>
                 </div>
                 <div className="player-progress-container">
                   <span className="chat-time">{formatTime(progress)}</span>
@@ -9589,6 +9729,51 @@ function App() {
                 </div>
               </div>
               <div className="player-right">
+                <button
+                  onClick={() => {
+                    const newVal = !(settings.autoplay !== false);
+                    const nextSettings = { ...settings, autoplay: newVal };
+                    setSettings(nextSettings);
+                    localStorage.setItem('donpollo_settings', JSON.stringify(nextSettings));
+                  }}
+                  title={`${t('autoplayLabel')}: ${settings.autoplay !== false ? 'ON' : 'OFF'}`}
+                  style={{
+                    width: '34px',
+                    height: '18px',
+                    borderRadius: '999px',
+                    border: 'none',
+                    padding: '2px',
+                    cursor: 'pointer',
+                    display: 'flex',
+                    alignItems: 'center',
+                    backgroundColor: settings.autoplay !== false ? 'var(--accent-primary)' : 'rgba(255, 255, 255, 0.22)',
+                    transition: 'background-color 0.2s ease',
+                    position: 'relative',
+                    flexShrink: 0,
+                  }}
+                >
+                  <span
+                    style={{
+                      width: '14px',
+                      height: '14px',
+                      borderRadius: '50%',
+                      backgroundColor: settings.autoplay !== false ? 'var(--accent-text, #000000)' : '#ffffff',
+                      color: settings.autoplay !== false ? 'var(--accent-primary)' : '#1a1a1a',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      transform: settings.autoplay !== false ? 'translateX(16px)' : 'translateX(0px)',
+                      transition: 'transform 0.2s ease',
+                      boxShadow: '0 1px 3px rgba(0,0,0,0.4)',
+                    }}
+                  >
+                    {settings.autoplay !== false ? (
+                      <Play size={8} fill="currentColor" style={{ marginLeft: '1px' }} />
+                    ) : (
+                      <Pause size={8} fill="currentColor" />
+                    )}
+                  </span>
+                </button>
                 {settings.theme !== 'minimalist' && (
                   <button className="chat-btn" onClick={() => setIsRightSidebarOpen(!isRightSidebarOpen)} style={{ color: isRightSidebarOpen ? 'var(--accent-primary)' : 'var(--text-secondary)' }} title={isRightSidebarOpen ? t('btnHideSidebar') : t('btnSidebar')}>
                     <PanelRight size={20} />
@@ -10215,7 +10400,12 @@ function App() {
                         <div style={{ display: 'flex', flex: 1, alignItems: 'center', gap: '12px', cursor: (isGuest && activePartyId) ? 'default' : 'pointer', minWidth: 0 }} onClick={() => { if (isGuest && activePartyId) return; setCurrentIndex(idx); executePlay(song); }}>
                           <img src={(getCleanThumbnail(song.thumbnail) || getHighResImage(song.cover))} alt={song.title} style={{ width: '40px', height: '40px', borderRadius: '6px', objectFit: 'cover', flexShrink: 0 }} />
                           <div style={{ flex: 1, overflow: 'hidden', minWidth: 0 }}>
-                            <div title={song.title} style={{ fontSize: "13px", fontWeight: 600, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{song.title}</div>
+                            <div title={song.title} style={{ fontSize: "13px", fontWeight: 600, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                              <span style={{ overflow: 'hidden', textOverflow: 'ellipsis' }}>{song.title}</span>
+                              {song.isAutoplay && (
+                                <span style={{ fontSize: '10px', fontWeight: 700, padding: '1px 6px', borderRadius: '4px', background: 'rgba(255,255,255,0.08)', color: 'var(--accent-primary)', flexShrink: 0 }}>{t('autoplayBadge')}</span>
+                              )}
+                            </div>
                             <div style={{ fontSize: '12px', color: 'var(--text-secondary)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{song.artist}</div>
                           </div>
                           <div style={{ fontSize: '12px', color: 'var(--text-muted)', flexShrink: 0 }}>{formatTime(song.duration)}</div>
@@ -10374,7 +10564,7 @@ function App() {
                         {isPlaying ? <Pause size={28} fill="black" /> : <Play size={28} fill="black" style={{ marginLeft: '6px' }} />}
                       </button>
                       <button onClick={handleNext}><SkipForward size={24} fill="currentColor" /></button>
-                      <button onClick={toggleLoopMode} style={{ color: loopMode !== 'off' ? 'var(--accent-primary)' : 'white' }} title={loopMode === 'one' ? 'Loop 1x: Ulangi 1 kali lalu lanjut antrean' : loopMode === 'all' ? 'Loop: Ulang lagu ini terus-menerus' : 'Loop Nonaktif'}>{loopMode === 'one' ? <Repeat1 size={20} /> : <Repeat size={20} />}</button>
+                      <button onClick={toggleLoopMode} style={{ color: loopMode !== 'off' ? 'var(--accent-primary)' : 'white' }} title={loopMode === 'all' ? t('loopPlaylist') : loopMode === 'one' ? t('loopOne') : t('loopOff')}>{loopMode === 'one' ? <Repeat1 size={20} /> : <Repeat size={20} />}</button>
                     </div>
 
                     <div className="fs-overlay-progress">

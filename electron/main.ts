@@ -579,9 +579,9 @@ ipcMain.on('set-close-to-tray', (event, enabled) => {
 });
 
 ipcMain.handle('get-playlists', async (event, discordId) => {
-  if (!db) return [];
+  if (!db) return null;
   try {
-    await ensureGlobalStatsCache();
+    void ensureGlobalStatsCache();
 
     let savedPlaylistIds: string[] = [];
     if (discordId) {
@@ -643,7 +643,7 @@ ipcMain.handle('get-playlists', async (event, discordId) => {
     return playlists;
   } catch (error) {
     console.error('get-playlists error:', error);
-    return [];
+    return null;
   }
 });
 
@@ -667,7 +667,7 @@ ipcMain.handle('save-playlist', async (event, pl) => {
 ipcMain.handle('get-profile', async (event, discordId) => {
   if (!db) return null;
   try {
-    await ensureGlobalStatsCache();
+    void ensureGlobalStatsCache();
     // Run all user-specific queries in parallel for performance
     const [[rows], [playlistRows], [followerRows]] = await Promise.all([
       db.execute('SELECT * FROM user_profiles WHERE discord_id = ?', [discordId]),
@@ -677,7 +677,7 @@ ipcMain.handle('get-profile', async (event, discordId) => {
 
     const username = (rows as any[]).length > 0 ? (rows as any[])[0].username : '';
     let avatarUrl = (rows as any[]).length > 0 ? (rows as any[])[0].avatar_url : '';
-    if (process.env.DISCORD_TOKEN && discordId) {
+    if (!avatarUrl && process.env.DISCORD_TOKEN && discordId) {
       const live = await fetchDiscordUserLive(discordId);
       if (live && live.avatarUrl) {
         avatarUrl = live.avatarUrl;
@@ -2148,6 +2148,21 @@ if (!gotTheLock && !isDev) {
     void initDB();
     createWindow();
 
+    // Global Hardware Media Keys (tetap jalan saat app di-minimize atau main game fullscreen)
+    try {
+      globalShortcut.register('MediaPlayPause', () => {
+        mainWindow?.webContents.send('tray-control', 'play');
+      });
+      globalShortcut.register('MediaNextTrack', () => {
+        mainWindow?.webContents.send('tray-control', 'next');
+      });
+      globalShortcut.register('MediaPreviousTrack', () => {
+        mainWindow?.webContents.send('tray-control', 'prev');
+      });
+    } catch (e) {
+      console.warn('Failed to register global media shortcuts:', e);
+    }
+
 
 
     // Handle deep-link on macOS (open-url)
@@ -2164,6 +2179,10 @@ if (!gotTheLock && !isDev) {
         createWindow();
       }
     });
+  });
+
+  app.on('will-quit', () => {
+    try { globalShortcut.unregisterAll(); } catch { }
   });
 
   app.on('window-all-closed', () => {

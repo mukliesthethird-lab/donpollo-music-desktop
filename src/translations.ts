@@ -151,6 +151,12 @@ type TranslationKeys = {
   logout: string;
   discordActivity: string;
   discordActivityDesc: string;
+  autoplayLabel: string;
+  autoplayDesc: string;
+  autoplayBadge: string;
+  loopPlaylist: string;
+  loopOne: string;
+  loopOff: string;
   audioSection: string;
   audioOutputDevice: string;
   audioOutputDeviceDesc: string;
@@ -752,6 +758,12 @@ const translations: Record<Language, TranslationKeys> = {
     logout: 'Keluar',
     discordActivity: 'Status Aktivitas Discord',
     discordActivityDesc: 'Tampilkan lagu yang sedang didengar di profil Discord Anda',
+    autoplayLabel: 'Autoplay',
+    autoplayDesc: 'Putar lagu serupa otomatis setelah antrean habis',
+    autoplayBadge: 'Autoplay',
+    loopPlaylist: 'Loop Playlist: Ulangi semua lagu di antrean',
+    loopOne: 'Loop Lagu: Ulangi lagu ini terus-menerus',
+    loopOff: 'Loop Nonaktif',
     audioSection: 'Audio',
     audioOutputDevice: 'Perangkat Output Audio',
     audioOutputDeviceDesc: 'Pilih perangkat speaker atau headphone untuk pemutaran musik',
@@ -1352,6 +1364,12 @@ const translations: Record<Language, TranslationKeys> = {
     logout: 'Logout',
     discordActivity: 'Discord Activity Status',
     discordActivityDesc: 'Show the song you are currently listening to on your Discord profile',
+    autoplayLabel: 'Autoplay',
+    autoplayDesc: 'Keep playing similar tracks when your queue ends',
+    autoplayBadge: 'Autoplay',
+    loopPlaylist: 'Loop Playlist: Repeat all songs in queue',
+    loopOne: 'Repeat One: Loop current song',
+    loopOff: 'Loop Off',
     audioSection: 'Audio',
     audioOutputDevice: 'Audio Output Device',
     audioOutputDeviceDesc: 'Select speaker or headphone device for music playback',
@@ -1952,6 +1970,12 @@ const translations: Record<Language, TranslationKeys> = {
     logout: 'ログアウト',
     discordActivity: 'Discord アクティビティステータス',
     discordActivityDesc: '現在聴いている曲をDiscordのプロフィールに表示します',
+    autoplayLabel: '自動再生',
+    autoplayDesc: 'キュー終了後に似た曲を自動で再生します',
+    autoplayBadge: '自動再生',
+    loopPlaylist: 'プレイリストループ: キュー内の全曲をリピート',
+    loopOne: '1曲ループ: 現在の曲をリピート',
+    loopOff: 'ループオフ',
     audioSection: 'オーディオ',
     audioOutputDevice: 'オーディオ出力デバイス',
     audioOutputDeviceDesc: '音楽再生に使用するスピーカーまたはヘッドフォンを選択します',
@@ -2553,6 +2577,12 @@ const translations: Record<Language, TranslationKeys> = {
     logout: '로그아웃',
     discordActivity: 'Discord 활동 상태',
     discordActivityDesc: '현재 듣고 있는 노래를 Discord 프로필에 표시합니다',
+    autoplayLabel: '자동 재생',
+    autoplayDesc: '대기열이 끝나면 비슷한 곡을 자동으로 재생합니다',
+    autoplayBadge: '자동 재생',
+    loopPlaylist: '플레이리스트 반복: 대기열 전체 반복',
+    loopOne: '한 곡 반복: 현재 곡 반복',
+    loopOff: '반복 끄기',
     audioSection: '오디오',
     audioOutputDevice: '오디오 출력 장치',
     audioOutputDeviceDesc: '음악 재생에 사용할 스피커 또는 헤드폰 장치를 선택하세요',
