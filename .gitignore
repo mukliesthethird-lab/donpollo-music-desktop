@@ -37,3 +37,6 @@ win-unpacked
 
 # api.py
 api.py
+
+# Local feature docs
+FEATURES.md

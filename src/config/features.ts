@@ -22,7 +22,7 @@ export const FEATURE_FLAGS = {
    * Saat `true`:
    * - Fitur beroperasi penuh meracik lagu secara algoritmik.
    */
-  ENABLE_PLAYLIST_MIX: false,
+  ENABLE_PLAYLIST_MIX: true,
 
   /**
    * Rak "Daily Mix & Highlights" bento di beranda (Recent Play, Favorite, Trending, Jump Back In).

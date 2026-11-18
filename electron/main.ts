@@ -1,4 +1,4 @@
-import { app, BrowserWindow, ipcMain, Menu, protocol, globalShortcut, Tray, nativeImage, dialog, session } from 'electron';
+import { app, BrowserWindow, ipcMain, Menu, protocol, globalShortcut, Tray, nativeImage, dialog, session, screen } from 'electron';
 import * as path from 'path';
 import * as fs from 'fs';
 import * as https from 'https';
@@ -333,6 +333,19 @@ async function initDB() {
           unlock_date TIMESTAMP NOT NULL,
           created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         )
+      `),
+      db.execute(`
+        CREATE TABLE IF NOT EXISTS party_messages (
+          id INT AUTO_INCREMENT PRIMARY KEY,
+          party_id VARCHAR(255) NOT NULL,
+          sender_id VARCHAR(255) NOT NULL,
+          sender_name VARCHAR(255) NOT NULL,
+          sender_avatar VARCHAR(1000),
+          type VARCHAR(20) DEFAULT 'chat',
+          content TEXT NOT NULL,
+          created_at TIMESTAMP(3) DEFAULT CURRENT_TIMESTAMP(3),
+          INDEX idx_party_msg (party_id, id)
+        )
       `)
     ]);
 
@@ -373,9 +386,13 @@ async function initDB() {
 }
 
 function createWindow() {
+  const { workAreaSize } = screen.getPrimaryDisplay();
+  const initWidth = Math.min(1440, Math.max(960, Math.round(workAreaSize.width * 0.85)));
+  const initHeight = Math.min(900, Math.max(640, Math.round(workAreaSize.height * 0.86)));
+
   mainWindow = new BrowserWindow({
-    width: 1280,
-    height: 800,
+    width: initWidth,
+    height: initHeight,
     minWidth: 800,
     minHeight: 600,
     backgroundColor: '#0B0B10',
@@ -637,6 +654,7 @@ ipcMain.handle('get-playlists', async (event, discordId) => {
         authorAvatar: row.author_avatar,
         saveCount,
         isPrivate: row.is_private === 1,
+        privacy: row.is_private === 1 ? 'private' : 'public',
         collaborators: safeJsonParse(row.collaborators, [])
       };
     });
@@ -650,7 +668,7 @@ ipcMain.handle('get-playlists', async (event, discordId) => {
 ipcMain.handle('save-playlist', async (event, pl) => {
   if (!db) return false;
   try {
-    const isPrivate = pl.isPrivate ? 1 : 0;
+    const isPrivate = (pl.isPrivate === true || pl.privacy === 'private') ? 1 : 0;
     const collaboratorsStr = JSON.stringify(pl.collaborators || []);
     await db.execute(
       'INSERT INTO playlists (id, name, avatar, songs, discord_id, is_private, collaborators) VALUES (?, ?, ?, ?, ?, ?, ?) ON DUPLICATE KEY UPDATE name = ?, avatar = ?, songs = ?, discord_id = ?, is_private = ?, collaborators = ?',
@@ -1428,10 +1446,78 @@ ipcMain.handle('get-party-state', async (event, partyId) => {
 ipcMain.handle('delete-party', async (event, partyId) => {
   if (!db) return false;
   try {
-    await db.execute('DELETE FROM listen_parties WHERE id = ?', [partyId]);
+    await Promise.all([
+      db.execute('DELETE FROM listen_parties WHERE id = ?', [partyId]),
+      db.execute('DELETE FROM party_messages WHERE party_id = ?', [partyId])
+    ]);
     return true;
   } catch (error) {
     return false;
+  }
+});
+
+ipcMain.handle('send-party-message', async (_event, payload: {
+  partyId: string;
+  senderId: string;
+  senderName: string;
+  senderAvatar?: string;
+  type: 'chat' | 'reaction';
+  content: string;
+}) => {
+  if (!db) return null;
+  try {
+    const cleanContent = String(payload.content || '').slice(0, 300).trim();
+    if (!cleanContent || !payload.partyId || !payload.senderId) return null;
+    const [res]: any = await db.execute(
+      `INSERT INTO party_messages (party_id, sender_id, sender_name, sender_avatar, type, content)
+       VALUES (?, ?, ?, ?, ?, ?)`,
+      [payload.partyId, payload.senderId, payload.senderName || 'Guest', payload.senderAvatar || null, payload.type || 'chat', cleanContent]
+    );
+    return {
+      id: res.insertId,
+      partyId: payload.partyId,
+      senderId: payload.senderId,
+      senderName: payload.senderName || 'Guest',
+      senderAvatar: payload.senderAvatar || null,
+      type: payload.type || 'chat',
+      content: cleanContent,
+      createdAt: Date.now()
+    };
+  } catch (error) {
+    console.error('send-party-message error:', error);
+    return null;
+  }
+});
+
+ipcMain.handle('poll-party-messages', async (_event, partyId: string, afterId: number = 0) => {
+  if (!db || !partyId) return [];
+  try {
+    if (afterId > 0) {
+      const [rows] = await db.execute(
+        `SELECT id, party_id AS partyId, sender_id AS senderId, sender_name AS senderName,
+                sender_avatar AS senderAvatar, type, content, UNIX_TIMESTAMP(created_at) * 1000 AS createdAt
+         FROM party_messages
+         WHERE party_id = ? AND id > ?
+         ORDER BY id ASC
+         LIMIT 50`,
+        [partyId, afterId]
+      );
+      return rows as any[];
+    } else {
+      const [rows] = await db.execute(
+        `SELECT id, party_id AS partyId, sender_id AS senderId, sender_name AS senderName,
+                sender_avatar AS senderAvatar, type, content, UNIX_TIMESTAMP(created_at) * 1000 AS createdAt
+         FROM party_messages
+         WHERE party_id = ? AND created_at > DATE_SUB(NOW(), INTERVAL 2 HOUR)
+         ORDER BY id DESC
+         LIMIT 30`,
+        [partyId]
+      );
+      return (rows as any[]).reverse();
+    }
+  } catch (error) {
+    console.error('poll-party-messages error:', error);
+    return [];
   }
 });
 

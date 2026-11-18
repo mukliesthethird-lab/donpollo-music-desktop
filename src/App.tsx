@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect, useCallback, useMemo } from 'react';
-import { Home, Library, Plus, Mic2, Settings, Play, Pause, SkipBack, SkipForward, Repeat, Shuffle, Volume2, VolumeX, ListMusic, UserCircle, ChevronRight, Search, AlertCircle, Headset, Loader2, Maximize2, X, ChevronLeft, ChevronUp, ChevronDown, Music, PanelRight, Trash2, Heart, LogIn, LogOut, Check, FolderPlus, Globe, Headphones, Download, DownloadCloud, Database, WifiOff, CheckCircle2, Paintbrush, Clock, Trophy, Zap, Radio, Timer, Repeat1, MinusCircle, PlusCircle, Edit3, Share2, Copy, Smartphone, Lock, Map as MapIcon, Users, RotateCcw, FileText, Film, Sparkles, RefreshCw, Coffee, Sun, CloudRain, Compass, Flame, Upload, Keyboard, MessageSquare } from 'lucide-react';
+import { Home, Library, Plus, Mic2, Settings, Play, Pause, SkipBack, SkipForward, Repeat, Repeat1, Shuffle, Volume2, VolumeX, ListMusic, UserCircle, ChevronRight, Search, AlertCircle, Loader2, Maximize2, X, ChevronLeft, ChevronUp, ChevronDown, Music, PanelRight, Trash2, Heart, LogOut, Check, FolderPlus, Headphones, Download, DownloadCloud, WifiOff, CheckCircle2, Paintbrush, Clock, Trophy, MinusCircle, Share2, Copy, Smartphone, Lock, Map as MapIcon, Users, FileText, Film, Upload, Keyboard, MessageSquare, Languages } from 'lucide-react';
 import './index.css';
 import './themes.css';
 import { createTranslator } from './translations';
@@ -7,9 +7,33 @@ import type { Language } from './translations';
 
 const API_BASE_URL = 'http://179.41.4.182:7097';
 import { SoundMap } from './components/SoundMap';
+import { AudioVisualizer } from './components/AudioVisualizer';
+import { CommandPalette } from './components/CommandPalette';
+import { PartyChatOverlay } from './components/PartyChatOverlay';
+import { ShortcutsModal } from './components/ShortcutsModal';
+import { WrappedStoryModal } from './components/WrappedStoryModal';
+import { FullscreenPlayer } from './components/FullscreenPlayer';
+import { LibraryPage } from './pages/LibraryPage';
+import { DownloadsPage } from './pages/DownloadsPage';
+import { ArtistPage } from './pages/ArtistPage';
+import { ProfilePage } from './pages/ProfilePage';
+import { SettingsPage } from './pages/SettingsPage';
+import { PlaylistPage } from './pages/PlaylistPage';
+import { HomePage } from './pages/HomePage';
+import { useMediaSession } from './hooks/useMediaSession';
+import {
+  renderMixIcon,
+  getHighResImage,
+  getCleanThumbnail,
+  applyDragGhost,
+  type Page,
+  type Playlist,
+  type DiscordUser,
+} from './utils/mediaHelpers';
+import { translateLyricsLines } from './utils/lyricsTranslator';
 import { rankAudioResults, buildSmartSearchQuery, getAudioBadge, searchItunesTracks, formatTrackLikeSpotify, isUnwantedTrackVariant, userExplicitlyWantsAcoustic, userExplicitlyWantsRemix, userExplicitlyWantsLive, deduplicateTracks, cleanBaseSongTitle } from './utils/audioRanking';
-import { generateAlgorithmicMix, DEFAULT_MADE_FOR_YOU_PLAYLISTS, VIBE_CONFIGS, extractTopArtists } from './utils/vibeRecommendation';
-import type { VibeType, MixType } from './utils/vibeRecommendation';
+import { generateAlgorithmicMix, DEFAULT_MADE_FOR_YOU_PLAYLISTS, VIBE_CONFIGS } from './utils/vibeRecommendation';
+import type { VibeType } from './utils/vibeRecommendation';
 import { getMixPlaylistCover, isMixPlaylist } from './utils/spotifyMixCover';
 import { FEATURE_FLAGS } from './config/features';
 // ⚠️ Ganti dengan Client ID dari Discord Developer Portal Anda
@@ -19,146 +43,6 @@ const DISCORD_REDIRECT_URI = window.location.hostname === 'localhost'
   ? 'http://localhost:5173/callback.html'
   : 'https://donpollo-music-desktop.vercel.app/callback';
 
-type Page = 'home' | 'library' | 'playlist' | 'playlist-detail' | 'settings' | 'downloads' | 'artist' | 'profile' | 'sound-map';
-
-interface Playlist {
-  id: string;
-  name: string;
-  avatar?: string;
-  songs: any[];
-  createdAt: number;
-  discordId?: string;
-  privacy?: string;
-  collaborators?: string[];
-  isTemporary?: boolean;
-  mood?: VibeType;
-  mixType?: MixType;
-  description?: string;
-  tagline?: string;
-  gradient?: string;
-  iconName?: string;
-}
-
-interface DiscordUser {
-  id: string;
-  username: string;
-  discriminator: string;
-  avatar: string | null;
-  global_name: string | null;
-}
-
-const renderMixIcon = (iconName?: string, size = 20, className = '') => {
-  switch (iconName) {
-    case 'coffee':
-      return <Coffee size={size} className={className} />;
-    case 'sun':
-      return <Sun size={size} className={className} />;
-    case 'zap':
-      return <Zap size={size} className={className} />;
-    case 'cloud-rain':
-      return <CloudRain size={size} className={className} />;
-    case 'compass':
-      return <Compass size={size} className={className} />;
-    case 'headphones':
-      return <Headphones size={size} className={className} />;
-    case 'flame':
-      return <Flame size={size} className={className} />;
-    default:
-      return <Music size={size} className={className} />;
-  }
-};
-
-const getHighResImage = (url: string | undefined) => {
-  if (!url) return 'https://images.unsplash.com/photo-1614680376573-df3480f0c6ff?auto=format&fit=crop&w=500&q=80';
-  if (url.includes('i.ytimg.com')) {
-    return url.replace('hqdefault.jpg', 'maxresdefault.jpg').replace('default.jpg', 'maxresdefault.jpg');
-  }
-  if (url.includes('mzstatic.com')) {
-    // Apple Music/iTunes covers
-    return url.replace(/\d+x\d+([a-zA-Z]*)\.jpg/i, '1000x1000$1.jpg');
-  }
-  if (url.includes('lh3.googleusercontent.com')) {
-    // YouTube Music covers
-    return url.replace(/=w\d+-h\d+/i, '=w1000-h1000').replace(/=s\d+/i, '=s1000');
-  }
-  return url;
-};
-
-const getCleanThumbnail = (url: string | undefined) => {
-  if (!url) return '';
-  if (url.includes('i.ytimg.com') && url.includes('hqdefault.jpg')) {
-    return url.replace('hqdefault.jpg', 'mqdefault.jpg');
-  }
-  return url;
-};
-
-const applyDragGhost = (e: React.DragEvent, song: any) => {
-  const dragGhost = document.createElement('div');
-  
-  const img = document.createElement('img');
-  img.src = getCleanThumbnail(song.thumbnail) || getHighResImage(song.cover);
-  img.style.width = '120px';
-  img.style.height = '120px';
-  img.style.borderRadius = '16px';
-  img.style.objectFit = 'cover';
-  img.style.boxShadow = '0 10px 25px rgba(0,0,0,0.8)';
-  
-  const infoContainer = document.createElement('div');
-  infoContainer.style.background = 'rgba(0,0,0,0.8)';
-  infoContainer.style.backdropFilter = 'blur(10px)';
-  infoContainer.style.padding = '8px 12px';
-  infoContainer.style.borderRadius = '12px';
-  infoContainer.style.marginTop = '12px';
-  infoContainer.style.textAlign = 'center';
-  infoContainer.style.color = 'white';
-  infoContainer.style.width = '160px';
-  infoContainer.style.boxSizing = 'border-box';
-  infoContainer.style.boxShadow = '0 4px 15px rgba(0,0,0,0.5)';
-  
-  const title = document.createElement('div');
-  title.innerText = song.title;
-  title.style.fontSize = '13px';
-  title.style.fontWeight = '700';
-  title.style.whiteSpace = 'nowrap';
-  title.style.overflow = 'hidden';
-  title.style.textOverflow = 'ellipsis';
-  title.style.fontFamily = 'Inter, sans-serif';
-  
-  const artist = document.createElement('div');
-  artist.innerText = song.artist || song.uploader || 'Unknown Artist';
-  artist.style.fontSize = '11px';
-  artist.style.color = 'rgba(255,255,255,0.7)';
-  artist.style.whiteSpace = 'nowrap';
-  artist.style.overflow = 'hidden';
-  artist.style.textOverflow = 'ellipsis';
-  artist.style.marginTop = '4px';
-  artist.style.fontFamily = 'Inter, sans-serif';
-  
-  infoContainer.appendChild(title);
-  infoContainer.appendChild(artist);
-
-  dragGhost.appendChild(img);
-  dragGhost.appendChild(infoContainer);
-  
-  dragGhost.style.position = 'absolute';
-  dragGhost.style.top = '-1000px';
-  dragGhost.style.display = 'flex';
-  dragGhost.style.flexDirection = 'column';
-  dragGhost.style.alignItems = 'center';
-  dragGhost.className = 'dragging-ghost'; 
-
-  
-  document.body.appendChild(dragGhost);
-  e.dataTransfer.setDragImage(dragGhost, 60, 60);
-  
-  setTimeout(() => {
-    if (document.body.contains(dragGhost)) document.body.removeChild(dragGhost);
-  }, 100);
-
-  const currentTarget = e.currentTarget as HTMLElement;
-  currentTarget.classList.add('dragging-origin');
-};
-
 function App() {
   // ─── Page Navigation ────────────────────────────────────────
   const [activePage, setActivePage] = useState<Page>('home');
@@ -167,6 +51,7 @@ function App() {
   const [activeArtist, setActiveArtist] = useState<string | null>(null);
   const [activePodcastMeta, setActivePodcastMeta] = useState<{ podcastId?: string; feedUrl?: string } | null>(null);
   const [showShortcutsModal, setShowShortcutsModal] = useState(false);
+  const [showCommandPalette, setShowCommandPalette] = useState(false);
   const searchInputRef = useRef<HTMLInputElement | null>(null);
   const lyricsRequestIdRef = useRef(0);
   const [wrappedData, setWrappedData] = useState<any>(null);
@@ -1703,8 +1588,72 @@ function App() {
   // ─── Lyrics ──────────────────────────────────────────────────
   const [lyricsData, setLyricsData] = useState<{ time: number, text: string, romanizedText?: string, isInstrumental?: boolean }[] | null>(null);
   const [showRomanized, setShowRomanized] = useState(true);
+  const [showLyricTranslation, setShowLyricTranslation] = useState(false);
+  const [translatedLyrics, setTranslatedLyrics] = useState<string[] | null>(null);
+  const [isTranslatingLyrics, setIsTranslatingLyrics] = useState(false);
+  const [showSidebarLyricsLangMenu, setShowSidebarLyricsLangMenu] = useState(false);
   const [plainLyrics, setPlainLyrics] = useState<string>('');
   const [lyricsOffset, setLyricsOffset] = useState<number>(0);
+
+  // ─── Podcast Speed & Custom EQ Presets ───────────────────────
+  const [podcastSpeed, setPodcastSpeed] = useState<number>(() => {
+    try { return parseFloat(localStorage.getItem('donpollo_podcast_speed') || '1') || 1; } catch { return 1; }
+  });
+  const [customEqPresets, setCustomEqPresets] = useState<{ name: string; bands: number[] }[]>(() => {
+    try { return JSON.parse(localStorage.getItem('donpollo_custom_eq_presets') || '[]'); } catch { return []; }
+  });
+  const [newEqPresetName, setNewEqPresetName] = useState('');
+  const lastPodcastSaveRef = useRef<number>(0);
+
+  const getSavedLyricsOffset = (songId?: string | null): number | null => {
+    if (!songId) return null;
+    try {
+      const map = JSON.parse(localStorage.getItem('donpollo_lyrics_offsets') || '{}');
+      return typeof map[songId] === 'number' ? map[songId] : null;
+    } catch { return null; }
+  };
+
+  const updateAndSaveLyricsOffset = (deltaOrZero: number, isReset = false) => {
+    setLyricsOffset(prev => {
+      const next = isReset ? 0 : Math.round((prev + deltaOrZero) * 10) / 10;
+      const sid = currentSongRef.current?.id;
+      if (sid) {
+        try {
+          const map = JSON.parse(localStorage.getItem('donpollo_lyrics_offsets') || '{}');
+          if (next === 0) delete map[sid];
+          else map[sid] = next;
+          localStorage.setItem('donpollo_lyrics_offsets', JSON.stringify(map));
+        } catch {}
+      }
+      return next;
+    });
+  };
+
+  const getSavedPodcastProgress = (epId?: string | null): number => {
+    if (!epId) return 0;
+    try {
+      const map = JSON.parse(localStorage.getItem('donpollo_podcast_progress') || '{}');
+      const entry = map[epId];
+      if (!entry || typeof entry.time !== 'number') return 0;
+      if (entry.duration && entry.time >= entry.duration * 0.95) return 0;
+      return entry.time > 5 ? entry.time : 0;
+    } catch { return 0; }
+  };
+
+  const savePodcastProgress = (epId?: string | null, time?: number, dur?: number) => {
+    if (!epId || typeof time !== 'number' || time < 5) return;
+    try {
+      const map = JSON.parse(localStorage.getItem('donpollo_podcast_progress') || '{}');
+      map[epId] = { time: Math.floor(time), duration: dur || 0, updatedAt: Date.now() };
+      const entries = Object.entries(map);
+      if (entries.length > 60) {
+        entries.sort((a: any, b: any) => (a[1].updatedAt || 0) - (b[1].updatedAt || 0));
+        localStorage.setItem('donpollo_podcast_progress', JSON.stringify(Object.fromEntries(entries.slice(-60))));
+      } else {
+        localStorage.setItem('donpollo_podcast_progress', JSON.stringify(map));
+      }
+    } catch {}
+  };
   const sidebarLyricsRef = useRef<HTMLDivElement>(null);
   const widgetLyricsRef = useRef<HTMLDivElement>(null);
 
@@ -1778,19 +1727,19 @@ function App() {
 
       if (!autoGainNodeRef.current) {
         const gainNode = ctx.createGain();
-        gainNode.gain.value = settings.normalizeAudio ? 4.0 : 1.0;
+        gainNode.gain.value = settings.normalizeAudio ? 2.0 : 1.0;
         autoGainNodeRef.current = gainNode;
       }
 
       if (!compressorNodeRef.current) {
         const comp = ctx.createDynamicsCompressor();
-        // Setup initial values based on settings
+        // Smooth soft-knee limiter for loudness normalization without harsh pumping
         if (settings.normalizeAudio) {
-          comp.threshold.value = -12;
-          comp.knee.value = 30;
-          comp.ratio.value = 20;
-          comp.attack.value = 0.001;
-          comp.release.value = 0.25;
+          comp.threshold.value = -14;
+          comp.knee.value = 24;
+          comp.ratio.value = 8;
+          comp.attack.value = 0.005;
+          comp.release.value = 0.2;
         } else {
           comp.threshold.value = 0;
           comp.ratio.value = 1;
@@ -2216,6 +2165,14 @@ function App() {
       if (audioRef.current !== audio) return;
       setProgress(audio.currentTime);
 
+      if (currentSongRef.current?.isPodcast) {
+        const now = Date.now();
+        if (now - lastPodcastSaveRef.current > 5000) {
+          lastPodcastSaveRef.current = now;
+          savePodcastProgress(currentSongRef.current.id, audio.currentTime, audio.duration);
+        }
+      }
+
       if (audio.currentTime >= 30 && currentSongRef.current) {
         const songId = currentSongRef.current.id;
         if (!trackedSongIdsRef.current.has(songId)) {
@@ -2315,12 +2272,12 @@ function App() {
       const comp = compressorNodeRef.current;
       const gainNode = autoGainNodeRef.current;
       if (settings.normalizeAudio) {
-        gainNode.gain.value = 4.0;
-        comp.threshold.value = -12;
-        comp.knee.value = 30;
-        comp.ratio.value = 20;
-        comp.attack.value = 0.001;
-        comp.release.value = 0.25;
+        gainNode.gain.value = 2.0;
+        comp.threshold.value = -14;
+        comp.knee.value = 24;
+        comp.ratio.value = 8;
+        comp.attack.value = 0.005;
+        comp.release.value = 0.2;
       } else {
         gainNode.gain.value = 1.0;
         comp.threshold.value = 0;
@@ -3166,10 +3123,13 @@ function App() {
 
         let bestMatch = scoredMatches[0];
 
-        if (songDuration > 0 && bestMatch.duration) {
+        const savedUserOffset = getSavedLyricsOffset(currentSongRef.current?.id);
+        if (savedUserOffset !== null) {
+          setLyricsOffset(savedUserOffset);
+        } else if (songDuration > 0 && bestMatch.duration) {
           const diff = songDuration - bestMatch.duration;
           if (Math.abs(diff) > 2 && Math.abs(diff) < 30) {
-            setLyricsOffset(diff);
+            setLyricsOffset(Math.round(diff * 10) / 10);
           } else {
             setLyricsOffset(0);
           }
@@ -3277,18 +3237,25 @@ function App() {
         setDuration(cleanSong.duration || song.duration || 0);
         setIsPlaying(true);
         setLyricsData(null);
+        setTranslatedLyrics(null);
         setLyricsOffset(0);
+
+        const resumeTime = startTime !== undefined ? startTime : getSavedPodcastProgress(cleanSong.id);
 
         ensureAudioType(true);
         if (audioRef.current) {
           audioRef.current.src = song.audioUrl;
+          audioRef.current.playbackRate = podcastSpeed;
           audioRef.current.load();
-          if (startTime !== undefined && startTime > 0) {
+          if (resumeTime > 0) {
             const targetAudio = audioRef.current;
             const seekOnMetadata = () => {
               try {
-                if (targetAudio.duration && startTime < targetAudio.duration) {
-                  targetAudio.currentTime = startTime;
+                if (targetAudio.duration && resumeTime < targetAudio.duration) {
+                  targetAudio.currentTime = resumeTime;
+                  if (startTime === undefined) {
+                    showToast(t('podcastResumedToast', { time: formatTime(resumeTime) }));
+                  }
                 }
               } catch (e) { }
             };
@@ -3379,7 +3346,8 @@ function App() {
 
 
       setLyricsData(null);
-      setLyricsOffset(0);
+      setTranslatedLyrics(null);
+      setLyricsOffset(getSavedLyricsOffset(song.id) ?? 0);
 
       // 1. Update UI langsung agar terasa lebih cepat
       const cleanSong = formatTrackLikeSpotify(song);
@@ -3638,8 +3606,11 @@ function App() {
   // Restore personal crossfade and playback rate setting when guest leaves party
   useEffect(() => {
     if (!isGuest || !activePartyId) {
-      if (audioRef.current && audioRef.current.playbackRate !== 1.0) {
-        audioRef.current.playbackRate = 1.0;
+      if (audioRef.current) {
+        const targetRate = currentSong?.isPodcast ? podcastSpeed : 1.0;
+        if (audioRef.current.playbackRate !== targetRate) {
+          audioRef.current.playbackRate = targetRate;
+        }
       }
       if (savedGuestCrossfadeRef.current !== null) {
         const originalCf = savedGuestCrossfadeRef.current;
@@ -3648,7 +3619,41 @@ function App() {
         setSettings((prev: any) => ({ ...prev, crossfade: originalCf }));
       }
     }
-  }, [isGuest, activePartyId]);
+  }, [isGuest, activePartyId, currentSong?.isPodcast, podcastSpeed]);
+
+  // ─── Lyrics Translation Effect ───────────────────────────────
+  const handleChangeLyricsTargetLang = useCallback((lang: string) => {
+    setSettings((p: any) => {
+      const updated = { ...p, lyricsTargetLang: lang };
+      localStorage.setItem('donpollo_settings', JSON.stringify(updated));
+      return updated;
+    });
+    if (!showLyricTranslation) setShowLyricTranslation(true);
+  }, [showLyricTranslation]);
+
+  useEffect(() => {
+    if (!showLyricTranslation || !lyricsData || lyricsData.length === 0 || !currentSong?.id) {
+      if (!showLyricTranslation) setTranslatedLyrics(null);
+      return;
+    }
+    let cancelled = false;
+    const pref = settings.lyricsTargetLang || 'auto';
+    const targetLang = pref === 'auto' ? (settings.language || 'en') : pref;
+    setIsTranslatingLyrics(true);
+    translateLyricsLines(
+      currentSong.id,
+      lyricsData.map(l => l.isInstrumental ? '' : l.text),
+      targetLang
+    ).then(res => {
+      if (!cancelled) {
+        setTranslatedLyrics(res);
+        setIsTranslatingLyrics(false);
+      }
+    }).catch(() => {
+      if (!cancelled) setIsTranslatingLyrics(false);
+    });
+    return () => { cancelled = true; };
+  }, [showLyricTranslation, lyricsData, currentSong?.id, settings.language, settings.lyricsTargetLang]);
 
   const augmentSongWithUser = (song: any) => {
     if (!discordUser) return song;
@@ -3731,6 +3736,19 @@ function App() {
   const handleNextRef = useRef<(isAutomatic?: boolean) => void>(() => { });
   const handlePrevRef = useRef<() => void>(() => { });
   const togglePlayRef = useRef<() => void>(() => { });
+
+  useMediaSession({
+    currentSong,
+    isPlaying,
+    progress,
+    duration,
+    podcastSpeed,
+    audioRef,
+    setProgress,
+    togglePlayRef,
+    handlePrevRef,
+    handleNextRef,
+  });
 
   const autoplayFetchingRef = useRef<string | null>(null);
 
@@ -4460,8 +4478,19 @@ function App() {
         activeEl.classList?.contains('chat-input')
       );
 
+      // Command Palette (Ctrl+K or Cmd+K) — works everywhere
+      if ((e.ctrlKey || e.metaKey) && (e.key === 'k' || e.key === 'K')) {
+        e.preventDefault();
+        setShowCommandPalette(prev => !prev);
+        return;
+      }
+
       // Escape key behavior
       if (e.key === 'Escape') {
+        if (showCommandPalette) {
+          setShowCommandPalette(false);
+          return;
+        }
         if (showShortcutsModal) {
           setShowShortcutsModal(false);
           return;
@@ -4581,171 +4610,22 @@ function App() {
   // ═══════════════════════════════════════════════════════════════
 
   const renderLibraryPage = () => (
-    <div className="page-content library-mode" style={{ minHeight: '100%', display: 'flex', flexDirection: 'column', background: 'var(--bg-primary)' }}>
-      <div style={{ padding: '32px 32px 16px 32px' }}>
-        <h1 style={{ fontSize: '28px', fontWeight: '800', marginBottom: '24px', color: 'var(--text-primary)' }}>{t('myLibrary')}</h1>
-
-        {/* Dashboard Cards */}
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(250px, 1fr))', gap: '16px', marginBottom: '32px' }}>
-
-          <div style={{ background: 'var(--bg-card)', padding: '20px', borderRadius: '12px', border: '1px solid var(--border-color)', display: 'flex', flexDirection: 'column', gap: '12px' }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', color: '#ff6b9d' }}>
-              <Heart size={20} fill="currentColor" />
-              <h3 style={{ fontSize: '12px', fontWeight: '700', letterSpacing: '1px', textTransform: 'uppercase' }}>{t('likedSongs')}</h3>
-            </div>
-            <div style={{ fontSize: '36px', fontWeight: '800' }}>{likedSongs.length} <span style={{ fontSize: '16px', color: 'var(--text-secondary)', fontWeight: '600' }}>{t('songs')}</span></div>
-            <div style={{ fontSize: '12px', color: 'var(--text-secondary)' }}>{t('favoriteCollectionDesc')}</div>
-          </div>
-
-          <div style={{ background: 'var(--bg-card)', padding: '20px', borderRadius: '12px', border: '1px solid var(--border-color)', display: 'flex', flexDirection: 'column', gap: '12px' }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', color: 'var(--text-secondary)' }}>
-              <ListMusic size={20} />
-              <h3 style={{ fontSize: '12px', fontWeight: '700', letterSpacing: '1px', textTransform: 'uppercase' }}>{t('recentlyPlayed')}</h3>
-            </div>
-            <div style={{ fontSize: '36px', fontWeight: '800' }}>{playHistory.length} <span style={{ fontSize: '16px', color: 'var(--text-secondary)', fontWeight: '600' }}>{t('songs')}</span></div>
-            <div style={{ fontSize: '12px', color: 'var(--text-secondary)' }}>{t('recentPlaybackDesc')}</div>
-          </div>
-
-          <div style={{ background: 'linear-gradient(135deg, #ff6b9d, #ff4785)', padding: '20px', borderRadius: '12px', display: 'flex', flexDirection: 'column', gap: '8px', justifyContent: 'center', position: 'relative', overflow: 'hidden' }}>
-            <div style={{ position: 'absolute', right: '-15px', bottom: '-15px', opacity: 0.15 }}>
-              <Headphones size={100} />
-            </div>
-            <h3 style={{ fontSize: '16px', fontWeight: '800', color: '#fff', zIndex: 1, letterSpacing: '0.5px' }}>{t('myPersonalCollection').split('\n').map((line, i) => <span key={i}>{line}{i === 0 ? <br /> : ''}</span>)}</h3>
-            <p style={{ fontSize: '12px', color: 'rgba(255,255,255,0.85)', zIndex: 1, margin: 0, marginTop: '4px', lineHeight: '1.4' }}>{t('personalCollectionDesc')}</p>
-          </div>
-        </div>
-
-        {likedSongs.length === 0 && playHistory.length === 0 ? (
-          <div className="empty-state" style={{ marginTop: '24px', color: 'var(--text-muted)' }}>
-            <Music size={64} style={{ marginBottom: '16px', opacity: 0.3 }} />
-            <h3 style={{ color: 'var(--text-secondary)' }}>{t('noHistory')}</h3>
-            <p style={{ fontSize: '13px' }}>{t('noHistoryDesc')}</p>
-          </div>
-        ) : (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '32px' }}>
-
-            {/* Liked Songs List */}
-            {likedSongs.length > 0 && (
-              <section>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
-                  <h2 style={{ fontSize: '18px', fontWeight: '700', color: 'var(--text-primary)', display: 'flex', alignItems: 'center', gap: '8px' }}><Heart size={20} fill="#ff6b9d" color="#ff6b9d" /> {t('likedSongs')}</h2>
-                  <span style={{ fontSize: '12px', color: 'var(--accent-primary)', cursor: 'pointer', fontWeight: '600' }} onClick={() => startPlayingFromList(likedSongs, 0)}>{t('playAll')}</span>
-                </div>
-
-                <div style={{ background: 'var(--bg-card)', borderRadius: '12px', border: '1px solid var(--border-color)', overflow: 'hidden' }}>
-                  <div style={{ display: 'grid', gridTemplateColumns: '40px 1fr 100px 80px', padding: '16px 24px', borderBottom: '1px solid var(--border-color)', fontSize: '11px', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '1px', fontWeight: '700' }}>
-                    <span>#</span>
-                    <span>{t('songDetail')}</span>
-                    <span>{t('duration')}</span>
-                    <span></span>
-                  </div>
-
-                  <div style={{ display: 'flex', flexDirection: 'column' }}>
-                    {likedSongs.map((song, i) => (
-                      <div key={i} className={`offline-row ${currentSong?.id === song.id ? 'active-row' : ''}`} style={{ display: 'grid', gridTemplateColumns: '40px 1fr 100px 80px', padding: '12px 24px', alignItems: 'center', transition: 'background 0.2s', cursor: 'pointer', borderBottom: i === likedSongs.length - 1 ? 'none' : '1px solid rgba(255,255,255,0.03)' }} onClick={() => startPlayingFromList(likedSongs, i)}
-                        draggable={true}
-                        onDragStart={(e) => { setDraggedGlobalSong(song); applyDragGhost(e, song); }}
-                        onDragEnd={(e) => { setDraggedGlobalSong(null); (e.currentTarget as HTMLElement).classList.remove('dragging-origin'); }}
-                      >
-                        <span style={{ color: currentSong?.id === song.id ? 'var(--accent-primary)' : 'var(--text-muted)', fontSize: '13px', fontWeight: '600' }}>{currentSong?.id === song.id ? <Play size={14} fill="currentColor" /> : String(i + 1).padStart(2, '0')}</span>
-                        <div style={{ display: 'flex', gap: '16px', alignItems: 'center', minWidth: 0 }}>
-                          <div style={{ position: 'relative', width: '40px', height: '40px', borderRadius: '6px', overflow: 'hidden', flexShrink: 0 }}>
-                            <img src={(getCleanThumbnail(song.thumbnail) || getHighResImage(song.cover))} style={{ width: '100%', height: '100%', objectFit: 'cover' }} alt="Cover" />
-                            <div className="play-overlay" style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(0,0,0,0.6)', display: 'flex', alignItems: 'center', justifyContent: 'center', opacity: 0, transition: 'opacity 0.2s' }}>
-                              <Play fill="currentColor" size={16} />
-                            </div>
-                          </div>
-                          <div style={{ display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
-                            <div style={{ display: 'flex', alignItems: 'center', gap: '6px', overflow: 'hidden' }}>
-                              <span style={{ fontWeight: '600', fontSize: '14px', color: currentSong?.id === song.id ? 'var(--accent-primary)' : 'var(--text-primary)', whiteSpace: 'nowrap', textOverflow: 'ellipsis', overflow: 'hidden', display: 'block' }}>
-                                {song.title}
-                              </span>
-                              {downloadedSongs.some(ds => ds.id === song.id) && <span title="Tersedia Offline" style={{ flexShrink: 0 }}><CheckCircle2 size={14} color="#23a559" /></span>}
-                            </div>
-                            <span style={{ fontSize: '12px', color: 'var(--text-secondary)', whiteSpace: 'nowrap', textOverflow: 'ellipsis', overflow: 'hidden', display: 'block' }}>{song.artist}</span>
-                          </div>
-                        </div>
-                        <div>
-                          <span style={{ fontSize: '13px', color: 'var(--text-secondary)' }}>{formatTime(song.duration)}</span>
-                        </div>
-                        <div style={{ display: 'flex', gap: '8px', justifyContent: 'flex-end' }}>
-                          <button className="btn-icon" onClick={(e) => { e.stopPropagation(); toggleLike(song); }} style={{ color: '#ff6b9d' }}>
-                            <Heart size={16} fill="currentColor" />
-                          </button>
-                          <button className="btn-icon" onClick={(e) => { e.stopPropagation(); setAddToPlaylistSong(song); }} style={{ color: 'var(--text-secondary)' }}>
-                            <FolderPlus size={16} />
-                          </button>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              </section>
-            )}
-
-            {/* Recently Played List */}
-            {playHistory.length > 0 && (
-              <section>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
-                  <h2 style={{ fontSize: '18px', fontWeight: '700', color: 'var(--text-primary)' }}>{t('recentlyPlayed')}</h2>
-                  <span style={{ fontSize: '12px', color: 'var(--text-secondary)', cursor: 'pointer', fontWeight: '600' }} onClick={() => { setPlayHistory([]); showToast(t('toastHistoryCleared')); }}>{t('clearHistory')}</span>
-                </div>
-
-                <div style={{ background: 'var(--bg-card)', borderRadius: '12px', border: '1px solid var(--border-color)', overflow: 'hidden' }}>
-                  <div style={{ display: 'grid', gridTemplateColumns: '40px 1fr 100px 80px', padding: '16px 24px', borderBottom: '1px solid var(--border-color)', fontSize: '11px', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '1px', fontWeight: '700' }}>
-                    <span>#</span>
-                    <span>{t('songDetail')}</span>
-                    <span>{t('duration')}</span>
-                    <span></span>
-                  </div>
-
-                  <div style={{ display: 'flex', flexDirection: 'column' }}>
-                    {playHistory.map((song, i) => (
-                      <div key={i} className={`offline-row ${currentSong?.id === song.id ? 'active-row' : ''}`} style={{ display: 'grid', gridTemplateColumns: '40px 1fr 100px 80px', padding: '12px 24px', alignItems: 'center', transition: 'background 0.2s', cursor: 'pointer', borderBottom: i === playHistory.length - 1 ? 'none' : '1px solid rgba(255,255,255,0.03)' }} onClick={() => playSingleSong(song)}
-                        draggable={true}
-                        onDragStart={(e) => { setDraggedGlobalSong(song); applyDragGhost(e, song); }}
-                        onDragEnd={(e) => { setDraggedGlobalSong(null); (e.currentTarget as HTMLElement).classList.remove('dragging-origin'); }}
-                      >
-                        <span style={{ color: currentSong?.id === song.id ? 'var(--accent-primary)' : 'var(--text-muted)', fontSize: '13px', fontWeight: '600' }}>{currentSong?.id === song.id ? <Play size={14} fill="currentColor" /> : String(i + 1).padStart(2, '0')}</span>
-                        <div style={{ display: 'flex', gap: '16px', alignItems: 'center', minWidth: 0 }}>
-                          <div style={{ position: 'relative', width: '40px', height: '40px', borderRadius: '6px', overflow: 'hidden', flexShrink: 0 }}>
-                            <img src={(getCleanThumbnail(song.thumbnail) || getHighResImage(song.cover))} style={{ width: '100%', height: '100%', objectFit: 'cover' }} alt="Cover" />
-                            <div className="play-overlay" style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(0,0,0,0.6)', display: 'flex', alignItems: 'center', justifyContent: 'center', opacity: 0, transition: 'opacity 0.2s' }}>
-                              <Play fill="currentColor" size={16} />
-                            </div>
-                          </div>
-                          <div style={{ display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
-                            <span style={{ fontWeight: '600', fontSize: '14px', color: currentSong?.id === song.id ? 'var(--accent-primary)' : 'var(--text-primary)', whiteSpace: 'nowrap', textOverflow: 'ellipsis', overflow: 'hidden', display: 'block' }}>{song.title}</span>
-                            <span style={{ fontSize: '12px', color: 'var(--text-secondary)', whiteSpace: 'nowrap', textOverflow: 'ellipsis', overflow: 'hidden', display: 'block' }}>{song.artist}</span>
-                          </div>
-                        </div>
-                        <div>
-                          <span style={{ fontSize: '13px', color: 'var(--text-secondary)' }}>{formatTime(song.duration)}</span>
-                        </div>
-                        <div style={{ display: 'flex', gap: '8px', justifyContent: 'flex-end' }}>
-                          <button className="btn-icon" onClick={(e) => { e.stopPropagation(); toggleLike(song); }} style={{ color: isLiked(song.id) ? '#ff6b9d' : 'var(--text-secondary)' }}>
-                            <Heart size={16} fill={isLiked(song.id) ? 'currentColor' : 'none'} />
-                          </button>
-                          <button className="btn-icon" onClick={(e) => { e.stopPropagation(); setAddToPlaylistSong(song); }} style={{ color: 'var(--text-secondary)' }}>
-                            <FolderPlus size={16} />
-                          </button>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              </section>
-            )}
-          </div>
-        )}
-      </div>
-
-      <style>{`
-        .offline-row:hover { background: var(--bg-card-hover) !important; }
-        .offline-row:hover .play-overlay { opacity: 1 !important; }
-        .active-row { background: rgba(var(--accent-primary-rgb), 0.05); }
-      `}</style>
-    </div>
+    <LibraryPage
+      likedSongs={likedSongs}
+      playHistory={playHistory}
+      setPlayHistory={setPlayHistory}
+      downloadedSongs={downloadedSongs}
+      currentSong={currentSong}
+      startPlayingFromList={startPlayingFromList}
+      playSingleSong={playSingleSong}
+      setDraggedGlobalSong={setDraggedGlobalSong}
+      formatTime={formatTime}
+      toggleLike={toggleLike}
+      isLiked={isLiked}
+      setAddToPlaylistSong={setAddToPlaylistSong}
+      showToast={showToast}
+      t={t}
+    />
   );
 
   const generateOrGetMixTracks = async (pl: Playlist, forceRefresh = false): Promise<any[]> => {
@@ -4832,2853 +4712,258 @@ function App() {
     }
   }, [activePage, activePlaylistId]);
 
-  const renderPlaylistPage = () => {
-    if (activePage === 'playlist-detail' && activePlaylistId) {
-      const pl = playlists.find(p => p.id === activePlaylistId) || madeForYouPlaylists.find(p => p.id === activePlaylistId);
-      if (!pl) return null;
-      const isMyPlaylist = (!pl.discordId || pl.discordId === discordUser?.id) && !(pl as any).isTemporary;
-      const isCollaborator = pl.collaborators?.includes(discordUser?.id || '') || false;
-      const canEditSongs = (isMyPlaylist || isCollaborator) && !(pl as any).isTemporary;
-      const isAlgorithmic = Boolean((pl as any).isTemporary || pl.id.startsWith('temp_') || pl.id.startsWith('vibe_temp_'));
-      const effectiveSongs = isAlgorithmic
-        ? deduplicateTracks(pl.songs.map((s: any) => formatTrackLikeSpotify(s)), 3)
-        : pl.songs;
-      return (
-        <div className="page-content">
-          <div className="page-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-            <div style={{ display: 'flex', gap: '20px', alignItems: 'center' }}>
-              <div
-                className="playlist-avatar-large"
-                style={{ width: '120px', height: '120px', borderRadius: '8px', backgroundColor: 'var(--surface-color)', display: 'flex', alignItems: 'center', justifyContent: 'center', overflow: 'hidden', cursor: isMyPlaylist ? 'pointer' : 'default', position: 'relative' }}
-                onClick={() => { if (isMyPlaylist) { setAvatarUrlInput(pl.avatar || ''); setShowAvatarPrompt(true); } }}
-              >
-                {isMixPlaylist(pl) ? (
-                  <img
-                    src={getMixPlaylistCover(pl, { songs: effectiveSongs, playHistory, likedSongs })}
-                    alt={pl.name}
-                    style={{ width: '100%', height: '100%', objectFit: 'cover' }}
-                  />
-                ) : pl.avatar ? (
-                  <img
-                    src={pl.avatar}
-                    alt="Avatar"
-                    style={{ width: '100%', height: '100%', objectFit: 'cover' }}
-                    onError={(e) => {
-                      if (pl.songs.length > 0) {
-                        e.currentTarget.src = (getCleanThumbnail(pl.songs[0].thumbnail) || getHighResImage(pl.songs[0].cover));
-                      } else {
-                        e.currentTarget.style.display = 'none';
-                      }
-                    }}
-                  />
-                ) : (
-                  <ListMusic size={48} color="var(--text-muted)" />
-                )}
-                {isMyPlaylist && (
-                  <div className="avatar-overlay" style={{ position: 'absolute', inset: 0, backgroundColor: 'rgba(0,0,0,0.6)', display: 'flex', alignItems: 'center', justifyContent: 'center', opacity: 0, transition: 'opacity 0.2s' }}>
-                    <span style={{ fontSize: '12px', fontWeight: 'bold' }}>{t('changeImage')}</span>
-                  </div>
-                )}
-              </div>
+  const renderPlaylistPage = () => (
+    <PlaylistPage
+      activePage={activePage}
+      activePlaylistId={activePlaylistId}
+      playlists={playlists}
+      setPlaylists={setPlaylists}
+      madeForYouPlaylists={madeForYouPlaylists}
+      discordUser={discordUser}
+      settings={settings}
+      playHistory={playHistory}
+      likedSongs={likedSongs}
+      downloadedSongs={downloadedSongs}
+      savedPlaylists={savedPlaylists}
+      activeDownloads={activeDownloads}
+      currentSong={currentSong}
+      isEditingPlaylistName={isEditingPlaylistName}
+      setIsEditingPlaylistName={setIsEditingPlaylistName}
+      editPlaylistNameValue={editPlaylistNameValue}
+      setEditPlaylistNameValue={setEditPlaylistNameValue}
+      handleEditPlaylistName={handleEditPlaylistName}
+      setShowAvatarPrompt={setShowAvatarPrompt}
+      setAvatarUrlInput={setAvatarUrlInput}
+      setShowCreatePlaylist={setShowCreatePlaylist}
+      setShowImportPlaylist={setShowImportPlaylist}
+      setShowCollabModal={setShowCollabModal}
+      setCollabPlaylistId={setCollabPlaylistId}
+      setShareCodeResult={setShareCodeResult}
+      setPlaylistToDelete={setPlaylistToDelete}
+      setPlaylistToRemove={setPlaylistToRemove}
+      setActivePage={setActivePage}
+      setActiveProfileId={setActiveProfileId}
+      navigate={navigate}
+      getDefaultDiscordAvatar={getDefaultDiscordAvatar}
+      handleAvatarError={handleAvatarError}
+      startPlayingFromList={startPlayingFromList}
+      playSingleSong={playSingleSong}
+      handleContextMenu={handleContextMenu}
+      setContextMenu={setContextMenu}
+      draggedGlobalSong={draggedGlobalSong}
+      setDraggedGlobalSong={setDraggedGlobalSong}
+      draggedPlaylistSongIdx={draggedPlaylistSongIdx}
+      setDraggedPlaylistSongIdx={setDraggedPlaylistSongIdx}
+      dragOverPlaylistSongIdx={dragOverPlaylistSongIdx}
+      setDragOverPlaylistSongIdx={setDragOverPlaylistSongIdx}
+      isMixGeneratingId={isMixGeneratingId}
+      regenerateMadeForYouMix={regenerateMadeForYouMix}
+      toggleLike={toggleLike}
+      isLiked={isLiked}
+      addSongToPlaylist={addSongToPlaylist}
+      removeSongFromPlaylist={removeSongFromPlaylist}
+      formatTime={formatTime}
+      showToast={showToast}
+      playlistSearchQuery={playlistSearchQuery}
+      setPlaylistSearchQuery={setPlaylistSearchQuery}
+      playlistSearchResults={playlistSearchResults}
+      isPlaylistSearching={isPlaylistSearching}
+      handlePlaylistSearch={handlePlaylistSearch}
+      setPlaylistContextMenu={setPlaylistContextMenu}
+      API_BASE_URL={API_BASE_URL}
+      t={t}
+    />
+  );
 
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-                {isEditingPlaylistName ? (
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                    <input
-                      type="text"
-                      value={editPlaylistNameValue}
-                      onChange={e => setEditPlaylistNameValue(e.target.value)}
-                      onKeyDown={e => e.key === 'Enter' && handleEditPlaylistName(pl.id)}
-                      autoFocus
-                      className="modal-input"
-                      style={{ fontSize: '24px', fontWeight: 'bold', width: '300px', marginBottom: 0 }}
-                    />
-                    <button className="btn-primary" onClick={() => handleEditPlaylistName(pl.id)}>{t('save')}</button>
-                    <button className="btn-secondary" onClick={() => setIsEditingPlaylistName(false)}>{t('cancel')}</button>
-                  </div>
-                ) : (() => {
-                  const isMix = isMixPlaylist(pl);
-                  const displayName = (() => {
-                    if (isMix) {
-                      if (pl.mixType === 'daily_mix' || pl.id === 'temp_mix_daily') return t('dailyMixTitle');
-                      if (pl.mixType === 'discover_weekly' || pl.id === 'temp_mix_discover_weekly') return t('discoverWeekly');
-                      if (pl.mixType === 'release_radar' || pl.id === 'temp_mix_release_radar') return t('releaseRadar');
-                      if ((pl as any).mood) {
-                        const cfg = VIBE_CONFIGS[(pl as any).mood as VibeType];
-                        if (cfg) return `${t(cfg.labelKey as any)} Mix`;
-                      }
-                    }
-                    return pl.name;
-                  })();
-
-                  const displayDescription = (() => {
-                    if (isMix) {
-                      if (pl.mixType === 'daily_mix' || pl.id === 'temp_mix_daily') return t('dailyMixDesc');
-                      if (pl.mixType === 'discover_weekly' || pl.id === 'temp_mix_discover_weekly') return t('discoverWeeklyDesc');
-                      if (pl.mixType === 'release_radar' || pl.id === 'temp_mix_release_radar') return t('releaseRadarDesc');
-                      if ((pl as any).mood) {
-                        const cfg = VIBE_CONFIGS[(pl as any).mood as VibeType];
-                        if (cfg && cfg.descriptionKey) return t(cfg.descriptionKey as any);
-                      }
-                    }
-                    return (pl as any).description;
-                  })();
-
-                  return (
-                    <>
-                      <h1 style={{ display: 'flex', alignItems: 'center', gap: '12px', margin: 0, fontSize: '32px' }}>
-                        {displayName}
-                        {isMyPlaylist && (
-                          <button className="btn-icon" onClick={() => { setEditPlaylistNameValue(pl.name); setIsEditingPlaylistName(true); }}>
-                            <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M17 3a2.828 2.828 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5L17 3z"></path></svg>
-                          </button>
-                        )}
-                      </h1>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '16px', marginTop: '4px' }}>
-                        {(pl as any).isTemporary ? (
-                          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                            <span style={{ fontSize: '12px', color: 'var(--accent-primary)', fontWeight: 600, background: 'rgba(255,255,255,0.06)', padding: '2px 10px', borderRadius: '12px' }}>
-                              {t('madeForYou')} • {t('temporaryMix')}
-                            </span>
-                          </div>
-                        ) : (
-                          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer' }} onClick={() => { if (pl.discordId) { setActiveProfileId(pl.discordId); setActivePage('profile'); } }}>
-                            {(pl as any).authorAvatar ? (
-                              <img src={(pl as any).authorAvatar} alt="avatar" style={{ width: '24px', height: '24px', borderRadius: '50%', objectFit: 'cover' }} />
-                            ) : (
-                              <div className="user-avatar" style={{ width: '24px', height: '24px', fontSize: '10px' }}>
-                                {((pl as any).authorName || discordUser?.global_name || discordUser?.username || 'U').charAt(0).toUpperCase()}
-                              </div>
-                            )}
-                            <span style={{ fontSize: '14px', fontWeight: '600', color: 'white', transition: 'text-decoration 0.2s' }} onMouseOver={e => e.currentTarget.style.textDecoration = 'underline'} onMouseOut={e => e.currentTarget.style.textDecoration = 'none'}>
-                              {isMyPlaylist ? (discordUser?.global_name || discordUser?.username) : ((pl as any).authorName || 'User')}
-                            </span>
-                          </div>
-                        )}
-                        <span style={{ color: 'var(--text-muted)' }}>•</span>
-                        <p className="page-subtitle" style={{ margin: 0 }}>{effectiveSongs.length} {t('songs')}</p>
-
-                        {discordUser && discordUser.id === pl.discordId && (
-                          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer', background: 'rgba(255,255,255,0.05)', padding: '4px 12px', borderRadius: '20px' }} onClick={async () => {
-                            const updated = { ...pl, privacy: pl.privacy === 'private' ? 'public' : 'private' };
-                            if ((window as any).electronAPI) {
-                              await (window as any).electronAPI.savePlaylist(updated);
-                              setPlaylists(prev => prev.map(p => p.id === pl.id ? updated : p));
-                            }
-                          }}>
-                            <div style={{ width: '30px', height: '16px', background: pl.privacy !== 'private' ? 'var(--accent-primary)' : 'rgba(255,255,255,0.2)', borderRadius: '10px', position: 'relative', transition: 'all 0.2s' }}>
-                              <div style={{ width: '12px', height: '12px', background: pl.privacy !== 'private' ? '#000' : '#fff', borderRadius: '50%', position: 'absolute', top: '2px', left: pl.privacy !== 'private' ? '16px' : '2px', transition: 'all 0.2s' }} />
-                            </div>
-                            <span style={{ fontSize: '12px', color: 'var(--text-secondary)', fontWeight: 600 }}>{pl.privacy !== 'private' ? t('isPublic') : t('isPrivate')}</span>
-                          </div>
-                        )}
-                      </div>
-                      {displayDescription && (
-                        <p style={{ margin: '6px 0 0 0', fontSize: '13px', color: 'var(--text-secondary)', maxWidth: '650px', lineHeight: 1.4 }}>
-                          {displayDescription}
-                        </p>
-                      )}
-                    </>
-                  );
-                })()}
-              </div>
-            </div>
-            <div style={{ display: 'flex', gap: '12px', marginTop: 'auto', flexWrap: 'wrap' }}>
-              {effectiveSongs.length > 0 && (
-                <button className="btn-primary" onClick={() => startPlayingFromList(effectiveSongs, 0)}>
-                  <Play size={16} fill="currentColor" /> {t('playAll')}
-                </button>
-              )}
-              {(pl as any).isTemporary && effectiveSongs.length > 0 && (
-                <button
-                  className="btn-secondary"
-                  style={{ display: 'flex', alignItems: 'center', gap: '6px' }}
-                  onClick={() => {
-                    const permanentPl: Playlist = {
-                      ...pl,
-                      id: `pl_${Date.now()}`,
-                      name: pl.name,
-                      avatar: getMixPlaylistCover(pl, { songs: effectiveSongs, playHistory, likedSongs }),
-                      songs: effectiveSongs,
-                      createdAt: Date.now(),
-                      discordId: discordUser?.id || undefined
-                    };
-                    delete (permanentPl as any).isTemporary;
-                    const user = JSON.parse(localStorage.getItem('donpollo_user') || 'null');
-                    const suffix = user ? `_${user.id}` : '';
-                    const updated = [permanentPl, ...playlists];
-                    setPlaylists(updated);
-                    localStorage.setItem(`donpollo_playlists${suffix}`, JSON.stringify(updated));
-                    showToast(t('playlistSavedToLibrary'), 'success');
-                  }}
-                >
-                  <FolderPlus size={16} /> {t('saveToPlaylist')}
-                </button>
-              )}
-              {(pl as any).isTemporary && (
-                <button
-                  className="btn-secondary"
-                  style={{ display: 'flex', alignItems: 'center', gap: '6px' }}
-                  onClick={() => regenerateMadeForYouMix(pl.id)}
-                  disabled={isMixGeneratingId === pl.id}
-                >
-                  <RefreshCw size={16} className={isMixGeneratingId === pl.id ? 'spinner' : ''} />
-                  {isMixGeneratingId === pl.id ? t('remixing') : t('remixVibe')}
-                </button>
-              )}
-              {effectiveSongs.length > 0 && (
-                <button className="btn-secondary" onClick={() => {
-                  if ((window as any).electronAPI?.cacheAudio) {
-                    const toDownload = effectiveSongs.filter(s => !downloadedSongs.some(ds => ds.id === s.id) && !activeDownloads[s.id]);
-                    if (toDownload.length === 0) {
-                      showToast(t('allSongsDownloaded'), 'success');
-                      return;
-                    }
-                    showToast(t('startDownloadingSongs', { '0': String(toDownload.length) }), 'success');
-                    toDownload.forEach(song => {
-                      let streamUrl = `${API_BASE_URL}/api/stream?id=${song.id}`;
-                      if (settings.audioQuality && settings.audioQuality !== 'auto') {
-                        streamUrl += `&quality=${settings.audioQuality}`;
-                      }
-                      (window as any).electronAPI.cacheAudio(song, streamUrl);
-                    });
-                  } else {
-                    showToast(t('downloadDesktopOnly'), 'error');
-                  }
-                }}>
-                  <DownloadCloud size={16} /> {t('downloadAll')}
-                </button>
-              )}
-              {(isMyPlaylist || isCollaborator) && (
-                <button className="btn-secondary" onClick={() => {
-                  setCollabPlaylistId(pl.id);
-                  setShowCollabModal(true);
-                }}>
-                  <Users size={16} /> {t('collabButton', { '0': String(pl.collaborators?.length || 0) })}
-                </button>
-              )}
-              {isMyPlaylist && (
-                <button className="btn-secondary" onClick={async () => {
-                  if ((window as any).electronAPI?.createShareCode) {
-                    const result = await (window as any).electronAPI.createShareCode(pl);
-                    if (result) setShareCodeResult(result);
-                    else showToast(t('shareCodeError'), 'error');
-                  }
-                }}>
-                  <Share2 size={16} /> {t('share')}
-                </button>
-              )}
-              {isMyPlaylist ? (
-                <button className="btn-secondary" onClick={() => setPlaylistToDelete(pl.id)} style={{ color: '#ff5555' }}>
-                  <Trash2 size={16} /> {t('deletePlaylist')}
-                </button>
-              ) : discordUser && savedPlaylists.includes(pl.id) && (
-                <button className="btn-secondary" onClick={() => setPlaylistToRemove(pl.id)} style={{ color: '#ff5555' }}>
-                  <Trash2 size={16} /> {t('removeFromLibrary')}
-                </button>
-              )}
-            </div>
-          </div>
-          {isMixGeneratingId === pl.id ? (
-            <div style={{ padding: '60px 20px', textAlign: 'center', color: 'var(--text-secondary)' }}>
-              <Loader2 size={36} className="spinner" style={{ margin: '0 auto 16px', color: 'var(--accent-primary)' }} />
-              <div style={{ fontSize: '16px', fontWeight: 600, color: 'var(--text-primary)' }}>
-                Meracik lagu untuk {pl.name}...
-              </div>
-              <div style={{ fontSize: '13px', color: 'var(--text-secondary)', marginTop: '6px' }}>
-                Menganalisis lagu & musisi favoritmu secara cerdas
-              </div>
-            </div>
-          ) : effectiveSongs.length > 0 ? (
-            <div className="library-list">
-              {effectiveSongs.map((song, i) => (
-                <div key={i} className={`library-item ${currentSong?.id === song.id ? 'playing' : ''}`} onContextMenu={(e) => handleContextMenu(e, song)}
-                  draggable={true}
-                  onDragStart={(e) => {
-                    setDraggedPlaylistSongIdx(i);
-                    setDraggedGlobalSong(song);
-                    applyDragGhost(e, song);
-                  }}
-                  onDragOver={(e) => {
-                    e.preventDefault();
-                    if (canEditSongs) setDragOverPlaylistSongIdx(i);
-                  }}
-                  onDragLeave={() => setDragOverPlaylistSongIdx(null)}
-                  onDrop={async (e) => {
-                    if (!canEditSongs) return;
-                    e.preventDefault();
-                    if (draggedPlaylistSongIdx !== null && draggedPlaylistSongIdx !== i) {
-                      const newSongs = [...pl.songs];
-                      const [moved] = newSongs.splice(draggedPlaylistSongIdx, 1);
-                      newSongs.splice(i, 0, moved);
-                      const updated = { ...pl, songs: newSongs };
-                      if ((window as any).electronAPI) await (window as any).electronAPI.savePlaylist(updated);
-                      setPlaylists(prev => prev.map(p => p.id === pl.id ? updated : p));
-                    } else if (draggedGlobalSong && draggedPlaylistSongIdx === null) {
-                      if (!pl.songs.some(s => s.id === draggedGlobalSong.id)) {
-                        const newSongs = [...pl.songs];
-                        const songWithAddedBy = {
-                          ...draggedGlobalSong,
-                          addedBy: discordUser ? {
-                            id: discordUser.id,
-                            username: discordUser.global_name || discordUser.username,
-                            avatar: discordUser.avatar ? `https://cdn.discordapp.com/avatars/${discordUser.id}/${discordUser.avatar}.png` : null
-                          } : null
-                        };
-                        newSongs.splice(i, 0, songWithAddedBy);
-                        const updated = { ...pl, songs: newSongs };
-                        if ((window as any).electronAPI) await (window as any).electronAPI.savePlaylist(updated);
-                        setPlaylists(prev => prev.map(p => p.id === pl.id ? updated : p));
-                        showToast(t('toastAddedToPlaylist', { playlist: pl.name }), 'playlist');
-                      } else {
-                        showToast(t('toastAlreadyInPlaylist'), 'error');
-                      }
-                    }
-                    setDragOverPlaylistSongIdx(null);
-                    setDraggedPlaylistSongIdx(null);
-                    setDraggedGlobalSong(null);
-                  }}
-                  onDragEnd={(e) => {
-                    setDragOverPlaylistSongIdx(null);
-                    setDraggedPlaylistSongIdx(null);
-                    setDraggedGlobalSong(null);
-                    (e.currentTarget as HTMLElement).classList.remove('dragging-origin');
-                  }}
-                  style={{
-                    borderTop: dragOverPlaylistSongIdx === i ? '2px solid var(--accent-primary)' : 'none',
-                    transition: 'border 0.2s',
-                  }}
-                >
-                  {(() => {
-                    const cleanSong = formatTrackLikeSpotify(song);
-                    return (
-                      <>
-                        <div className="library-item-art" onClick={() => startPlayingFromList(effectiveSongs, i)}>
-                          <img src={(getCleanThumbnail(cleanSong.thumbnail) || getHighResImage(cleanSong.cover))} alt={cleanSong.title} />
-                          <div className="library-item-play"><Play size={16} fill="currentColor" /></div>
-                        </div>
-                        <div className="library-item-info" onClick={() => startPlayingFromList(effectiveSongs, i)}>
-                          <div className="library-item-title" title={cleanSong.title}>{cleanSong.title}</div>
-                          <div className="library-item-artist" style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                            <span>{cleanSong.artist}</span>
-                            {(cleanSong.source === 'itunes' || cleanSong.isOfficialAudio || getAudioBadge(cleanSong)?.type === 'audio') && (
-                              <span className="suggestion-badge badge-audio" style={{ fontSize: '10px', padding: '1px 6px' }}>
-                                <Music size={10} strokeWidth={2.4} />
-                                <span>{t('badgeAudio')}</span>
-                              </span>
-                            )}
-                          </div>
-                        </div>
-                      </>
-                    );
-                  })()}
-                  {song.addedBy && (
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginRight: '16px', flexShrink: 0 }} title={`Added by ${song.addedBy.username}`}>
-                      {song.addedBy.avatar ? (
-                        <img src={song.addedBy.avatar || getDefaultDiscordAvatar(song.addedBy.id, song.addedBy.name)} alt="" style={{ width: '18px', height: '18px', borderRadius: '50%', objectFit: 'cover' }} onError={(e) => handleAvatarError(e, song.addedBy.id, song.addedBy.name)} />
-                      ) : (
-                        <div style={{ width: '18px', height: '18px', borderRadius: '50%', background: 'var(--bg-card-hover)', color: 'var(--text-secondary)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '9px', fontWeight: 'bold' }}>
-                          {song.addedBy.username?.charAt(0).toUpperCase()}
-                        </div>
-                      )}
-                      <span style={{ fontSize: '11px', color: 'var(--text-secondary)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: '80px' }}>
-                        {song.addedBy.username}
-                      </span>
-                    </div>
-                  )}
-                  <div className="library-item-duration">{formatTime(song.duration)}</div>
-                  <div style={{ display: 'flex', gap: '4px' }}>
-                    <button
-                      className="library-item-action"
-                      onClick={(e) => { e.stopPropagation(); toggleLike(song); }}
-                      style={{ color: isLiked(song) ? '#ff6b9d' : 'var(--text-secondary)' }}
-                      title="Like"
-                    >
-                      <Heart size={16} fill={isLiked(song) ? 'currentColor' : 'none'} />
-                    </button>
-                    {canEditSongs && (
-                      <button
-                        className="library-item-action"
-                        onClick={(e) => { e.stopPropagation(); removeSongFromPlaylist(pl.id, song, i); }}
-                        title="Hapus dari playlist"
-                      >
-                        <Trash2 size={16} />
-                      </button>
-                    )}
-                  </div>
-                </div>
-              ))}
-            </div>
-          ) : (pl as any).isTemporary ? (
-            <div style={{ padding: '60px 20px', textAlign: 'center', color: 'var(--text-secondary)' }}>
-              <div style={{ fontSize: '15px', color: 'var(--text-secondary)' }}>Belum ada lagu dalam playlist ini.</div>
-              <button
-                className="btn-primary"
-                style={{ marginTop: '16px', display: 'inline-flex', alignItems: 'center', gap: '8px' }}
-                onClick={() => regenerateMadeForYouMix(pl.id)}
-              >
-                <RefreshCw size={15} /> Racik Lagu Sekarang
-              </button>
-            </div>
-          ) : (
-            <div className="empty-state">
-              <ListMusic size={64} color="var(--text-muted)" />
-              <h3>{t('noPlaylists')}</h3>
-              <p>{t('addSongs')}</p>
-            </div>
-          )}
-
-          {/* Search bar inside playlist */}
-          {canEditSongs && (
-            <div className="playlist-search-section" style={{ marginTop: '40px', paddingTop: '20px', borderTop: '1px solid var(--border-color)' }}>
-              <h2 style={{ fontSize: '18px', marginBottom: '16px' }}>{t('addSongToPlaylistLabel')}</h2>
-              <form onSubmit={handlePlaylistSearch} style={{ display: 'flex', gap: '12px', marginBottom: '20px' }}>
-                <input
-                  type="text"
-                  placeholder={t('searchPlaceholder')}
-                  value={playlistSearchQuery}
-                  onChange={(e) => setPlaylistSearchQuery(e.target.value)}
-                  className="search-input"
-                  style={{ flex: 1, padding: '12px 16px', borderRadius: '8px', border: '1px solid var(--border-color)', backgroundColor: 'var(--surface-color)', color: 'var(--text-primary)' }}
-                />
-                <button type="submit" className="btn-primary" disabled={isPlaylistSearching}>
-                  {isPlaylistSearching ? '...' : t('addSongs')}
-                </button>
-              </form>
-
-              {playlistSearchResults.length > 0 && (
-                <div className="library-list">
-                  {playlistSearchResults.map((song, i) => {
-                    const isAdded = pl.songs.some(s => (song.id && s.id === song.id) || (s.title === song.title && s.artist === song.artist));
-                    const badge = getAudioBadge(song);
-                    return (
-                      <div key={i} className="library-item"
-                        draggable={true}
-                        onDragStart={(e) => { setDraggedGlobalSong(song); applyDragGhost(e, song); }}
-                        onDragEnd={(e) => { setDraggedGlobalSong(null); (e.currentTarget as HTMLElement).classList.remove('dragging-origin'); }}
-                      >
-                        <div
-                          className="library-item-art"
-                          onClick={() => playSingleSong(song)}
-                          title={t('playSong')}
-                          style={{ cursor: 'pointer' }}
-                        >
-                          <img src={(getCleanThumbnail(song.thumbnail) || getHighResImage(song.cover))} alt={song.title} />
-                          <div className="library-item-play"><Play size={16} fill="currentColor" /></div>
-                        </div>
-                        <div className="library-item-info">
-                          <div className="library-item-title" title={song.title}>{song.title}</div>
-                          <div className="library-item-artist" style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                            <span>{song.artist}</span>
-                            {badge && (
-                              <span className={`suggestion-badge badge-${badge.type}`}>
-                                {badge.type === 'audio' && <Music size={10} strokeWidth={2.4} />}
-                                {badge.type === 'lyrics' && <FileText size={10} strokeWidth={2.4} />}
-                                {badge.type === 'video' && <Film size={10} strokeWidth={2.4} />}
-                                <span>{badge.type === 'audio' ? t('badgeAudio') : badge.type === 'lyrics' ? t('badgeLyrics') : t('badgeVideo')}</span>
-                              </span>
-                            )}
-                          </div>
-                        </div>
-                        <div className="library-item-duration">{formatTime(song.duration)}</div>
-                        <button
-                          className={isAdded ? "btn-secondary" : "btn-primary"}
-                          onClick={() => addSongToPlaylist(pl.id, song)}
-                          disabled={isAdded}
-                          style={{ display: 'flex', alignItems: 'center', gap: '6px' }}
-                        >
-                          {isAdded ? (
-                            <>
-                              <Check size={14} />
-                              <span>{t('addedToPlaylist')}</span>
-                            </>
-                          ) : (
-                            <>
-                              <Plus size={14} />
-                              <span>{t('addSongs')}</span>
-                            </>
-                          )}
-                        </button>
-                      </div>
-                    );
-                  })}
-                </div>
-              )}
-            </div>
-          )}
-
-        </div>
-      );
-    }
-
-    return (
-      <div className="page-content">
-        <div className="page-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-          <div>
-            <h1>{t('myLibrary')}</h1>
-            <p className="page-subtitle">{playlists.filter(pl => pl.discordId === discordUser?.id || savedPlaylists.includes(pl.id) || pl.collaborators?.includes(discordUser?.id || '')).length} {t('playlist')}</p>
-          </div>
-          <div style={{ display: 'flex', gap: '8px' }}>
-            <button className="btn-secondary" onClick={() => setShowImportPlaylist(true)}>
-              <Download size={16} /> {t('importPlaylist')}
-            </button>
-            <button className="btn-primary" onClick={() => setShowCreatePlaylist(true)}>
-              <Plus size={16} /> {t('createPlaylist')}
-            </button>
-          </div>
-        </div>
-        {playlists.filter(pl => pl.discordId === discordUser?.id || savedPlaylists.includes(pl.id) || pl.collaborators?.includes(discordUser?.id || '')).length > 0 ? (
-          <div className="playlist-grid">
-            {playlists.filter(pl => pl.discordId === discordUser?.id || savedPlaylists.includes(pl.id) || pl.collaborators?.includes(discordUser?.id || '')).map(pl => (
-              <div key={pl.id} className="playlist-card" onClick={() => { navigate('playlist-detail', { playlistId: pl.id }); }}
-                onContextMenu={(e) => {
-                  e.preventDefault();
-                  setContextMenu(null);
-                  setPlaylistContextMenu({ x: e.clientX, y: e.clientY, playlist: pl });
-                }}>
-                <div className="playlist-card-art">
-                  {isMixPlaylist(pl) ? (
-                    <img src={getMixPlaylistCover(pl, { songs: pl.songs, playHistory, likedSongs })} alt={pl.name} />
-                  ) : pl.avatar ? (
-                    <img src={pl.avatar} alt={pl.name} />
-                  ) : pl.songs.length > 0 ? (
-                    <img src={(getCleanThumbnail(pl.songs[0].thumbnail) || getHighResImage(pl.songs[0].cover))} alt={pl.name} />
-                  ) : (
-                    <div className="playlist-card-empty-art"><ListMusic size={32} color="var(--text-muted)" /></div>
-                  )}
-                  <div className="playlist-card-play"><Play size={20} fill="currentColor" /></div>
-                </div>
-                <div className="playlist-card-name">{pl.name}</div>
-                <div className="playlist-card-count">{pl.songs.length} {t('songs')}</div>
-              </div>
-            ))}
-          </div>
-        ) : (
-          <div className="empty-state">
-            <ListMusic size={64} color="var(--text-muted)" />
-            <h3>{t('noPlaylists')}</h3>
-            <p>{t('noPlaylistsDesc')}</p>
-          </div>
-        )}
-      </div>
-    );
-  };
-
-  const renderProfilePage = () => {
-    if (isLoadingProfile) return <div className="loading-state" style={{ marginTop: '50px' }}><Loader2 className="spin" size={40} color="var(--accent-primary)" /></div>;
-    if (!profileData && activeProfileId !== discordUser?.id) return <div className="empty-state" style={{ marginTop: '50px' }}><UserCircle size={64} color="var(--text-secondary)" /><p>Profil tidak ditemukan.</p></div>;
-
-    const isMe = activeProfileId === discordUser?.id;
-    const onlineFriend = onlineUsers.find(u => u.discordId === activeProfileId);
-
-    const displayUsername = profileData?.username ||
-      (isMe && discordUser ? (discordUser.global_name || discordUser.username) :
-        (onlineFriend ? onlineFriend.username : 'Unknown User'));
-
-    const displayAvatar = profileData?.avatarUrl ||
-      (isMe && discordUser ? (discordUser.avatar ? `https://cdn.discordapp.com/avatars/${discordUser.id}/${discordUser.avatar}.png` : `https://ui-avatars.com/api/?name=${discordUser.username}`) :
-        (onlineFriend ? (onlineFriend.avatarUrl || `https://ui-avatars.com/api/?name=${onlineFriend.username}`) : `https://ui-avatars.com/api/?name=${displayUsername}`));
-
-    const isPrivateStats = !isMe && !profileData?.privacySettings?.publicStats;
-    const isPrivateLikes = !isMe && !profileData?.privacySettings?.publicLikedSongs;
-    const displayBanner = profileData?.bannerUrl || null;
-
-    return (
-      <div className="profile-container" style={{ width: '100%', height: '100%', display: 'flex', flexDirection: 'column' }}>
-        <div className="profile-header" style={{
-          position: 'relative',
-          display: 'flex',
-          alignItems: 'flex-end',
-          gap: '24px',
-          padding: '80px 40px 40px 40px',
-          background: displayBanner ? `url(${displayBanner}) center/cover no-repeat` : 'linear-gradient(to bottom, rgba(80,80,80,0.6), rgba(18,18,18,1))',
-          boxShadow: '0 4px 60px rgba(0,0,0,0.5)'
-        }}>
-          {displayBanner && <div style={{ position: 'absolute', inset: 0, background: 'linear-gradient(to bottom, transparent, rgba(18,18,18,1))' }} />}
-
-          {isMe && (
-            <div style={{ position: 'absolute', top: '20px', right: '20px', zIndex: 2 }}>
-              {isEditingBanner ? (
-                <div style={{ display: 'flex', gap: '8px', background: 'rgba(0,0,0,0.8)', padding: '8px', borderRadius: '8px', backdropFilter: 'blur(10px)' }}>
-                  <input
-                    type="text"
-                    value={bannerInputUrl}
-                    onChange={(e) => setBannerInputUrl(e.target.value)}
-                    placeholder={t('enterBannerUrl') || 'Banner URL'}
-                    style={{ background: 'rgba(255,255,255,0.1)', border: '1px solid rgba(255,255,255,0.2)', color: 'white', padding: '6px 12px', borderRadius: '4px', fontSize: '12px', width: '250px' }}
-                    autoFocus
-                  />
-                  <input type="file" accept="image/*" style={{ display: 'none' }} id="banner-upload" onChange={(e) => {
-                    if (e.target.files && e.target.files[0]) {
-                      const p = (e.target.files[0] as any).path;
-                      if (p) setBannerInputUrl(`file:///${p.replace(/\\/g, '/')}`);
-                      else setBannerInputUrl(URL.createObjectURL(e.target.files[0]));
-                    }
-                  }} />
-                  <label htmlFor="banner-upload" style={{ cursor: 'pointer', padding: '6px', margin: 0, display: 'flex', alignItems: 'center', background: 'rgba(255,255,255,0.1)', color: 'white', border: '1px solid rgba(255,255,255,0.2)', borderRadius: '4px', transition: 'background 0.2s' }}
-                    onMouseOver={e => e.currentTarget.style.background = 'rgba(255,255,255,0.25)'}
-                    onMouseOut={e => e.currentTarget.style.background = 'rgba(255,255,255,0.1)'}
-                    title="Upload Image">
-                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="17 8 12 3 7 8"></polyline><line x1="12" y1="3" x2="12" y2="15"></line></svg>
-                  </label>
-                  <button style={{ padding: '6px 16px', fontSize: '12px', background: 'rgba(255,255,255,0.1)', color: 'white', border: '1px solid rgba(255,255,255,0.2)', borderRadius: '4px', cursor: 'pointer', fontWeight: 600, transition: 'background 0.2s' }}
-                    onMouseOver={e => e.currentTarget.style.background = 'rgba(255,255,255,0.25)'}
-                    onMouseOut={e => e.currentTarget.style.background = 'rgba(255,255,255,0.1)'}
-                    onClick={() => {
-                      const newBannerUrl = bannerInputUrl;
-                      setProfileData((prev: any) => ({ ...prev, bannerUrl: newBannerUrl }));
-                      if ((window as any).electronAPI && discordUser) {
-                        (window as any).electronAPI.updateBanner(discordUser.id, newBannerUrl)
-                          .then((ok: boolean) => { if (!ok) showToast('Gagal menyimpan banner', 'error'); });
-                      }
-                      setIsEditingBanner(false);
-                    }}>{t('save') || 'Save'}
-                  </button>
-                  <button style={{ padding: '6px', background: 'transparent', color: 'white', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', opacity: 0.7, transition: 'opacity 0.2s' }}
-                    onMouseOver={e => e.currentTarget.style.opacity = '1'}
-                    onMouseOut={e => e.currentTarget.style.opacity = '0.7'}
-                    onClick={() => setIsEditingBanner(false)}>
-                    <X size={16} />
-                  </button>
-                </div>
-              ) : (
-                <button
-                  className="btn-icon"
-                  style={{ background: 'rgba(0,0,0,0.5)', padding: '8px', borderRadius: '50%' }}
-                  onClick={() => {
-                    setBannerInputUrl(displayBanner || '');
-                    setIsEditingBanner(true);
-                  }}
-                  title={t('editBanner') || "Edit Banner"}
-                >
-                  <Edit3 size={18} color="white" />
-                </button>
-              )}
-            </div>
-          )}
-
-          <div style={{ position: 'relative', zIndex: 1, display: 'flex', gap: '24px', width: '100%', alignItems: 'flex-end' }}>
-            <img src={displayAvatar} alt={displayUsername} style={{ width: '160px', height: '160px', borderRadius: '50%', objectFit: 'cover', boxShadow: '0 8px 32px rgba(0,0,0,0.6)' }} onError={(e) => handleAvatarError(e, activeProfileId, displayUsername)} />
-            <div style={{ flex: 1 }}>
-              <div style={{ fontSize: '12px', fontWeight: '700', textTransform: 'uppercase', letterSpacing: '1px', marginBottom: '8px', color: 'var(--text-secondary)' }}>{t('profile') || 'Profil'}</div>
-              <h1 style={{ fontSize: '56px', fontWeight: '900', margin: '0 0 12px 0', letterSpacing: '-2px', lineHeight: '1', color: 'var(--text-primary)' }}>{displayUsername}</h1>
-
-              {/* Custom Status Cloud Thought Bubble */}
-              {(() => {
-                const userCustomStatus = isMe ? myCustomStatus : (onlineFriend?.customStatus || profileData?.customStatus || '');
-                if (userCustomStatus) {
-                  return (
-                    <div
-                      className={`profile-cloud-bubble ${isMe ? 'clickable' : ''}`}
-                      onClick={() => { if (isMe) { setCustomStatusInput(myCustomStatus); setShowStatusModal(true); } }}
-                      title={isMe ? t('customStatusTooltip') : ''}
-                      style={{ marginBottom: '14px' }}
-                    >
-                      <MessageSquare size={16} color="var(--accent-primary)" />
-                      <span style={{ fontWeight: 500 }}>{userCustomStatus}</span>
-                    </div>
-                  );
-                } else if (isMe) {
-                  return (
-                    <div
-                      className="profile-cloud-bubble clickable"
-                      onClick={() => { setCustomStatusInput(''); setShowStatusModal(true); }}
-                      style={{ marginBottom: '14px', opacity: 0.7, borderStyle: 'dashed' }}
-                    >
-                      <MessageSquare size={15} color="var(--text-secondary)" />
-                      <span style={{ fontSize: '12px' }}>{t('customStatusSet')}</span>
-                    </div>
-                  );
-                }
-                return null;
-              })()}
-
-              <div style={{ display: 'flex', gap: '20px', color: 'var(--text-secondary)', fontSize: '14px', fontWeight: '500', alignItems: 'center' }}>
-                <span><strong style={{ color: 'var(--text-primary)' }}>{profileData?.followers?.length || 0}</strong> {t('followers')}</span>
-                {profileData?.playlists?.length > 0 && <span><strong style={{ color: 'var(--text-primary)' }}>{profileData.playlists.length}</strong> {t('publicPlaylists')}</span>}
-              </div>
-
-              <div style={{ marginTop: '24px', display: 'flex', alignItems: 'center', gap: '16px' }}>
-                {!isMe && discordUser && activeProfileId && (
-                  <button
-                    className="primary-btn"
-                    style={{
-                      background: following.includes(activeProfileId) ? 'transparent' : 'var(--accent-primary)',
-                      color: following.includes(activeProfileId) ? 'var(--text-primary)' : '#000',
-                      border: following.includes(activeProfileId) ? '1px solid var(--text-secondary)' : 'none',
-                      display: 'flex', alignItems: 'center', gap: '8px', padding: '8px 24px', borderRadius: '30px', fontWeight: '800', cursor: 'pointer', transition: 'all 0.2s'
-                    }}
-                    onClick={async () => {
-                      if ((window as any).electronAPI) {
-                        const newFollowing = await (window as any).electronAPI.toggleFollow(discordUser.id, activeProfileId);
-                        if (newFollowing) {
-                          setFollowing(newFollowing);
-                          setProfileData((prev: any) => {
-                            if (!prev) return prev;
-                            const newFollowers = newFollowing.includes(activeProfileId)
-                              ? [...(prev.followers || []), discordUser.id]
-                              : (prev.followers || []).filter((id: string) => id !== discordUser.id);
-                            return { ...prev, followers: newFollowers };
-                          });
-                        }
-                      }
-                    }}
-                  >
-                    {following.includes(activeProfileId) ? <MinusCircle size={18} /> : <PlusCircle size={18} />}
-                    {following.includes(activeProfileId) ? '-Rep' : '+Rep'}
-                  </button>
-                )}
-
-                {isMe && (
-                  <div style={{ display: 'flex', gap: '24px', alignItems: 'center' }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '10px', cursor: 'pointer' }} onClick={() => setSettings((p: any) => ({ ...p, privacySettings: { ...(p.privacySettings || {}), publicStats: !(settings.privacySettings?.publicStats !== false) } }))}>
-                      <div style={{ width: '36px', height: '20px', background: settings.privacySettings?.publicStats !== false ? 'var(--accent-primary)' : 'rgba(255,255,255,0.2)', borderRadius: '10px', position: 'relative', transition: 'all 0.2s' }}>
-                        <div style={{ width: '16px', height: '16px', background: settings.privacySettings?.publicStats !== false ? '#000' : '#fff', borderRadius: '50%', position: 'absolute', top: '2px', left: settings.privacySettings?.publicStats !== false ? '18px' : '2px', transition: 'all 0.2s' }} />
-                      </div>
-                      <span style={{ fontSize: '13px', color: 'var(--text-secondary)', fontWeight: 600 }}>{t('isPublic')} {t('listeningTime')}</span>
-                    </div>
-
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '10px', cursor: 'pointer' }} onClick={() => setSettings((p: any) => ({ ...p, privacySettings: { ...(p.privacySettings || {}), publicLikedSongs: !(settings.privacySettings?.publicLikedSongs !== false) } }))}>
-                      <div style={{ width: '36px', height: '20px', background: settings.privacySettings?.publicLikedSongs !== false ? 'var(--accent-primary)' : 'rgba(255,255,255,0.2)', borderRadius: '10px', position: 'relative', transition: 'all 0.2s' }}>
-                        <div style={{ width: '16px', height: '16px', background: settings.privacySettings?.publicLikedSongs !== false ? '#000' : '#fff', borderRadius: '50%', position: 'absolute', top: '2px', left: settings.privacySettings?.publicLikedSongs !== false ? '18px' : '2px', transition: 'all 0.2s' }} />
-                      </div>
-                      <span style={{ fontSize: '13px', color: 'var(--text-secondary)', fontWeight: 600 }}>{t('isPublic')} {t('likedSongs')}</span>
-                    </div>
-                  </div>
-                )}
-              </div>
-            </div>
-          </div>
-        </div>
-
-        <div className="profile-content" style={{ padding: '32px 40px', display: 'flex', flexDirection: 'column', gap: '40px', flex: 1 }}>
-          <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1fr) minmax(0, 1.5fr)', gap: '40px', alignItems: 'start' }}>
-            {/* Kiri: Stats & Liked Songs */}
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '40px' }}>
-              {!isPrivateStats && (
-                <div className="profile-section">
-                  <h2 style={{ fontSize: '20px', fontWeight: '700', marginBottom: '16px', display: 'flex', alignItems: 'center', gap: '10px' }}><Clock size={20} color="var(--accent-primary)" /> {t('listeningTime')}</h2>
-                  <div style={{ background: 'rgba(255,255,255,0.02)', padding: '24px', borderRadius: '16px', display: 'flex', alignItems: 'center', gap: '20px', border: '1px solid rgba(255,255,255,0.05)' }}>
-                    <div style={{ fontSize: '32px', fontWeight: '800', color: 'var(--accent-primary)' }}>
-                      {Math.floor((profileData?.stats?.totalListenSeconds || 0) / 3600)}<span style={{ fontSize: '14px', color: 'var(--text-secondary)' }}>h</span> {Math.floor(((profileData?.stats?.totalListenSeconds || 0) % 3600) / 60)}<span style={{ fontSize: '14px', color: 'var(--text-secondary)' }}>m</span>
-                    </div>
-                    {(() => {
-                      if (listenerPercentile !== null && listenerPercentile <= 50) return (
-                        <div style={{ padding: '4px 10px', background: 'rgba(0,0,0,0.2)', border: 'none', borderRadius: '6px', color: 'var(--text-secondary)', fontSize: '12px', fontWeight: '600', display: 'flex', alignItems: 'center', gap: '6px' }}>
-                          <Trophy size={14} /> {t('topListener').replace('{percent}', listenerPercentile.toString())}
-                        </div>
-                      );
-                      return null;
-                    })()}
-                  </div>
-                </div>
-              )}
-
-              <div className="profile-section">
-                <h2 style={{ fontSize: '20px', fontWeight: '700', marginBottom: '16px', display: 'flex', alignItems: 'center', gap: '10px' }}><Heart size={20} color="#ff4081" /> {t('likedSongs')}</h2>
-                {isPrivateLikes ? (
-                  <div style={{ fontSize: '14px', color: 'var(--text-muted)' }}>{t('isPrivate')}</div>
-                ) : profileData?.likedSongs?.length > 0 ? (
-                  <div className="song-list" style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-                    {profileData.likedSongs.slice(0, 5).map((song: any, i: number) => (
-                      <div key={song.id} className="song-item" style={{ display: 'flex', alignItems: 'center', gap: '12px', padding: '10px', background: 'rgba(255,255,255,0.02)', borderRadius: '10px', cursor: 'pointer' }} onClick={() => startPlayingFromList(profileData.likedSongs, i)} onContextMenu={(e) => handleContextMenu(e, song)}>
-                        <img src={song.thumbnail || 'https://images.unsplash.com/photo-1614680376573-df3480f0c6ff?auto=format&fit=crop&w=500&q=80'} alt={song.title} style={{ width: '40px', height: '40px', borderRadius: '6px', objectFit: 'cover' }} />
-                        <div style={{ overflow: 'hidden', flex: 1 }}>
-                          <div style={{ fontSize: '14px', fontWeight: '600', color: 'var(--text-primary)', whiteSpace: 'nowrap', textOverflow: 'ellipsis', overflow: 'hidden' }}>{song.title}</div>
-                          <div style={{ fontSize: '12px', color: 'var(--text-secondary)', whiteSpace: 'nowrap', textOverflow: 'ellipsis', overflow: 'hidden' }}>{song.artist}</div>
-                        </div>
-                        <div style={{ color: 'var(--text-secondary)', fontSize: '12px' }}>{formatTime(song.duration)}</div>
-                      </div>
-                    ))}
-                    {profileData.likedSongs.length > 5 && (
-                      <div style={{ fontSize: '12px', color: 'var(--text-secondary)', padding: '10px', textAlign: 'center', background: 'rgba(255,255,255,0.02)', borderRadius: '10px', cursor: 'pointer' }} onClick={() => startPlayingFromList(profileData.likedSongs, 0)}>
-                        + {profileData.likedSongs.length - 5} {t('songs')}
-                      </div>
-                    )}
-                  </div>
-                ) : (
-                  <div style={{ fontSize: '14px', color: 'var(--text-muted)' }}>{t('noLikedSongsYet')}</div>
-                )}
-              </div>
-            </div>
-
-            {/* Kanan: Playlists */}
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '40px' }}>
-              <div className="profile-section">
-                <h2 style={{ fontSize: '20px', fontWeight: '700', marginBottom: '16px', display: 'flex', alignItems: 'center', gap: '10px' }}><ListMusic size={20} color="var(--accent-primary)" /> {t('publicPlaylists')}</h2>
-                {profileData?.playlists?.length > 0 ? (
-                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(180px, 1fr))', gap: '20px' }}>
-                    {profileData.playlists.map((pl: any) => (
-                      <div key={pl.id} className="playlist-card" style={{ background: 'var(--bg-card)', padding: '16px', borderRadius: '12px', cursor: 'pointer', transition: 'all 0.2s', border: '1px solid var(--border-color)' }} onClick={() => { setActivePlaylistId(pl.id); setActivePage('playlist-detail'); }}>
-                        <div style={{ width: '100%', aspectRatio: '1', borderRadius: '8px', overflow: 'hidden', marginBottom: '12px', background: 'var(--bg-card-hover)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                          {pl.avatar ? (
-                            <img src={pl.avatar} alt={pl.name} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
-                          ) : (
-                            <ListMusic size={40} color="var(--text-muted)" />
-                          )}
-                        </div>
-                        <div style={{ fontSize: '15px', fontWeight: '700', color: 'var(--text-primary)', marginBottom: '4px', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{pl.name}</div>
-                        <div style={{ fontSize: '13px', color: 'var(--text-secondary)', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                          <span>{pl.songs?.length || 0} {t('songs')}</span>
-                          {(pl as any).saveCount > 0 && (
-                            <span style={{ fontSize: '12px', background: 'rgba(255,255,255,0.1)', padding: '2px 8px', borderRadius: '12px', color: 'var(--text-primary)' }}>
-                              {(pl as any).saveCount} Saves
-                            </span>
-                          )}
-                        </div>
-
-                        {!isMe && discordUser && (
-                          <button className="btn-secondary" style={{ width: '100%', marginTop: '12px', padding: '6px 0', fontSize: '12px', justifyContent: 'center', background: savedPlaylists.includes(pl.id) ? '#ff5555' : '#5865f2', color: 'white', border: 'none' }} onClick={async (e) => {
-                            e.stopPropagation();
-                            if ((window as any).electronAPI) {
-                              const newSaved = await (window as any).electronAPI.toggleSavePlaylist(discordUser.id, pl.id);
-                              if (newSaved) {
-                                setSavedPlaylists(newSaved);
-                                if (newSaved.includes(pl.id)) {
-                                  showToast(t('toastPlaylistSaved'), 'success');
-                                } else {
-                                  showToast(t('toastPlaylistRemoved'), 'success');
-                                }
-                              }
-                            }
-                          }}>
-                            {savedPlaylists.includes(pl.id) ? t('removeFromLibrary') : t('saveToLibrary')}
-                          </button>
-                        )}
-                      </div>
-                    ))}
-                  </div>
-                ) : (
-                  <div style={{ fontSize: '14px', color: 'var(--text-muted)' }}>Tidak ada playlist publik.</div>
-                )}
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
-    );
-  };
+  const renderProfilePage = () => (
+    <ProfilePage
+      isLoadingProfile={isLoadingProfile}
+      profileData={profileData}
+      setProfileData={setProfileData}
+      activeProfileId={activeProfileId}
+      discordUser={discordUser}
+      onlineUsers={onlineUsers}
+      isEditingBanner={isEditingBanner}
+      setIsEditingBanner={setIsEditingBanner}
+      bannerInputUrl={bannerInputUrl}
+      setBannerInputUrl={setBannerInputUrl}
+      myCustomStatus={myCustomStatus}
+      setCustomStatusInput={setCustomStatusInput}
+      setShowStatusModal={setShowStatusModal}
+      following={following}
+      setFollowing={setFollowing}
+      settings={settings}
+      setSettings={setSettings}
+      listenerPercentile={listenerPercentile}
+      savedPlaylists={savedPlaylists}
+      setSavedPlaylists={setSavedPlaylists}
+      setActivePlaylistId={setActivePlaylistId}
+      setActivePage={setActivePage}
+      handleAvatarError={handleAvatarError}
+      startPlayingFromList={startPlayingFromList}
+      handleContextMenu={handleContextMenu}
+      formatTime={formatTime}
+      showToast={showToast}
+      t={t}
+    />
+  );
 
   const renderSettingsPage = () => (
-    <div className="page-content">
-      <div className="page-header">
-        <h1>{t('settingsTitle')}</h1>
-      </div>
-
-      {updateInfo.available && (
-        <div className="settings-section" style={{ background: 'rgba(35, 165, 89, 0.1)', border: '1px solid rgba(35, 165, 89, 0.3)' }}>
-          <div className="settings-section-title" style={{ color: '#23a559' }}>
-            <DownloadCloud size={20} style={{ marginRight: 8 }} /> {t('updateSectionTitle')}
-          </div>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 12 }}>
-            <div style={{ color: 'var(--text-secondary)' }}>
-              {updateInfo.error ? (
-                <span style={{ color: '#f23f43' }}>Error: {updateInfo.error}</span>
-              ) : updateInfo.ready ? (
-                t('updateReadyMsg')
-              ) : updateInfo.downloading ? (
-                `${t('downloadingUpdateMsg')} ${Math.round(updateInfo.progress)}%`
-              ) : (
-                t('updateAvailableMsg')
-              )}
-            </div>
-
-            <div style={{ display: 'flex', gap: '8px' }}>
-              {updateInfo.downloading ? (
-                <div style={{ width: 100, height: 6, background: 'rgba(255,255,255,0.1)', borderRadius: 3, overflow: 'hidden' }}>
-                  <div style={{ width: `${updateInfo.progress}%`, height: '100%', background: '#23a559', transition: 'width 0.2s' }} />
-                </div>
-              ) : updateInfo.ready ? (
-                <button className="btn-primary" style={{ background: '#23a559' }} onClick={() => (window as any).electronAPI.installUpdate()}>
-                  {t('restartApp')}
-                </button>
-              ) : (
-                <button className="btn-primary" onClick={() => { (window as any).electronAPI.downloadUpdate(); setUpdateInfo(prev => ({ ...prev, downloading: true })); }}>
-                  {t('downloadNow')}
-                </button>
-              )}
-            </div>
-          </div>
-        </div>
-      )}
-
-      {!updateInfo.available && !updateInfo.downloading && !updateInfo.ready && (
-        <div className="settings-section">
-          <div className="settings-section-title">
-            <DownloadCloud size={18} style={{ marginRight: 8 }} /> {t('appUpdateSectionTitle')}
-          </div>
-          <div className="settings-item" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-            <div className="settings-item-info" style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-              <div className="settings-item-title">{t('manualUpdateCheck')}</div>
-              <div className="settings-item-desc" style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                {t('manualUpdateDesc')}
-                {updateInfo.checkMsg && (
-                  <span style={{
-                    color: updateInfo.checkMsg.includes('Error') ? '#f23f43' : 'var(--accent-primary)',
-                    fontSize: '0.95em',
-                    fontWeight: 500
-                  }}>
-                    {updateInfo.checkMsg}
-                  </span>
-                )}
-              </div>
-            </div>
-            <button className="btn-secondary" style={{ whiteSpace: 'nowrap' }} disabled={updateInfo.isChecking} onClick={async () => {
-              try {
-                setUpdateInfo(prev => ({ ...prev, isChecking: true, checkMsg: t('checkingUpdate') }));
-                const hasUpdate = await (window as any).electronAPI.checkForUpdates();
-                if (!hasUpdate) {
-                  setUpdateInfo(prev => ({ ...prev, isChecking: false, checkMsg: t('alreadyLatest') }));
-                } else {
-                  setUpdateInfo(prev => ({ ...prev, isChecking: false, checkMsg: '' }));
-                }
-              } catch (err: any) {
-                let errorMsg = err.message || err;
-                if (typeof errorMsg === 'string' && errorMsg.includes('No published versions on GitHub')) {
-                  errorMsg = t('noPublishedVersions');
-                }
-                setUpdateInfo(prev => ({ ...prev, isChecking: false, checkMsg: `Error: ${errorMsg}` }));
-              }
-            }}>
-              {t('manualUpdateCheck')}
-            </button>
-          </div>
-        </div>
-      )}
-
-      {/* Tema Tampilan */}
-      <div className="settings-section">
-        <div className="settings-section-title" style={{ display: 'flex', alignItems: 'center', gap: '8px' }}><Paintbrush size={20} color="var(--accent-primary)" /> {t('themeDisplay')}</div>
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(120px, 1fr))', gap: '12px' }}>
-          {[
-            { id: 'default', name: t('themeDefault'), desc: t('themeDefaultDesc') },
-            { id: 'minimalist', name: t('themeMinimalist'), desc: t('themeMinimalistDesc') },
-            { id: 'vibrant', name: t('themeVibrant'), desc: t('themeVibrantDesc') }
-          ].map(theme => (
-            <button
-              key={theme.id}
-              onClick={() => {
-                const newSettings = { ...settings, theme: theme.id };
-                setSettings(newSettings);
-                localStorage.setItem('donpollo_settings', JSON.stringify(newSettings));
-              }}
-              style={{
-                background: settings.theme === theme.id ? 'var(--accent-primary)' : 'var(--bg-card)',
-                color: settings.theme === theme.id ? 'var(--accent-text, #ffffff)' : 'var(--text-primary)',
-                border: `1px solid ${settings.theme === theme.id ? 'var(--accent-primary)' : 'var(--border-color)'}`,
-                padding: '16px', borderRadius: '12px', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '8px', cursor: 'pointer', transition: 'all 0.2s'
-              }}
-            >
-              <div style={{ fontWeight: 'bold', fontSize: '14px' }}>{theme.name}</div>
-              <div style={{ fontSize: '11px', opacity: 0.8 }}>{theme.desc}</div>
-            </button>
-          ))}
-        </div>
-
-        {/* Font & Shape Settings — Always Visible for All Themes */}
-        <div style={{ marginTop: '16px', display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '16px' }}>
-
-          {/* Font Family */}
-          <div style={{ background: 'var(--bg-card)', padding: '12px 16px', borderRadius: 'var(--global-radius)' }}>
-            <div style={{ fontSize: '13px', color: 'var(--text-primary)', marginBottom: '8px' }}>{t('fontFamily')}</div>
-            <select value={settings.fontFamily || 'Inter'}
-              onChange={(e) => {
-                const newSettings = { ...settings, fontFamily: e.target.value };
-                setSettings(newSettings);
-                localStorage.setItem('donpollo_settings', JSON.stringify(newSettings));
-              }}
-              className="settings-select" style={{ width: '100%' }}>
-              <option value="Inter">{t('fontInter')}</option>
-              <option value="Roboto">{t('fontRoboto')}</option>
-              <option value="Outfit">{t('fontOutfit')}</option>
-              <option value="monospace">{t('fontMono')}</option>
-            </select>
-          </div>
-
-          {/* Border Radius */}
-          <div style={{ background: 'var(--bg-card)', padding: '12px 16px', borderRadius: 'var(--global-radius)' }}>
-            <div style={{ fontSize: '13px', color: 'var(--text-primary)', marginBottom: '8px' }}>{t('shapeStyle')}</div>
-            <select value={settings.borderRadiusMode || 'rounded'}
-              onChange={(e) => {
-                const newSettings = { ...settings, borderRadiusMode: e.target.value };
-                setSettings(newSettings);
-                localStorage.setItem('donpollo_settings', JSON.stringify(newSettings));
-              }}
-              className="settings-select" style={{ width: '100%' }}>
-              <option value="rounded">{t('shapeRounded')}</option>
-              <option value="sharp">{t('shapeSharp')}</option>
-              <option value="pill">{t('shapePill')}</option>
-            </select>
-          </div>
-        </div>
-
-      </div>
-
-      {/* Akun Discord */}
-      <div className="settings-section">
-        <div className="settings-section-title" style={{ display: 'flex', alignItems: 'center', gap: '8px' }}><UserCircle size={20} color="var(--accent-primary)" /> {t('accountSection')}</div>
-        {discordUser ? (
-          <div className="settings-account-card">
-            {getDiscordAvatar(discordUser) ? (
-              <img src={getDiscordAvatar(discordUser)!} alt="avatar" className="settings-avatar" onError={(e) => handleAvatarError(e, discordUser.id, discordUser.username)} />
-            ) : (
-              <div className="settings-avatar-placeholder">{(discordUser.global_name || discordUser.username).charAt(0).toUpperCase()}</div>
-            )}
-            <div className="settings-account-info">
-              <div className="settings-account-name">{discordUser.global_name || discordUser.username}</div>
-              <div className="settings-account-sub">@{discordUser.username}#{discordUser.discriminator} • Discord</div>
-            </div>
-            <div className="settings-account-actions" style={{ marginLeft: 'auto', display: 'flex', gap: '8px', alignItems: 'center' }}>
-              <button
-                className="btn-secondary"
-                onClick={() => refreshDiscordProfile(true)}
-                disabled={isRefreshingProfile}
-                title={t('syncProfile')}
-                style={{ display: 'flex', alignItems: 'center', gap: '6px' }}
-              >
-                <RefreshCw size={15} className={isRefreshingProfile ? 'spin' : ''} /> {t('syncProfile')}
-              </button>
-              <button className="btn-secondary" onClick={logoutDiscord} style={{ color: '#ff5555' }}>
-                <LogOut size={16} /> {t('logout')}
-              </button>
-            </div>
-          </div>
-        ) : (
-          <div className="settings-account-card">
-            <div className="settings-avatar-placeholder" style={{ background: '#5865F2' }}>
-              <svg width="24" height="24" viewBox="0 0 127.14 96.36" fill="white">
-                <path d="M107.7,8.07A105.15,105.15,0,0,0,81.47,0a72.06,72.06,0,0,0-3.36,6.83A97.68,97.68,0,0,0,49,6.83,72.37,72.37,0,0,0,45.64,0,105.89,105.89,0,0,0,19.39,8.09C2.79,32.65-1.71,56.6.54,80.21h0A105.73,105.73,0,0,0,32.71,96.36,77.7,77.7,0,0,0,39.6,85.25a68.42,68.42,0,0,1-10.85-5.18c.91-.66,1.8-1.34,2.66-2a75.57,75.57,0,0,0,64.32,0c.87.71,1.76,1.39,2.66,2a68.68,68.68,0,0,1-10.87,5.19,77,77,0,0,0,6.89,11.1A105.25,105.25,0,0,0,126.6,80.22h0C129.24,52.84,122.09,29.11,107.7,8.07ZM42.45,65.69C36.18,65.69,31,60,31,53s5-12.74,11.43-12.74S54,46,53.89,53,48.84,65.69,42.45,65.69Zm42.24,0C78.41,65.69,73.25,60,73.25,53s5-12.74,11.44-12.74S96.23,46,96.12,53,91.08,65.69,84.69,65.69Z" />
-              </svg>
-            </div>
-            <div className="settings-account-info">
-              <div className="settings-account-name">{t('notLoggedIn')}</div>
-              <div className="settings-account-sub">{t('loginToSync')}</div>
-            </div>
-            <button className="btn-primary" onClick={loginWithDiscord} style={{ marginLeft: 'auto' }}>
-              <LogIn size={16} /> {t('loginDiscord')}
-            </button>
-          </div>
-        )}
-        <div style={{ height: '1px', backgroundColor: 'var(--border-color)', margin: '16px 0' }}></div>
-        <div className="settings-row">
-          <div>
-            <div className="settings-label">{t('discordActivity')}</div>
-            <div className="settings-desc">{t('discordActivityDesc')}</div>
-          </div>
-          <button className={`settings-toggle ${settings.discordActivityEnabled !== false ? 'on' : ''}`} onClick={() => {
-            const newVal = !(settings.discordActivityEnabled !== false);
-            setSettings((p: any) => ({ ...p, discordActivityEnabled: newVal }));
-            localStorage.setItem('donpollo_settings', JSON.stringify({ ...settings, discordActivityEnabled: newVal }));
-            if (!newVal && (window as any).electronAPI) {
-              (window as any).electronAPI.clearActivity();
-            }
-          }}>
-            {settings.discordActivityEnabled !== false && <Check size={14} />}
-          </button>
-        </div>
-        <div style={{ height: '1px', backgroundColor: 'var(--border-color)', margin: '16px 0' }}></div>
-        <div className="settings-row">
-          <div>
-            <div className="settings-label">{t('autoplayLabel')}</div>
-            <div className="settings-desc">{t('autoplayDesc')}</div>
-          </div>
-          <button className={`settings-toggle ${settings.autoplay !== false ? 'on' : ''}`} onClick={() => {
-            const newVal = !(settings.autoplay !== false);
-            const nextSettings = { ...settings, autoplay: newVal };
-            setSettings(nextSettings);
-            localStorage.setItem('donpollo_settings', JSON.stringify(nextSettings));
-          }}>
-            {settings.autoplay !== false && <Check size={14} />}
-          </button>
-        </div>
-      </div>
-
-      {/* Bahasa */}
-      <div className="settings-section">
-        <div className="settings-section-title" style={{ display: 'flex', alignItems: 'center', gap: '8px' }}><Globe size={20} color="var(--accent-primary)" /> {t('languageSection')}</div>
-        <div className="settings-row">
-          <div>
-            <div className="settings-label">{t('languageLabel')}</div>
-            <div className="settings-desc">{t('languageDesc')}</div>
-          </div>
-          <div className="language-picker">
-            {(['id', 'en', 'ja', 'ko'] as Language[]).map(lang => (
-              <button
-                key={lang}
-                className={`lang-btn ${language === lang ? 'active' : ''}`}
-                onClick={() => setLanguage(lang)}
-              >
-                <img src={
-                  lang === 'id' ? 'https://flagcdn.com/id.svg' :
-                    lang === 'en' ? 'https://flagcdn.com/us.svg' :
-                      lang === 'ja' ? 'https://flagcdn.com/jp.svg' :
-                        'https://flagcdn.com/kr.svg'
-                } alt={lang} />
-                {lang === 'id' ? 'Indonesia' : lang === 'en' ? 'English' : lang === 'ja' ? '日本語' : '한국어'}
-              </button>
-            ))}
-          </div>
-        </div>
-      </div>
-
-      {/* Audio */}
-      <div className="settings-section">
-        <div className="settings-section-title" style={{ display: 'flex', alignItems: 'center', gap: '8px' }}><Volume2 size={20} color="var(--accent-primary)" /> {t('audioSection')}</div>
-        <div className="settings-row">
-          <div>
-            <div className="settings-label">{t('audioOutputDevice')}</div>
-            <div className="settings-desc">{t('audioOutputDeviceDesc')}</div>
-          </div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-            <select
-              className="settings-select"
-              style={{ maxWidth: '240px', textOverflow: 'ellipsis' }}
-              value={settings.audioOutputDeviceId || 'default'}
-              onChange={e => {
-                const newId = e.target.value;
-                setSettings((p: any) => {
-                  const updated = { ...p, audioOutputDeviceId: newId };
-                  localStorage.setItem('donpollo_settings', JSON.stringify(updated));
-                  return updated;
-                });
-                applyAudioOutputDevice(newId);
-              }}
-            >
-              <option value="default">{t('defaultAudioDevice')}</option>
-              {audioOutputDevices
-                .filter(dev => dev.deviceId !== 'default' && dev.deviceId !== 'communications')
-                .map(dev => (
-                  <option key={dev.deviceId} value={dev.deviceId} title={dev.label}>
-                    {dev.label || `Audio Device (${dev.deviceId.slice(0, 8)}...)`}
-                  </option>
-                ))}
-            </select>
-            <button
-              className="chat-btn"
-              style={{
-                padding: '6px',
-                borderRadius: '8px',
-                border: '1px solid var(--border-color)',
-                background: 'rgba(255,255,255,0.05)',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                cursor: isRefreshingAudioDevices ? 'not-allowed' : 'pointer'
-              }}
-              onClick={() => loadAudioOutputDevices()}
-              title={t('refreshAudioDevices')}
-              disabled={isRefreshingAudioDevices}
-            >
-              <RotateCcw
-                size={14}
-                style={{
-                  animation: isRefreshingAudioDevices ? 'spin 1s linear infinite' : 'none',
-                  color: 'var(--text-secondary)'
-                }}
-              />
-            </button>
-          </div>
-        </div>
-        <div className="settings-row">
-          <div>
-            <div className="settings-label">{t('defaultVolume')}</div>
-            <div className="settings-desc">{t('defaultVolumeDesc')}</div>
-          </div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-            <span style={{ color: 'var(--text-secondary)', fontSize: '13px' }}>{Math.round(volume * 100)}%</span>
-            <input type="range" min="0" max="1" step="0.01" value={volume}
-              onChange={e => setVolume(parseFloat(e.target.value))}
-              style={{ width: '120px', accentColor: 'var(--accent-primary)' }} />
-          </div>
-        </div>
-        <div className="settings-row">
-          <div>
-            <div className="settings-label">{t('audioQuality')}</div>
-            <div className="settings-desc">{t('audioQualityDesc')}</div>
-          </div>
-          <select className="settings-select"
-            value={settings.audioQuality || 'auto'}
-            onChange={e => setSettings((p: any) => ({ ...p, audioQuality: e.target.value }))}>
-            <option value="auto">{t('qualityAuto')}</option>
-            <option value="high">{t('qualityHigh')}</option>
-            <option value="medium">{t('qualityMedium')}</option>
-          </select>
-        </div>
-        <div className="settings-row">
-          <div>
-            <div className="settings-label">{t('normalizeAudio')}</div>
-            <div className="settings-desc">{t('normalizeAudioDesc')}</div>
-          </div>
-          <button className={`settings-toggle ${settings.normalizeAudio ? 'on' : ''}`}
-            onClick={() => {
-              const newVal = !settings.normalizeAudio;
-              setSettings((p: any) => ({ ...p, normalizeAudio: newVal }));
-              localStorage.setItem('donpollo_settings', JSON.stringify({ ...settings, normalizeAudio: newVal }));
-            }}>
-            {settings.normalizeAudio && <Check size={14} />}
-          </button>
-        </div>
-        <div className="settings-row">
-          <div>
-            <div className="settings-label">{t('prioritizeOfficialAudio')}</div>
-            <div className="settings-desc">{t('prioritizeOfficialAudioDesc')}</div>
-          </div>
-          <button className={`settings-toggle ${settings.prioritizeOfficialAudio !== false ? 'on' : ''}`}
-            onClick={() => {
-              const newVal = !(settings.prioritizeOfficialAudio !== false);
-              setSettings((p: any) => ({ ...p, prioritizeOfficialAudio: newVal }));
-              localStorage.setItem('donpollo_settings', JSON.stringify({ ...settings, prioritizeOfficialAudio: newVal }));
-              searchCacheRef.current = {};
-            }}>
-            {settings.prioritizeOfficialAudio !== false && <Check size={14} />}
-          </button>
-        </div>
-        <div className="settings-row">
-          <div>
-            <div className="settings-label">{t('vibeSettingTitle')}</div>
-            <div className="settings-desc">{t('vibeSettingDesc')}</div>
-          </div>
-          <button className={`settings-toggle ${settings.vibeCheckEnabled !== false ? 'on' : ''}`}
-            onClick={() => {
-              const newVal = !(settings.vibeCheckEnabled !== false);
-              setSettings((p: any) => ({ ...p, vibeCheckEnabled: newVal }));
-              localStorage.setItem('donpollo_settings', JSON.stringify({ ...settings, vibeCheckEnabled: newVal }));
-            }}>
-            {settings.vibeCheckEnabled !== false && <Check size={14} />}
-          </button>
-        </div>
-        {settings.vibeCheckEnabled !== false && (
-          <div className="settings-row">
-            <div>
-              <div className="settings-label">{t('vibeInterval')}</div>
-              <div className="settings-desc">{t('vibeIntervalSongs').replace('{0}', String(settings.vibeCheckInterval || 15))}</div>
-            </div>
-            <select className="settings-select"
-              value={settings.vibeCheckInterval !== undefined ? settings.vibeCheckInterval : 15}
-              onChange={e => {
-                const val = Number(e.target.value);
-                setSettings((p: any) => ({ ...p, vibeCheckInterval: val }));
-                localStorage.setItem('donpollo_settings', JSON.stringify({ ...settings, vibeCheckInterval: val }));
-              }}>
-              <option value="10">{t('vibeIntervalSongs').replace('{0}', '10')}</option>
-              <option value="15">{t('vibeIntervalSongs').replace('{0}', '15')}</option>
-              <option value="20">{t('vibeIntervalSongs').replace('{0}', '20')}</option>
-              <option value="0">{t('vibeIntervalManual')}</option>
-            </select>
-          </div>
-        )}
-        <div className="settings-row">
-          <div>
-            <div className="settings-label">{t('searchStorefront')}</div>
-            <div className="settings-desc">{t('searchStorefrontDesc')}</div>
-          </div>
-          <select className="settings-select"
-            value={settings.searchCountry || localStorage.getItem('donpollo_search_country') || 'auto'}
-            onChange={e => {
-              const val = e.target.value;
-              localStorage.setItem('donpollo_search_country', val);
-              setSettings((p: any) => ({ ...p, searchCountry: val }));
-              searchCacheRef.current = {};
-            }}>
-            <option value="auto">{t('storefrontAuto')}</option>
-            <option value="ID">{t('storefrontId')}</option>
-            <option value="US">{t('storefrontUs')}</option>
-            <option value="JP">{t('storefrontJp')}</option>
-            <option value="KR">{t('storefrontKr')}</option>
-          </select>
-        </div>
-        <div className="settings-row">
-          <div>
-            <div className="settings-label">
-              {t('crossfadeLabel')}
-              {isGuest && activePartyId && (
-                <span style={{ marginLeft: '8px', fontSize: '11px', color: 'var(--accent-primary)', fontWeight: 'bold' }}>
-                  (Disinkronkan dari Host)
-                </span>
-              )}
-            </div>
-            <div className="settings-desc">{t('crossfadeDesc')}</div>
-          </div>
-          <select className="settings-select"
-            disabled={isGuest && !!activePartyId}
-            style={isGuest && !!activePartyId ? { opacity: 0.6, cursor: 'not-allowed' } : {}}
-            value={localStorage.getItem('donpollo_crossfade') || '0'}
-            onChange={e => {
-              localStorage.setItem('donpollo_crossfade', e.target.value);
-              setSettings((p: any) => ({ ...p, crossfade: e.target.value }));
-            }}>
-            <option value="0">{t('crossfadeOff')}</option>
-            <option value="3">3 {t('crossfadeSec')}</option>
-            <option value="5">5 {t('crossfadeSec')}</option>
-            <option value="7">7 {t('crossfadeSec')}</option>
-            <option value="10">10 {t('crossfadeSec')}</option>
-          </select>
-        </div>
-      </div>
-
-      {/* Tampilan */}
-      <div className="settings-section">
-        <div className="settings-section-title" style={{ display: 'flex', alignItems: 'center', gap: '8px' }}><Settings size={20} color="var(--accent-primary)" /> {t('displaySection')}</div>
-        <div className="settings-row">
-          <div>
-            <div className="settings-label">{t('autoLyrics')}</div>
-            <div className="settings-desc">{t('autoLyricsDesc')}</div>
-          </div>
-          <button className={`settings-toggle ${settings.autoLyrics ? 'on' : ''}`}
-            onClick={() => setSettings((p: any) => ({ ...p, autoLyrics: !p.autoLyrics }))}>
-            {settings.autoLyrics && <Check size={14} />}
-          </button>
-        </div>
-        <div className="settings-row">
-          <div>
-            <div className="settings-label">{t('autoSidebar')}</div>
-            <div className="settings-desc">{t('autoSidebarDesc')}</div>
-          </div>
-          <button className={`settings-toggle ${settings.autoSidebar !== false ? 'on' : ''}`}
-            onClick={() => setSettings((p: any) => ({ ...p, autoSidebar: !(p.autoSidebar !== false) }))}>
-            {settings.autoSidebar !== false && <Check size={14} />}
-          </button>
-        </div>
-
-        <div className="settings-row">
-          <div>
-            <div className="settings-label">{t('closeToTray')}</div>
-            <div className="settings-desc">{t('closeToTrayDesc')}</div>
-          </div>
-          <button className={`settings-toggle ${settings.closeToTray ? 'on' : ''}`}
-            onClick={() => {
-              const newVal = !settings.closeToTray;
-              setSettings((p: any) => ({ ...p, closeToTray: newVal }));
-              if ((window as any).electronAPI?.setCloseToTray) {
-                (window as any).electronAPI.setCloseToTray(newVal);
-              }
-            }}>
-            {settings.closeToTray && <Check size={14} />}
-          </button>
-        </div>
-      </div>
-
-      {/* Audio & Equalizer */}
-      <div className="settings-section">
-        <div className="settings-section-title" style={{ display: 'flex', alignItems: 'center', gap: '8px' }}><Headphones size={20} color="var(--accent-primary)" /> {t('equalizer')}</div>
-        <div className="settings-row">
-          <div>
-            <div className="settings-label">{t('eqEnabled')}</div>
-            <div className="settings-desc">{t('eqEnabledDesc')}</div>
-          </div>
-          <button className={`settings-toggle ${settings.eqEnabled ? 'on' : ''}`}
-            onClick={() => setSettings((p: any) => ({ ...p, eqEnabled: !p.eqEnabled }))}>
-            {settings.eqEnabled && <Check size={14} />}
-          </button>
-        </div>
-        {settings.eqEnabled && (
-          <div className="settings-eq-container" style={{ position: 'relative', marginTop: '16px', background: 'var(--bg-secondary)', borderRadius: '12px', padding: '24px', border: '1px solid rgba(255,255,255,0.05)' }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '16px', alignItems: 'center' }}>
-              <div style={{ display: 'flex', gap: '12px', alignItems: 'center' }}>
-                <span style={{ fontSize: '12px', fontWeight: 'bold', color: 'var(--text-secondary)', textTransform: 'uppercase' }}>Preset</span>
-                <select
-                  className="settings-select"
-                  style={{ padding: '10px 36px 10px 14px', fontSize: '12px', minWidth: '120px' }}
-                  value={
-                    (() => {
-                      const b = (settings.eqBands || [0, 0, 0, 0, 0]).join(',');
-                      if (b === '0,0,0,0,0') return 'default';
-                      if (b === '6,4,0,-2,-4') return 'bass_booster';
-                      if (b === '-2,2,4,3,-1') return 'pop';
-                      if (b === '4,3,-1,2,5') return 'electronic';
-                      if (b === '3,1,0,1,3') return 'acoustic';
-                      return 'custom';
-                    })()
-                  }
-                  onChange={(e) => {
-                    const v = e.target.value;
-                    let newBands = [...(settings.eqBands || [0, 0, 0, 0, 0])];
-                    if (v === 'default') newBands = [0, 0, 0, 0, 0];
-                    if (v === 'bass_booster') newBands = [6, 4, 0, -2, -4];
-                    if (v === 'pop') newBands = [-2, 2, 4, 3, -1];
-                    if (v === 'electronic') newBands = [4, 3, -1, 2, 5];
-                    if (v === 'acoustic') newBands = [3, 1, 0, 1, 3];
-                    setSettings((p: any) => ({ ...p, eqBands: newBands }));
-                  }}
-                >
-                  <option value="custom">Custom</option>
-                  <option value="default">Default (Flat)</option>
-                  <option value="bass_booster">Bass Booster</option>
-                  <option value="pop">Pop</option>
-                  <option value="electronic">Electronic</option>
-                  <option value="acoustic">Acoustic</option>
-                </select>
-              </div>
-              <span style={{ fontSize: '11px', fontWeight: 'bold', color: 'var(--text-secondary)' }}>+12dB</span>
-            </div>
-
-            <div style={{ position: 'relative', height: '180px', width: '100%', marginBottom: '8px' }}>
-              {/* SVG Background Curve */}
-              <svg viewBox="0 0 1000 180" style={{ position: 'absolute', top: 0, left: 0, width: '100%', height: '100%', overflow: 'visible', pointerEvents: 'none' }} preserveAspectRatio="none">
-                <defs>
-                  <linearGradient id="eqGrad" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="0%" stopColor="#1db954" stopOpacity="0.6" />
-                    <stop offset="100%" stopColor="#1db954" stopOpacity="0.0" />
-                  </linearGradient>
-                </defs>
-                <path d={(() => {
-                  const bands = settings.eqBands || [0, 0, 0, 0, 0];
-                  let path = "";
-                  const points = bands.map((val: number, i: number) => ({
-                    x: 100 + (i * 200),
-                    y: 90 - (val / 12) * 75
-                  }));
-                  path += `M 0,180 L 0,${points[0].y} L ${points[0].x},${points[0].y} `;
-                  for (let i = 1; i < points.length; i++) {
-                    const p0 = points[i - 1];
-                    const p1 = points[i];
-                    const dx = (p1.x - p0.x) / 2;
-                    path += `C ${p0.x + dx},${p0.y} ${p1.x - dx},${p1.y} ${p1.x},${p1.y} `;
-                  }
-                  path += `L 1000,${points[points.length - 1].y} L 1000,180 Z`;
-                  return path;
-                })()} fill="url(#eqGrad)" />
-                <path d={(() => {
-                  const bands = settings.eqBands || [0, 0, 0, 0, 0];
-                  let path = "";
-                  const points = bands.map((val: number, i: number) => ({
-                    x: 100 + (i * 200),
-                    y: 90 - (val / 12) * 75
-                  }));
-                  path += `M 0,${points[0].y} L ${points[0].x},${points[0].y} `;
-                  for (let i = 1; i < points.length; i++) {
-                    const p0 = points[i - 1];
-                    const p1 = points[i];
-                    const dx = (p1.x - p0.x) / 2;
-                    path += `C ${p0.x + dx},${p0.y} ${p1.x - dx},${p1.y} ${p1.x},${p1.y} `;
-                  }
-                  path += `L 1000,${points[points.length - 1].y}`;
-                  return path;
-                })()} fill="none" stroke="#1db954" strokeWidth="3" />
-
-                {/* Reference lines */}
-                <line x1="0" y1="90" x2="1000" y2="90" stroke="rgba(255,255,255,0.1)" strokeWidth="1" />
-                {Array.from({ length: 5 }).map((_, i) => (
-                  <line key={i} x1={100 + (i * 200)} y1="0" x2={100 + (i * 200)} y2="180" stroke="rgba(255,255,255,0.05)" strokeWidth="1" />
-                ))}
-              </svg>
-
-              {/* Sliders Overlaid */}
-              <div style={{ position: 'absolute', top: 0, left: 0, width: '100%', height: '100%', zIndex: 2 }}>
-                {['60Hz', '150Hz', '400Hz', '1kHz', '15kHz'].map((label, i) => (
-                  <div key={label} style={{ position: 'absolute', left: `${10 + i * 20}%`, transform: 'translateX(-50%)', height: '100%', width: '30px' }}>
-                    <div style={{ flex: 1, position: 'relative', width: '100%', height: '100%' }}>
-                      <input type="range" min="-12" max="12" step="0.1"
-                        value={(settings.eqBands || [0, 0, 0, 0, 0])[i]}
-                        onChange={(e) => {
-                          const newBands = [...(settings.eqBands || [0, 0, 0, 0, 0])];
-                          newBands[i] = parseFloat(e.target.value);
-                          setSettings((p: any) => ({ ...p, eqBands: newBands }));
-                        }}
-                        style={{
-                          position: 'absolute', top: '50%', left: '50%', transform: 'translate(-50%, -50%) rotate(-90deg)',
-                          width: '180px', height: '20px', margin: 0, opacity: 0, cursor: 'pointer', zIndex: 3
-                        }}
-                      />
-                      {/* Fake Knob */}
-                      <div style={{
-                        position: 'absolute', left: '50%', transform: 'translate(-50%, -50%)',
-                        top: `${(1 - (((settings.eqBands || [0, 0, 0, 0, 0])[i] + 12) / 24)) * 100}%`,
-                        width: '14px', height: '14px', borderRadius: '50%', background: '#fff',
-                        boxShadow: '0 2px 4px rgba(0,0,0,0.5)', pointerEvents: 'none'
-                      }} />
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </div>
-
-            <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '4px' }}>
-              <span style={{ fontSize: '11px', fontWeight: 'bold', color: 'var(--text-secondary)' }}>-12dB</span>
-            </div>
-            <div style={{ position: 'relative', width: '100%', height: '20px' }}>
-              {['60Hz', '150Hz', '400Hz', '1kHz', '15kHz'].map((label, i) => (
-                <span key={label} style={{ position: 'absolute', left: `${10 + i * 20}%`, transform: 'translateX(-50%)', fontSize: '11px', color: 'var(--text-secondary)', textAlign: 'center', fontWeight: '600' }}>{label}</span>
-              ))}
-            </div>
-          </div>
-        )}
-      </div>
-
-
-
-      {/* Data */}
-      <div className="settings-section">
-        <div className="settings-section-title" style={{ display: 'flex', alignItems: 'center', gap: '8px' }}><Library size={20} color="var(--accent-primary)" /> {t('dataSection')}</div>
-        <div className="settings-row">
-          <div>
-            <div className="settings-label">{t('playHistory')}</div>
-            <div className="settings-desc">{playHistory.length} {t('savedSongs')}</div>
-          </div>
-          <button className="btn-secondary" onClick={() => setShowClearHistoryConfirm(true)}>
-            <Trash2 size={14} /> {t('clearHistory')}
-          </button>
-        </div>
-        <div className="settings-row">
-          <div>
-            <div className="settings-label">{t('playlist')}</div>
-            <div className="settings-desc">{playlists.length} {t('playlistCount')}</div>
-          </div>
-          <button className="btn-secondary" onClick={() => setShowClearPlaylistsConfirm(true)}>
-            <Trash2 size={14} /> {t('deleteAllPlaylists')}
-          </button>
-        </div>
-        <div className="settings-row" style={{ alignItems: 'flex-start' }}>
-          <div style={{ flex: 1, paddingRight: '16px' }}>
-            <div className="settings-label">{t('cacheModeLabel')}</div>
-            <div className="settings-desc">{t('cacheModeDesc')}</div>
-
-            <div style={{ marginTop: '12px', display: 'flex', flexDirection: 'column', gap: '8px' }}>
-              <label style={{ display: 'flex', alignItems: 'flex-start', gap: '8px', cursor: 'pointer' }}>
-                <input type="radio" name="cacheMode" value="smart"
-                  checked={!settings.cacheMode || settings.cacheMode === 'smart'}
-                  onChange={() => {
-                    setSettings((p: any) => ({ ...p, cacheMode: 'smart' }));
-                    localStorage.setItem('donpollo_settings', JSON.stringify({ ...settings, cacheMode: 'smart' }));
-                  }}
-                  style={{ marginTop: '4px' }}
-                />
-                <div>
-                  <div style={{ fontSize: '14px', fontWeight: 600, color: 'var(--text-primary)', display: 'flex', alignItems: 'center', gap: '6px' }}><Zap size={16} color="var(--accent-primary)" /> {t('cacheModeSmartCache')}</div>
-                  <div style={{ fontSize: '12px', color: 'var(--text-secondary)' }}>{t('cacheModeSmartCacheDesc')}</div>
-                </div>
-              </label>
-
-              <label style={{ display: 'flex', alignItems: 'flex-start', gap: '8px', cursor: 'pointer' }}>
-                <input type="radio" name="cacheMode" value="stream"
-                  checked={settings.cacheMode === 'stream'}
-                  onChange={() => {
-                    setSettings((p: any) => ({ ...p, cacheMode: 'stream' }));
-                    localStorage.setItem('donpollo_settings', JSON.stringify({ ...settings, cacheMode: 'stream' }));
-                  }}
-                  style={{ marginTop: '4px' }}
-                />
-                <div>
-                  <div style={{ fontSize: '14px', fontWeight: 600, color: 'var(--text-primary)', display: 'flex', alignItems: 'center', gap: '6px' }}><Radio size={16} color="var(--accent-primary)" /> {t('cacheModeStream')}</div>
-                  <div style={{ fontSize: '12px', color: 'var(--text-secondary)' }}>{t('cacheModeStreamDesc')}</div>
-                </div>
-              </label>
-
-              <label style={{ display: 'flex', alignItems: 'flex-start', gap: '8px', cursor: 'pointer' }}>
-                <input type="radio" name="cacheMode" value="temp"
-                  checked={settings.cacheMode === 'temp'}
-                  onChange={() => {
-                    setSettings((p: any) => ({ ...p, cacheMode: 'temp' }));
-                    localStorage.setItem('donpollo_settings', JSON.stringify({ ...settings, cacheMode: 'temp' }));
-                  }}
-                  style={{ marginTop: '4px' }}
-                />
-                <div>
-                  <div style={{ fontSize: '14px', fontWeight: 600, color: 'var(--text-primary)', display: 'flex', alignItems: 'center', gap: '6px' }}><Timer size={16} color="var(--accent-primary)" /> {t('cacheModeTemp')}</div>
-                  <div style={{ fontSize: '12px', color: 'var(--text-secondary)' }}>{t('cacheModeTempDesc')}</div>
-                </div>
-              </label>
-            </div>
-          </div>
-        </div>
-        <div className="settings-row">
-          <div>
-            <div className="settings-label">{t('cacheLocation') || 'Cache Folder Location'}</div>
-            <div className="settings-desc">{t('cacheLocationDesc') || 'Choose a folder to store downloaded songs'}</div>
-          </div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-            {cachePath && (
-              <div style={{ fontSize: '11px', color: 'var(--text-muted)', textAlign: 'right' }}>
-                <span style={{ fontFamily: 'var(--font-mono)' }}>{cachePath}</span>
-              </div>
-            )}
-            <button className="btn-secondary" style={{ whiteSpace: 'nowrap' }} onClick={handleChangeCacheDir}>
-              {t('changeLocation') || 'Change Location'}
-            </button>
-          </div>
-        </div>
-        <div className="settings-row">
-          <div>
-            <div className="settings-label">{t('clearAudioCache')}</div>
-            <div className="settings-desc">{t('audioCacheDesc')}</div>
-          </div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-            <span style={{ color: 'var(--text-muted)', fontSize: '13px', whiteSpace: 'nowrap' }}>
-              {(cacheSize / (1024 * 1024)).toFixed(1)} MB
-            </span>
-            <button className="btn-secondary" style={{ whiteSpace: 'nowrap' }} onClick={handleClearCache}>
-              <Trash2 size={14} /> {t('delete')}
-            </button>
-          </div>
-        </div>
-        <div className="settings-row">
-          <div>
-            <div className="settings-label">{t('appVersion')}</div>
-            <div className="settings-desc">Don Pollo Music Desktop</div>
-          </div>
-          {/* @ts-ignore */}
-          <span style={{ color: 'var(--text-muted)', fontSize: '13px' }}>v{__APP_VERSION__ || '1.0.0-BETA'}</span>
-        </div>
-      </div>
-    </div>
+    <SettingsPage
+      updateInfo={updateInfo}
+      setUpdateInfo={setUpdateInfo}
+      settings={settings}
+      setSettings={setSettings}
+      discordUser={discordUser}
+      getDiscordAvatar={getDiscordAvatar}
+      handleAvatarError={handleAvatarError}
+      refreshDiscordProfile={refreshDiscordProfile}
+      isRefreshingProfile={isRefreshingProfile}
+      logoutDiscord={logoutDiscord}
+      loginWithDiscord={loginWithDiscord}
+      language={language}
+      setLanguage={setLanguage}
+      audioOutputDevices={audioOutputDevices}
+      applyAudioOutputDevice={applyAudioOutputDevice}
+      loadAudioOutputDevices={loadAudioOutputDevices}
+      isRefreshingAudioDevices={isRefreshingAudioDevices}
+      volume={volume}
+      setVolume={setVolume}
+      searchCacheRef={searchCacheRef}
+      isGuest={isGuest}
+      activePartyId={activePartyId}
+      customEqPresets={customEqPresets}
+      setCustomEqPresets={setCustomEqPresets}
+      newEqPresetName={newEqPresetName}
+      setNewEqPresetName={setNewEqPresetName}
+      playHistoryCount={playHistory.length}
+      playlistsCount={playlists.length}
+      setShowClearHistoryConfirm={setShowClearHistoryConfirm}
+      setShowClearPlaylistsConfirm={setShowClearPlaylistsConfirm}
+      cachePath={cachePath}
+      cacheSize={cacheSize}
+      handleChangeCacheDir={handleChangeCacheDir}
+      handleClearCache={handleClearCache}
+      showToast={showToast}
+      t={t}
+    />
   );
-
-
 
   const renderDownloadsPage = () => (
-    <div className="page-content offline-mode" style={{ minHeight: '100%', display: 'flex', flexDirection: 'column', background: 'var(--bg-primary)' }}>
-      <div style={{ padding: '32px 32px 16px 32px' }}>
-        <h1 style={{ fontSize: '28px', fontWeight: '800', marginBottom: '24px', color: 'var(--text-primary)' }}>{t('offlineVault')}</h1>
-
-        {/* Dashboard Cards */}
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(250px, 1fr))', gap: '16px', marginBottom: '32px' }}>
-
-          <div style={{ background: 'var(--bg-card)', padding: '20px', borderRadius: '12px', border: '1px solid var(--border-color)', display: 'flex', flexDirection: 'column', gap: '12px' }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', color: 'var(--accent-primary)' }}>
-              <DownloadCloud size={20} />
-              <h3 style={{ fontSize: '12px', fontWeight: '700', letterSpacing: '1px', textTransform: 'uppercase' }}>{t('localCollection')}</h3>
-            </div>
-            <div style={{ fontSize: '36px', fontWeight: '800' }}>{downloadedSongs.length} <span style={{ fontSize: '16px', color: 'var(--text-secondary)', fontWeight: '600' }}>{t('songs')}</span></div>
-            <div style={{ fontSize: '12px', color: 'var(--text-secondary)' }}>{t('availableOffline')}</div>
-          </div>
-
-          <div style={{ background: 'var(--bg-card)', padding: '20px', borderRadius: '12px', border: '1px solid var(--border-color)', display: 'flex', flexDirection: 'column', gap: '12px' }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', color: 'var(--text-secondary)' }}>
-              <Database size={20} />
-              <h3 style={{ fontSize: '12px', fontWeight: '700', letterSpacing: '1px', textTransform: 'uppercase' }}>{t('storage')}</h3>
-            </div>
-            <div style={{ fontSize: '36px', fontWeight: '800' }}>{(cacheSize / (1024 * 1024)).toFixed(1)} <span style={{ fontSize: '16px', color: 'var(--text-secondary)', fontWeight: '600' }}>MB</span></div>
-            <div style={{ fontSize: '12px', color: 'var(--text-secondary)' }}>{t('totalStorageUsed')}</div>
-          </div>
-
-          <div style={{ background: 'linear-gradient(135deg, #00c6ff, #0072ff)', padding: '20px', borderRadius: '12px', display: 'flex', flexDirection: 'column', gap: '8px', justifyContent: 'center', position: 'relative', overflow: 'hidden' }}>
-            <div style={{ position: 'absolute', right: '-15px', bottom: '-15px', opacity: 0.15 }}>
-              <WifiOff size={100} />
-            </div>
-            <h3 style={{ fontSize: '16px', fontWeight: '800', color: '#fff', zIndex: 1, letterSpacing: '0.5px' }}>{t('listenUnlimited').split('\n').map((line, i) => <span key={i}>{line}{i === 0 ? <br /> : ''}</span>)}</h3>
-            <p style={{ fontSize: '12px', color: 'rgba(255,255,255,0.85)', zIndex: 1, margin: 0, marginTop: '4px', lineHeight: '1.4' }}>{t('listenUnlimitedDesc')}</p>
-          </div>
-
-        </div>
-
-        {/* List Section */}
-        {downloadedSongs.length === 0 ? (
-          <div className="empty-state" style={{ marginTop: '24px', color: 'var(--text-muted)' }}>
-            <FolderPlus size={64} style={{ marginBottom: '16px', opacity: 0.3 }} />
-            <h3 style={{ color: 'var(--text-secondary)' }}>{t('noDownloads')}</h3>
-            <p style={{ fontSize: '13px' }}>{t('noDownloadsDesc')}</p>
-          </div>
-        ) : (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '32px' }}>
-            <section>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
-                <h2 style={{ fontSize: '18px', fontWeight: '700', color: 'var(--text-primary)', display: 'flex', alignItems: 'center', gap: '8px' }}><FolderPlus size={20} color="#00c6ff" /> {t('offlineDownloads')}</h2>
-                <span style={{ fontSize: '12px', color: 'var(--accent-primary)', cursor: 'pointer', fontWeight: '600' }} onClick={() => startPlayingFromList(downloadedSongs, 0)}>{t('playAll')}</span>
-              </div>
-
-              <div style={{ background: 'var(--bg-card)', borderRadius: '12px', border: '1px solid var(--border-color)', overflow: 'hidden' }}>
-                <div style={{ display: 'grid', gridTemplateColumns: '40px 1fr 100px 80px', padding: '16px 24px', borderBottom: '1px solid var(--border-color)', fontSize: '11px', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '1px', fontWeight: '700' }}>
-                  <span>#</span>
-                  <span>{t('songDetail')}</span>
-                  <span>{t('duration')}</span>
-                  <span></span>
-                </div>
-
-                <div style={{ display: 'flex', flexDirection: 'column' }}>
-                  {downloadedSongs.map((song, i) => (
-                    <div key={i} className={`offline-row ${currentSong?.id === song.id ? 'active-row' : ''}`} style={{ display: 'grid', gridTemplateColumns: '40px 1fr 100px 80px', padding: '12px 24px', alignItems: 'center', transition: 'background 0.2s', cursor: 'pointer', borderBottom: i === downloadedSongs.length - 1 ? 'none' : '1px solid rgba(255,255,255,0.03)' }} onClick={() => startPlayingFromList(downloadedSongs, i)}
-                      draggable={true}
-                      onDragStart={(e) => { setDraggedGlobalSong(song); applyDragGhost(e, song); }}
-                      onDragEnd={(e) => { setDraggedGlobalSong(null); (e.currentTarget as HTMLElement).classList.remove('dragging-origin'); }}
-                    >
-                      <span style={{ color: currentSong?.id === song.id ? 'var(--accent-primary)' : 'var(--text-muted)', fontSize: '13px', fontWeight: '600' }}>{currentSong?.id === song.id ? <Play size={14} fill="currentColor" /> : String(i + 1).padStart(2, '0')}</span>
-                      <div style={{ display: 'flex', gap: '16px', alignItems: 'center', minWidth: 0 }}>
-                        <div style={{ position: 'relative', width: '40px', height: '40px', borderRadius: '6px', overflow: 'hidden', flexShrink: 0 }}>
-                          <img src={getCleanThumbnail(song.thumbnail) || getHighResImage(song.cover)} style={{ width: '100%', height: '100%', objectFit: 'cover' }} alt="Cover" />
-                          <div className="play-overlay" style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(0,0,0,0.6)', display: 'flex', alignItems: 'center', justifyContent: 'center', opacity: 0, transition: 'opacity 0.2s' }}>
-                            <Play fill="currentColor" size={16} />
-                          </div>
-                        </div>
-                        <div style={{ display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
-                          <div style={{ display: 'flex', alignItems: 'center', gap: '6px', overflow: 'hidden' }}>
-                            <span style={{ fontWeight: '600', fontSize: '14px', color: currentSong?.id === song.id ? 'var(--accent-primary)' : 'var(--text-primary)', whiteSpace: 'nowrap', textOverflow: 'ellipsis', overflow: 'hidden', display: 'block' }}>
-                              {song.title}
-                            </span>
-                            <span title="Tersedia Offline" style={{ flexShrink: 0 }}><CheckCircle2 size={14} color="#23a559" /></span>
-                          </div>
-                          <span style={{ fontSize: '12px', color: 'var(--text-secondary)', whiteSpace: 'nowrap', textOverflow: 'ellipsis', overflow: 'hidden', display: 'block' }}>{song.artist}</span>
-                        </div>
-                      </div>
-                      <div>
-                        <span style={{ fontSize: '13px', color: 'var(--text-secondary)' }}>{formatTime(song.duration)}</span>
-                      </div>
-                      <div style={{ display: 'flex', gap: '8px', justifyContent: 'flex-end' }}>
-                        <button
-                          className="btn-icon"
-                          onClick={(e) => { e.stopPropagation(); toggleLike(song); }}
-                          style={{ color: isLiked(song.id) ? '#ff6b9d' : 'var(--text-secondary)' }}
-                          title={isLiked(song.id) ? t('btnUnlike') : t('btnLike')}
-                        >
-                          <Heart size={16} fill={isLiked(song.id) ? 'currentColor' : 'none'} />
-                        </button>
-                        <button
-                          className="btn-icon delete-btn"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            if ((window as any).electronAPI) {
-                              (window as any).electronAPI.deleteDownloadedSong(song.id).then(() => {
-                                setDownloadedSongs(prev => prev.filter(s => s.id !== song.id));
-                              });
-                            }
-                          }}
-                          style={{ color: 'var(--text-secondary)' }}
-                          onMouseEnter={(e) => { e.currentTarget.style.color = '#ff4d4d'; }}
-                          onMouseLeave={(e) => { e.currentTarget.style.color = 'var(--text-secondary)'; }}
-                        >
-                          <Trash2 size={16} />
-                        </button>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            </section>
-          </div>
-        )}
-      </div>
-
-      <style>{`
-        .offline-row:hover { background: var(--bg-card-hover); }
-        .offline-row:hover .play-overlay { opacity: 1 !important; }
-      `}</style>
-    </div>
+    <DownloadsPage
+      downloadedSongs={downloadedSongs}
+      setDownloadedSongs={setDownloadedSongs}
+      cacheSize={cacheSize}
+      currentSong={currentSong}
+      startPlayingFromList={startPlayingFromList}
+      setDraggedGlobalSong={setDraggedGlobalSong}
+      formatTime={formatTime}
+      toggleLike={toggleLike}
+      isLiked={isLiked}
+      t={t}
+    />
   );
 
-  const renderArtistPage = () => {
-    return (
-      <div className="main-scroll artist-page" style={{ position: 'relative' }}>
-        {artistSongs.length > 0 && (
-          <div className="artist-hero-mosaic">
-            <div className="mosaic-grid">
-              {artistSongs.slice(0, 30).map((song, i) => (
-                <img key={i} src={(getCleanThumbnail(song.thumbnail) || getHighResImage(song.cover))} alt="" />
-              ))}
-            </div>
-            <div className="mosaic-overlay" />
-          </div>
-        )}
-        <div className="artist-hero" style={{ position: 'relative', zIndex: 1 }}>
-          <div className="artist-hero-info">
-            <h1 className="artist-hero-name">{activeArtist}</h1>
-            <p className="artist-hero-label">{isArtistPodcast ? t('podcast') : t('artistPage')}</p>
-            <div className="artist-hero-actions">
-              <button className="btn-primary" onClick={() => {
-                if (artistSongs.length > 0) startPlayingFromList(artistSongs, 0);
-              }}>
-                <Play size={20} fill="currentColor" /> {t('playAll')}
-              </button>
-              <div className="artist-filters">
-                <button
-                  className={`filter-btn ${artistFilter === 'popular' ? 'active' : ''}`}
-                  onClick={() => {
-                    setArtistFilter('popular');
-                    if (activeArtist) fetchArtistSongs(activeArtist, 'popular', isArtistPodcast, activePodcastMeta?.podcastId, activePodcastMeta?.feedUrl);
-                  }}
-                >
-                  {t('filterPopular')}
-                </button>
-                <button
-                  className={`filter-btn ${artistFilter === 'newest' ? 'active' : ''}`}
-                  onClick={() => {
-                    setArtistFilter('newest');
-                    if (activeArtist) fetchArtistSongs(activeArtist, 'newest', isArtistPodcast, activePodcastMeta?.podcastId, activePodcastMeta?.feedUrl);
-                  }}
-                >
-                  {t('filterNewest')}
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
-        <div className="artist-content" style={{ position: 'relative', zIndex: 1 }}>
-          {isArtistLoading ? (
-            <div className="loading-state">
-              <Loader2 size={48} className="spin-icon" />
-              <p>{t('loadingSongs')}</p>
-            </div>
-          ) : artistSongs.length > 0 ? (
-            <div className="song-list-container">
-              {artistSongs.map((song, idx) => (
-                <div
-                  key={idx}
-                  className={`song-row ${currentSong?.id === song.id ? 'active' : ''}`}
-                  onClick={() => playSingleSong(song)}
-                  onContextMenu={(e) => handleContextMenu(e, song)}
-                  draggable={true}
-                  onDragStart={(e) => { setDraggedGlobalSong(song); applyDragGhost(e, song); }}
-                  onDragEnd={(e) => { setDraggedGlobalSong(null); (e.currentTarget as HTMLElement).classList.remove('dragging-origin'); }}
-                >
-                  <div className="song-index">
-                    {currentSong?.id === song.id && isPlaying ? (
-                      <div className="playing-eq"><div /><div /><div /></div>
-                    ) : (
-                      <span>{idx + 1}</span>
-                    )}
-                    <div className="play-overlay"><Play size={12} fill="currentColor" /></div>
-                  </div>
-                  <div className="song-thumb-wrapper">
-                    <img src={(getCleanThumbnail(song.thumbnail) || getHighResImage(song.cover))} alt={song.title} className="song-thumb" />
-                  </div>
-                  <div className="song-info">
-                    <div className="song-title">{song.title}</div>
-                    <div className="song-artist" onClick={(e) => {
-                      e.stopPropagation();
-                    }}>{song.artist}</div>
-                  </div>
-                  <div className="song-duration">{song.duration ? formatTime(song.duration) : ''}</div>
-                  <div className="song-actions">
-                    <button className={`action-btn ${isLiked(song.id) ? 'active' : ''}`} onClick={(e) => { e.stopPropagation(); toggleLike(song); }}>
-                      <Heart size={16} fill={isLiked(song.id) ? 'currentColor' : 'none'} />
-                    </button>
-                  </div>
-                </div>
-              ))}
-            </div>
-          ) : !isArtistLoading ? (
-            <div className="empty-state">
-              {isArtistPodcast ? <Mic2 size={40} /> : <Music size={40} />}
-              <p>{t('noResults')}</p>
-            </div>
-          ) : null}
-        </div>
-      </div>
-    );
-  };
+  const renderArtistPage = () => (
+    <ArtistPage
+      activeArtist={activeArtist}
+      artistSongs={artistSongs}
+      artistFilter={artistFilter}
+      setArtistFilter={setArtistFilter}
+      isArtistLoading={isArtistLoading}
+      isArtistPodcast={isArtistPodcast}
+      activePodcastMeta={activePodcastMeta}
+      currentSong={currentSong}
+      isPlaying={isPlaying}
+      fetchArtistSongs={fetchArtistSongs}
+      startPlayingFromList={startPlayingFromList}
+      playSingleSong={playSingleSong}
+      handleContextMenu={handleContextMenu}
+      setDraggedGlobalSong={setDraggedGlobalSong}
+      formatTime={formatTime}
+      toggleLike={toggleLike}
+      isLiked={isLiked}
+      t={t}
+    />
+  );
 
   const renderHomePage = () => (
-    <div className="main-scroll">
-      {searchResults.length === 0 ? (
-        <div className="home-dashboard">
-
-          {/* ── Greeting ─────────────────────────────── */}
-          <div className="home-greeting">
-            <span className="greeting-text">{getGreeting()}</span>
-            <span className="greeting-date">
-              {new Date().toLocaleDateString(language === 'en' ? 'en-US' : language === 'ja' ? 'ja-JP' : language === 'ko' ? 'ko-KR' : 'id-ID', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })}
-            </span>
-          </div>
-
-          {/* ── Home Mode Toggle ─────────────────────── */}
-          <div className="home-mode-toggle">
-            <button
-              id="home-mode-music-btn"
-              className={`home-mode-btn ${homeMode === 'music' ? 'active' : ''}`}
-              onClick={() => { setHomeMode('music'); setSearchQuery(''); setSuggestions([]); }}
-            >
-              <Music size={15} />
-              {t('music')}
-            </button>
-            <button
-              id="home-mode-podcast-btn"
-              className={`home-mode-btn ${homeMode === 'podcast' ? 'active' : ''}`}
-              onClick={() => { setHomeMode('podcast'); setSearchQuery(''); setSuggestions([]); }}
-            >
-              <Mic2 size={15} />
-              {t('podcast')}
-            </button>
-          </div>
-
-          {/* ── Podcast Mode Content ─────────────────── */}
-          {homeMode === 'podcast' && (
-            <div className="podcast-home-content">
-              {topPodcasts.length === 0 ? (
-                <div style={{ textAlign: 'center', padding: '60px 0', color: 'var(--text-secondary)', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '16px' }}>
-                  <Mic2 size={52} style={{ opacity: 0.25 }} />
-                  <div style={{ fontSize: '14px', fontWeight: 500 }}>{t('loadingPodcasts')}</div>
-                  <div style={{ width: '200px', height: '3px', background: 'rgba(255,255,255,0.06)', borderRadius: '2px', overflow: 'hidden' }}>
-                    <div style={{ height: '100%', width: '40%', background: 'var(--accent-primary)', borderRadius: '2px', animation: 'shimmer-bar 1.4s ease-in-out infinite' }} />
-                  </div>
-                </div>
-              ) : (
-                <>
-                  {/* Podcast Featured Showcase */}
-                  {topPodcasts.length >= 1 && (() => {
-                    const hero = topPodcasts[podcastHeroIndex] || topPodcasts[0];
-                    return (
-                      <div className="podcast-showcase-container">
-                        <div className="podcast-showcase-hero" onClick={() => openArtistPage(`${hero.artist} ${hero.title}__podcast__`, hero.podcastId || hero.id, hero.feedUrl)} onContextMenu={(e) => handleContextMenu(e, hero)}>
-                          <div className="podcast-showcase-bg" style={{ backgroundImage: `url(${hero.thumbnail})` }} />
-                          <div className="podcast-showcase-content">
-                            <img src={hero.thumbnail} alt={hero.title} className="podcast-showcase-art" />
-                            <div className="podcast-showcase-info">
-                              <div className="podcast-showcase-badge">🎙️ {t('podcast')}</div>
-                              <h2 className="podcast-showcase-title">{hero.title}</h2>
-                              <p className="podcast-showcase-author">{hero.artist}</p>
-                              <div className="podcast-showcase-actions">
-                                <button className="showcase-episodes" onClick={(e) => { e.stopPropagation(); openArtistPage(`${hero.artist} ${hero.title}__podcast__`, hero.podcastId || hero.id, hero.feedUrl); }}>
-                                  <ListMusic size={18} /> Episodes
-                                </button>
-                              </div>
-                            </div>
-                          </div>
-                        </div>
-                      </div>
-                    );
-                  })()}
-
-                  {/* Podcast Grids */}
-                  {(() => {
-                    const renderPodcastGrid = (title: string, items: any[], icon: string | React.ReactNode) => {
-                      if (!items || items.length === 0) return null;
-                      return (
-                        <section className="home-section">
-                          <div className="section-header-v2">
-                            <div className="section-header-left">
-                              {typeof icon === 'string' && icon.startsWith('http') ? (
-                                <img src={icon} alt="" style={{ width: '24px', height: '16px', objectFit: 'cover', borderRadius: '3px' }} />
-                              ) : (
-                                <span style={{ display: 'flex', alignItems: 'center', color: 'var(--text-secondary)' }}>{icon}</span>
-                              )}
-                              <h2 className="section-title-v2">{title}</h2>
-                            </div>
-                          </div>
-                          <div className="podcast-grid-container">
-                            {items.map((item, i) => (
-                              <div
-                                key={i}
-                                className={`podcast-card ${currentSong?.id === item.id ? 'podcast-card-playing' : ''}`}
-                                onClick={() => openArtistPage(`${item.artist} ${item.title}__podcast__`, item.podcastId || item.id, item.feedUrl)}
-                                onContextMenu={(e) => handleContextMenu(e, item)}
-                              >
-                                <div className="podcast-card-art">
-                                  <img src={item.thumbnail} alt={item.title} />
-                                  {currentSong?.id === item.id && isPlaying && (
-                                    <div className="card-v2-eq">
-                                      <div className="eq-bar" /><div className="eq-bar" /><div className="eq-bar" />
-                                    </div>
-                                  )}
-                                </div>
-                                <div className="podcast-card-info">
-                                  <div className="podcast-card-genre">{item.genre}</div>
-                                  <div className="podcast-card-title" title={item.title}>{item.title}</div>
-                                  <div className="podcast-card-host">{item.artist}</div>
-                                </div>
-                              </div>
-                            ))}
-                          </div>
-                        </section>
-                      );
-                    };
-
-                    return (
-                      <>
-                        {renderPodcastGrid(t('topPodcasts') + " (Global)", podcastsUs, <Globe size={20} />)}
-                        {renderPodcastGrid(t('topPodcasts') + " (Indonesia)", podcastsId, 'https://flagcdn.com/w40/id.png')}
-                        {renderPodcastGrid(t('topPodcasts') + " (Japan)", podcastsJp, 'https://flagcdn.com/w40/jp.png')}
-                        {renderPodcastGrid(t('topPodcasts') + " (Korea)", podcastsKr, 'https://flagcdn.com/w40/kr.png')}
-                        {renderPodcastGrid(t('topPodcasts') + " (Latin)", podcastsLatin, 'https://flagcdn.com/w40/mx.png')}
-                      </>
-                    );
-                  })()}
-                </>
-              )}
-            </div>
-          )}
-
-          {/* ── Music Mode: Bento + Sections ─────────── */}
-          {homeMode === 'music' && (<>
-
-            {/* ── Wrapped Dashboard Hero ──────── */}
-            {wrappedData && wrappedData.historyCount > 0 && (new Date().getDate() <= 7 || localStorage.getItem('force_wrapped_visible') === 'true') && (
-              <div className="wrapped-editorial-hero">
-                 {wrappedData?.topSongs && wrappedData.topSongs.length > 0 && (
-                    <div className="editorial-bg-collage">
-                       {Array.from({ length: 32 }).map((_, idx) => {
-                          const songData = wrappedData.topSongs[idx % wrappedData.topSongs.length].song;
-                          return (
-                             <div 
-                                key={idx} 
-                                className="editorial-collage-item" 
-                                style={{ backgroundImage: `url(${getCleanThumbnail(songData.thumbnail) || getHighResImage(songData.cover)})` }}
-                             />
-                          );
-                       })}
-                    </div>
-                 )}
-                 <h2 className="editorial-title">Your <span className="editorial-title-accent">Wrapped</span></h2>
-                 <p className="editorial-sentence">
-                    {t('wrappedEditorialP1')}<span className="ed-highlight">{Math.floor(wrappedData.totalListenSeconds / 60)} {t('listeningTimeMins')}</span>{t('wrappedEditorialP2')}
-                    <span className="ed-highlight">{wrappedData.topMood ? t(`mood${wrappedData.topMood.charAt(0).toUpperCase() + wrappedData.topMood.slice(1)}` as any) : '-'}</span>
-                    {t('wrappedEditorialP3')}<span className="ed-highlight">{wrappedData.historyCount}</span>{t('wrappedEditorialP4')}
-                 </p>
-                 <div className="editorial-actions">
-                    <button className="editorial-btn-primary" onClick={() => {
-                        if (wrappedData?.topSongs) {
-                            const playlistSongs = wrappedData.topSongs.map((item: any) => item.song);
-                            startPlayingFromList(playlistSongs, 0);
-                        }
-                    }}>
-                       <Play size={18} fill="currentColor" /> {t('playYourTopSongs')}
-                    </button>
-                    <button className="editorial-btn-secondary" onClick={() => {
-                        setWrappedStoryIndex(0);
-                        setShowWrappedStory(true);
-                    }}>
-                       <Maximize2 size={18} /> {t('viewYourStory')}
-                    </button>
-                 </div>
-              </div>
-            )}
-
-            {/* ── Desktop Editorial "Dibuat Untuk Kamu" (Personalized Mixes) ── */}
-            {FEATURE_FLAGS.ENABLE_PLAYLIST_MIX && (
-            <section className="home-section mfy-shelf-container" id="made-for-you-shelf">
-              {/* Honest, Clear Header */}
-              <div className="section-header-v2" style={{ flexWrap: 'wrap', gap: '8px', marginBottom: '8px' }}>
-                <div className="section-header-left">
-                  <span className="mfy-header-icon" style={{ display: 'flex', alignItems: 'center' }}><Sparkles size={20} /></span>
-                  <div>
-                    <h2 className="section-title-v2" style={{ margin: 0 }}>{t('madeForYou')}</h2>
-                    <div style={{ fontSize: '12px', color: 'var(--text-secondary)', marginTop: '2px' }}>
-                      {t('madeForYouDesc')}
-                    </div>
-                  </div>
-                </div>
-
-                {/* Tactile Mood Filter Tabs */}
-                <div className="mfy-mood-tabs" role="tablist" aria-label="Pilih Mood">
-                  {([
-                    { id: 'chill', labelKey: 'vibeMoodChill' },
-                    { id: 'happy', labelKey: 'vibeMoodHappy' },
-                    { id: 'energetic', labelKey: 'vibeMoodEnergetic' },
-                    { id: 'sad', labelKey: 'vibeMoodSad' }
-                  ] as { id: VibeType; labelKey: any }[]).map(item => {
-                    const isSelected = selectedVibeMood === item.id;
-                    return (
-                      <button
-                        key={item.id}
-                        type="button"
-                        className={`mfy-mood-tab-btn ${isSelected ? 'active' : ''}`}
-                        onClick={() => {
-                          setSelectedVibeMood(item.id);
-                          localStorage.setItem('donpollo_current_vibe', item.id);
-                          const targetPl = madeForYouPlaylists.find(p => p.id === `vibe_temp_${item.id}`);
-                          if (targetPl && (!targetPl.songs || targetPl.songs.length === 0)) {
-                            generateOrGetMixTracks(targetPl);
-                          }
-                        }}
-                      >
-                        {renderMixIcon(VIBE_CONFIGS[item.id]?.iconName, 13)}
-                        <span>{t(item.labelKey)}</span>
-                      </button>
-                    );
-                  })}
-                </div>
-              </div>
-
-              {/* Asymmetric Split Layout: Left Spotlight (Active Mood Mix) + Right Companions */}
-              {(() => {
-                const currentVibePl = madeForYouPlaylists.find(p => p.id === `vibe_temp_${selectedVibeMood}`) || DEFAULT_MADE_FOR_YOU_PLAYLISTS.find(p => p.id === `vibe_temp_${selectedVibeMood}`)!;
-                const discoverWeeklyPl = madeForYouPlaylists.find(p => p.id === 'temp_mix_discover_weekly') || DEFAULT_MADE_FOR_YOU_PLAYLISTS.find(p => p.id === 'temp_mix_discover_weekly')!;
-                const dailyMixPl = madeForYouPlaylists.find(p => p.id === 'temp_mix_daily') || DEFAULT_MADE_FOR_YOU_PLAYLISTS.find(p => p.id === 'temp_mix_daily')!;
-                const releaseRadarPl = madeForYouPlaylists.find(p => p.id === 'temp_mix_release_radar') || DEFAULT_MADE_FOR_YOU_PLAYLISTS.find(p => p.id === 'temp_mix_release_radar')!;
-
-                const isVibeGenerating = isMixGeneratingId === currentVibePl?.id;
-                const vibeSongs = currentVibePl?.songs || [];
-                const vibeCover = getMixPlaylistCover(currentVibePl, {
-                  id: currentVibePl?.id || `vibe_temp_${selectedVibeMood}`,
-                  name: currentVibePl?.name || 'Mood Mix',
-                  mixType: currentVibePl?.mixType || 'vibe_mix',
-                  mood: selectedVibeMood,
-                  songs: vibeSongs,
-                  playHistory,
-                  likedSongs
-                });
-
-                const formatSec = (sec?: number) => {
-                  if (!sec || isNaN(sec)) return '';
-                  const m = Math.floor(sec / 60);
-                  const s = Math.floor(sec % 60);
-                  return `${m}:${s < 10 ? '0' : ''}${s}`;
-                };
-
-                const companionList = [
-                  {
-                    pl: discoverWeeklyPl,
-                    title: t('discoverWeekly'),
-                    desc: t('discoverWeeklyDesc'),
-                    badge: t('weeklyUpdateBadge')
-                  },
-                  {
-                    pl: dailyMixPl,
-                    title: t('dailyMixTitle'),
-                    desc: t('dailyMixDesc'),
-                    badge: t('dailyUpdateBadge')
-                  },
-                  {
-                    pl: releaseRadarPl,
-                    title: t('releaseRadar'),
-                    desc: t('releaseRadarDesc'),
-                    badge: t('newReleaseBadge')
-                  }
-                ];
-
-                return (
-                  <div className="mfy-split-layout">
-                    {/* LEFT: Spotlight Card with Direct Song Preview & Play */}
-                    <div className="mfy-spotlight-card">
-                      <div className="mfy-spotlight-top">
-                        {vibeCover ? (
-                          <img src={vibeCover} alt={currentVibePl?.name || 'Vibe Mix'} className="mfy-spotlight-cover" />
-                        ) : (
-                          <div
-                            className="mfy-spotlight-cover"
-                            style={{
-                              display: 'flex',
-                              alignItems: 'center',
-                              justifyContent: 'center',
-                              color: 'var(--text-muted)'
-                            }}
-                          >
-                            <Music size={32} />
-                          </div>
-                        )}
-
-                        <div className="mfy-spotlight-meta">
-                          <div>
-                            <span className="mfy-spotlight-badge">{t('mixMoodSelected')}</span>
-                            <h3 className="mfy-spotlight-title">{currentVibePl?.name || 'Mood Mix'}</h3>
-                            <p className="mfy-spotlight-desc">
-                              {t(VIBE_CONFIGS[selectedVibeMood]?.descriptionKey as any) || currentVibePl?.description}
-                            </p>
-                          </div>
-
-                          <div className="mfy-spotlight-actions">
-                            <button
-                              type="button"
-                              className="mfy-btn-play-all"
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                if (currentVibePl) playMadeForYouPlaylist(currentVibePl, e);
-                              }}
-                              title={t('playAll')}
-                            >
-                              {isVibeGenerating ? (
-                                <Loader2 size={15} className="spinner" />
-                              ) : (
-                                <Play size={15} fill="currentColor" />
-                              )}
-                              <span>{t('btnPlay')} ({vibeSongs.length > 0 ? `${vibeSongs.length} ${t('songs')}` : 'Mix'})</span>
-                            </button>
-
-                            <button
-                              type="button"
-                              className="mfy-btn-secondary"
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                if (currentVibePl) regenerateMadeForYouMix(currentVibePl.id);
-                              }}
-                              title={t('remixVibeTooltip')}
-                            >
-                              <RefreshCw size={13} className={isVibeGenerating ? 'spinner' : ''} />
-                              <span>{t('remixVibe')}</span>
-                            </button>
-
-                            <button
-                              type="button"
-                              className="mfy-btn-secondary"
-                              onClick={() => {
-                                if (currentVibePl) openMadeForYouPlaylist(currentVibePl);
-                              }}
-                              title={t('openMixTooltip')}
-                            >
-                              <span>{t('openMix')}</span>
-                            </button>
-                          </div>
-                        </div>
-                      </div>
-
-                      {/* Interactive Song Preview Rows */}
-                      <div className="mfy-tracklist-preview">
-                        <div className="mfy-tracklist-header">
-                          <span>{t('tracklistPreview')}</span>
-                          <span>{vibeSongs.length > 0 ? t('mixSongsCount').replace('{0}', String(vibeSongs.length)) : ''}</span>
-                        </div>
-
-                        {vibeSongs.length === 0 ? (
-                          <div className="mfy-tracklist-empty">
-                            {isVibeGenerating ? t('loadingMixRecommendation') : t('emptyMixPrompt')}
-                          </div>
-                        ) : (
-                          vibeSongs.slice(0, 3).map((rawSong: any, sIdx: number) => {
-                            const song = formatTrackLikeSpotify(rawSong) || rawSong;
-                            const isThisPlaying = currentSong?.id === song.id && isPlaying;
-                            return (
-                              <div
-                                key={song.id || sIdx}
-                                className={`mfy-track-row ${currentSong?.id === song.id ? 'is-active' : ''}`}
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  startPlayingFromList(vibeSongs, sIdx);
-                                }}
-                                title={`Putar ${song.title} - ${song.artist}`}
-                              >
-                                <div className="mfy-track-left">
-                                  <span className="mfy-track-num">
-                                    {isThisPlaying ? '▶' : sIdx + 1}
-                                  </span>
-                                  <div className="mfy-track-info">
-                                    <span className="mfy-track-title">{song.title}</span>
-                                    <span className="mfy-track-artist">{song.artist}</span>
-                                  </div>
-                                </div>
-                                {song.duration ? (
-                                  <span className="mfy-track-duration">{formatSec(song.duration)}</span>
-                                ) : null}
-                              </div>
-                            );
-                          })
-                        )}
-                      </div>
-                    </div>
-
-                    {/* RIGHT: Companion Algorithmic Mixes (Discover, Daily, Release) */}
-                    <div className="mfy-companion-list">
-                      {companionList.map(({ pl, title, desc, badge }) => {
-                        if (!pl) return null;
-                        const hasSongs = pl.songs && pl.songs.length > 0;
-                        const isGenerating = isMixGeneratingId === pl.id;
-                        const cover = getMixPlaylistCover(pl, {
-                          songs: pl.songs,
-                          playHistory,
-                          likedSongs
-                        });
-
-                        const artistPreview = (() => {
-                          const andMore = t('andOthers') || 'dan lainnya';
-                          if (hasSongs) {
-                            const artList = Array.from(new Set(pl.songs.map((s: any) => s.artist).filter(Boolean))).slice(0, 3);
-                            if (artList.length > 0) return artList.join(', ') + `, ${andMore}`;
-                          }
-                          const userTop = extractTopArtists(playHistory, likedSongs, 3);
-                          if (userTop.length > 0) return userTop.join(', ') + `, ${andMore}`;
-                          return desc;
-                        })();
-
-                        return (
-                          <div
-                            key={pl.id}
-                            className="mfy-companion-card"
-                            onClick={() => openMadeForYouPlaylist(pl)}
-                            title={`${t('openMix')} ${title}`}
-                          >
-                            <div className="mfy-companion-left">
-                              {cover ? (
-                                <img src={cover} alt={title} className="mfy-companion-thumb" />
-                              ) : (
-                                <div className="mfy-companion-thumb" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--text-muted)' }}>
-                                  <Music size={20} />
-                                </div>
-                              )}
-                              <div className="mfy-companion-meta">
-                                <div className="mfy-companion-title">{title}</div>
-                                <div className="mfy-companion-desc" title={artistPreview}>
-                                  {artistPreview}
-                                </div>
-                                <div className="mfy-companion-note">
-                                  {badge} • {hasSongs ? `${pl.songs.length} ${t('songs')}` : t('readyToPlay')}
-                                </div>
-                              </div>
-                            </div>
-
-                            <button
-                              type="button"
-                              className="mfy-companion-play-btn"
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                playMadeForYouPlaylist(pl, e);
-                              }}
-                              title={`${t('btnPlay')} ${title}`}
-                            >
-                              {isGenerating ? (
-                                <Loader2 size={16} className="spinner" />
-                              ) : (
-                                <Play size={16} fill="currentColor" style={{ marginLeft: '1px' }} />
-                              )}
-                            </button>
-                          </div>
-                        );
-                      })}
-                    </div>
-                  </div>
-                );
-              })()}
-            </section>
-            )}
-
-            {/* ── Daily Mix & Highlights (Desktop Editorial) ──────── */}
-            {FEATURE_FLAGS.ENABLE_DAILY_MIX_SHELF && (() => {
-              const getDailyMix = () => {
-                const mix: any[] = [];
-                const isDuplicate = (s: any) => {
-                  if (!s || !s.title) return true;
-                  const base = cleanBaseSongTitle(s.title);
-                  return mix.some(m => m.id === s.id || (base && cleanBaseSongTitle(m.title) === base));
-                };
-
-                // 1. HERO SPOTLIGHT:
-                // If a song is currently playing, suggest the previous track from history rather than repeating the current song!
-                const prevSessionTrack = playHistory.find(s => s && s.id !== currentSong?.id && !isUnwantedTrackVariant(s.title, s.artist));
-                const heroCandidate = prevSessionTrack || playHistory[0] || hitsInternational[0];
-
-                if (heroCandidate) {
-                  const isFromHistory = playHistory.some(s => s.id === heroCandidate.id);
-                  mix.push({ ...heroCandidate, bentoTag: isFromHistory ? 'JUMP BACK IN' : 'TOP PICK' });
-                }
-
-                // 2. FAVORITE (from liked songs):
-                const favs = likedSongs.filter(s => !isDuplicate(s) && !isUnwantedTrackVariant(s.title, s.artist)).slice(0, 1);
-                favs.forEach(s => mix.push({ ...s, bentoTag: 'FAVORITE' }));
-
-                // 3. SUGGESTED (from recommendations or curated hits):
-                const recPool = recommendations.length > 0 ? recommendations : hitsInternational.slice(1);
-                const usableRecs = recPool.filter(s => !isDuplicate(s) && !isUnwantedTrackVariant(s.title, s.artist)).slice(0, 1);
-                usableRecs.forEach(s => mix.push({ ...s, bentoTag: 'SUGGESTED' }));
-
-                // 4. TRENDING (from international hits):
-                const trendingPool = hitsInternational.filter(s => !isDuplicate(s) && !isUnwantedTrackVariant(s.title, s.artist)).slice(0, 1);
-                trendingPool.forEach(s => mix.push({ ...s, bentoTag: 'TRENDING' }));
-
-                // 5. RECENTLY PLAYED (from history, if not already used as hero):
-                const recentPool = playHistory.filter(s => !isDuplicate(s) && !isUnwantedTrackVariant(s.title, s.artist)).slice(0, 1);
-                recentPool.forEach(s => mix.push({ ...s, bentoTag: 'RECENTLY PLAYED' }));
-
-                // 6. Fill any remaining slots up to 5 with diverse unique tracks
-                const fallbackPool = [...hitsInternational, ...likedSongs, ...recommendations, ...playHistory]
-                  .filter(s => !isDuplicate(s) && !isUnwantedTrackVariant(s.title, s.artist));
-                while (mix.length < 5 && fallbackPool.length > 0) {
-                  const candidate = fallbackPool.shift();
-                  if (candidate && !isDuplicate(candidate)) {
-                    mix.push({ ...candidate, bentoTag: 'TRENDING' });
-                  }
-                }
-
-                return mix;
-              };
-
-              const rawMix = getDailyMix();
-              if (rawMix.length === 0) return null;
-
-              const getTagLabel = (tag: string) => {
-                switch (tag) {
-                  case 'JUMP BACK IN': return t('tagJumpBackIn');
-                  case 'TOP PICK': return t('tagTopPick');
-                  case 'FAVORITE': return t('tagFavorite');
-                  case 'SUGGESTED': return t('tagSuggested');
-                  case 'RECENTLY PLAYED': return t('tagRecentlyPlayed');
-                  case 'TRENDING': return t('tagTrending');
-                  default: return tag;
-                }
-              };
-
-              const dailyMix = rawMix.map(item => {
-                const formatted = formatTrackLikeSpotify(item);
-                return {
-                  ...item,
-                  title: formatted?.title || item.title,
-                  artist: formatted?.artist || item.artist,
-                  thumbnail: formatted?.thumbnail || item.thumbnail,
-                  cover: formatted?.cover || item.cover,
-                  tagLabel: getTagLabel(item.bentoTag)
-                };
-              });
-
-              const heroTrack = dailyMix[0];
-              const companionTracks = dailyMix.slice(1, 5);
-              const isHeroPlaying = currentSong?.id === heroTrack.id && isPlaying;
-              const isHeroCurrent = currentSong?.id === heroTrack.id;
-              const isHeroLiked = likedSongs.some(s => s.id === heroTrack.id);
-
-              return (
-                <section className="home-section daily-shelf-container">
-                  <div className="section-header-v2" style={{ marginBottom: '8px' }}>
-                    <div className="section-header-left">
-                      <span className="daily-header-icon" style={{ display: 'flex', alignItems: 'center' }}>
-                        <Headphones size={20} />
-                      </span>
-                      <div>
-                        <h2 className="section-title-v2" style={{ margin: 0 }}>{t('dailyMixShelfTitle')}</h2>
-                        <div style={{ fontSize: '12px', color: 'var(--text-secondary)', marginTop: '2px' }}>
-                          {t('dailyMixShelfDesc')}
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-
-                  <div className="daily-split-layout">
-                    {/* LEFT: Spotlight Hero Card */}
-                    <div
-                      className={`daily-hero-card ${isHeroCurrent ? 'is-active' : ''}`}
-                      onContextMenu={(e) => handleContextMenu(e, heroTrack)}
-                      draggable={true}
-                      onDragStart={(e) => { setDraggedGlobalSong(heroTrack); applyDragGhost(e, heroTrack); }}
-                      onDragEnd={(e) => { setDraggedGlobalSong(null); (e.currentTarget as HTMLElement).classList.remove('dragging-origin'); }}
-                    >
-                      {isHeroPlaying && (
-                        <div className="daily-playing-pill" style={{ position: 'absolute', top: '16px', right: '16px' }}>
-                          <div className="eq-bar" /><div className="eq-bar" /><div className="eq-bar" />
-                          <span>{t('nowPlayingStatus')}</span>
-                        </div>
-                      )}
-
-                      <div className="daily-hero-body">
-                        <img
-                          src={getCleanThumbnail(heroTrack.thumbnail) || getHighResImage(heroTrack.cover)}
-                          alt={heroTrack.title}
-                          className="daily-hero-cover"
-                          onClick={() => {
-                            if (isHeroCurrent) togglePlay();
-                            else playSingleSong(heroTrack);
-                          }}
-                          title={isHeroPlaying ? t('btnPause') : t('playSongBtn')}
-                        />
-                        <div className="daily-hero-meta">
-                          <div>
-                            <h3 className="daily-hero-title" title={heroTrack.title}>{heroTrack.title}</h3>
-                            <p className="daily-hero-artist" title={heroTrack.artist}>{heroTrack.artist}</p>
-                          </div>
-
-                          <div className="daily-hero-actions">
-                            <button
-                              type="button"
-                              className="daily-btn-play"
-                              onClick={() => {
-                                if (isHeroCurrent) togglePlay();
-                                else playSingleSong(heroTrack);
-                              }}
-                              title={isHeroPlaying ? t('btnPause') : t('playSongBtn')}
-                            >
-                              {isHeroPlaying ? (
-                                <Pause size={15} fill="currentColor" />
-                              ) : (
-                                <Play size={15} fill="currentColor" style={{ marginLeft: '1px' }} />
-                              )}
-                              <span>{isHeroPlaying ? t('btnPause') : t('playSongBtn')}</span>
-                            </button>
-
-                            <button
-                              type="button"
-                              className={`daily-btn-icon ${isHeroLiked ? 'liked' : ''}`}
-                              onClick={() => toggleLike(heroTrack)}
-                              title={isHeroLiked ? t('unlikeSong') : t('likeSong')}
-                            >
-                              <Heart
-                                size={16}
-                                fill={isHeroLiked ? 'var(--accent-primary, #3b82f6)' : 'none'}
-                                color={isHeroLiked ? 'var(--accent-primary, #3b82f6)' : '#b3b3b3'}
-                              />
-                            </button>
-                          </div>
-                        </div>
-                      </div>
-                    </div>
-
-                    {/* RIGHT: 4 Companion Cards */}
-                    <div className="daily-companion-list">
-                      {companionTracks.map((item, i) => {
-                        const isCurrentPlaying = currentSong?.id === item.id && isPlaying;
-                        const isCurrentActive = currentSong?.id === item.id;
-                        const isLiked = likedSongs.some(s => s.id === item.id);
-
-                        return (
-                          <div
-                            key={item.id || i}
-                            className={`daily-companion-card ${isCurrentActive ? 'is-active' : ''}`}
-                            onClick={() => {
-                              if (isCurrentActive) togglePlay();
-                              else playSingleSong(item);
-                            }}
-                            onContextMenu={(e) => handleContextMenu(e, item)}
-                            draggable={true}
-                            onDragStart={(e) => { setDraggedGlobalSong(item); applyDragGhost(e, item); }}
-                            onDragEnd={(e) => { setDraggedGlobalSong(null); (e.currentTarget as HTMLElement).classList.remove('dragging-origin'); }}
-                          >
-                            <div className="daily-companion-left">
-                              <img
-                                src={getCleanThumbnail(item.thumbnail) || getHighResImage(item.cover)}
-                                alt={item.title}
-                                className="daily-companion-thumb"
-                              />
-                              <div className="daily-companion-meta">
-                                <span className={`daily-companion-badge badge-${item.bentoTag?.toLowerCase().replace(/\s+/g, '-')}`}>
-                                  {item.tagLabel}
-                                </span>
-                                <div className="daily-companion-title" title={item.title}>{item.title}</div>
-                                <div className="daily-companion-artist" title={item.artist}>{item.artist}</div>
-                              </div>
-                            </div>
-
-                            <div className="daily-companion-right">
-                              {isCurrentPlaying && (
-                                <div className="daily-eq-mini">
-                                  <div className="eq-bar" /><div className="eq-bar" /><div className="eq-bar" />
-                                </div>
-                              )}
-                              <button
-                                type="button"
-                                className={`daily-companion-icon-btn ${isLiked ? 'liked' : ''}`}
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  toggleLike(item);
-                                }}
-                                title={isLiked ? t('unlikeSong') : t('likeSong')}
-                              >
-                                <Heart
-                                  size={14}
-                                  fill={isLiked ? 'var(--accent-primary, #3b82f6)' : 'none'}
-                                  color={isLiked ? 'var(--accent-primary, #3b82f6)' : '#808080'}
-                                />
-                              </button>
-                              <button
-                                type="button"
-                                className="daily-companion-play-btn"
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  if (isCurrentActive) togglePlay();
-                                  else playSingleSong(item);
-                                }}
-                                title={isCurrentPlaying ? t('btnPause') : `${t('btnPlay')} ${item.title}`}
-                              >
-                                {isCurrentPlaying ? (
-                                  <Pause size={15} fill="currentColor" />
-                                ) : (
-                                  <Play size={15} fill="currentColor" style={{ marginLeft: '1px' }} />
-                                )}
-                              </button>
-                            </div>
-                          </div>
-                        );
-                      })}
-                    </div>
-                  </div>
-                </section>
-              );
-            })()}
-
-            {/* ── Recently Played ──────────────────────── */}
-            {playHistory.length > 0 && (
-              <section className="home-section" id="recently-played-shelf">
-                <div className="section-header-v2" style={{ marginBottom: '14px' }}>
-                  <div className="section-header-left">
-                    <span className="recent-header-icon" style={{ display: 'flex', alignItems: 'center' }}>
-                      <Clock size={20} />
-                    </span>
-                    <div>
-                      <h2 className="section-title-v2" style={{ margin: 0 }}>{t('recentlyPlayed')}</h2>
-                      <div style={{ fontSize: '12px', color: 'var(--text-secondary)', marginTop: '2px' }}>
-                        {playHistory.length} {t('songs')}
-                      </div>
-                    </div>
-                  </div>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '14px' }}>
-                    <span
-                      className="show-all"
-                      style={{ fontSize: '12px', color: 'var(--text-muted)', cursor: 'pointer' }}
-                      onClick={() => {
-                        setPlayHistory([]);
-                        showToast(t('toastHistoryCleared'), 'success');
-                      }}
-                      title={t('clearHistory')}
-                    >
-                      {t('clearHistory')}
-                    </span>
-                    <span className="show-all" onClick={() => setIsRecentExpanded(!isRecentExpanded)}>
-                      {isRecentExpanded ? t('showLess') : t('viewAll')}
-                    </span>
-                  </div>
-                </div>
-
-                {isRecentExpanded ? (
-                  <div className="card-expanded-grid">
-                    {playHistory.map((item, i) => {
-                      const isThisPlaying = currentSong?.id === item.id && isPlaying;
-                      const isThisCurrent = currentSong?.id === item.id;
-                      return (
-                        <div
-                          key={item.id || i}
-                          className={`music-card-v2 ${isThisCurrent ? 'music-card-v2-playing' : ''}`}
-                          onClick={() => {
-                            if (isThisCurrent) togglePlay();
-                            else playSingleSong(item);
-                          }}
-                          onContextMenu={(e) => handleContextMenu(e, item)}
-                          draggable={true}
-                          onDragStart={(e) => { setDraggedGlobalSong(item); applyDragGhost(e, item); }}
-                          onDragEnd={(e) => { setDraggedGlobalSong(null); (e.currentTarget as HTMLElement).classList.remove('dragging-origin'); }}
-                          title={isThisPlaying ? t('btnPause') : `${t('btnPlay')} ${item.title}`}
-                        >
-                          <div className="card-v2-art">
-                            <img src={(getCleanThumbnail(item.thumbnail) || getHighResImage(item.cover))} alt={item.title} loading="lazy" />
-                            {isThisPlaying && (
-                              <div className="card-v2-eq">
-                                <div className="eq-bar" /><div className="eq-bar" /><div className="eq-bar" />
-                              </div>
-                            )}
-                            <button
-                              type="button"
-                              className={`card-v2-play-btn ${isThisCurrent ? 'is-active' : ''}`}
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                if (isThisCurrent) togglePlay();
-                                else playSingleSong(item);
-                              }}
-                              title={isThisPlaying ? t('btnPause') : t('playSongBtn')}
-                            >
-                              {isThisPlaying ? (
-                                <Pause size={18} fill="currentColor" />
-                              ) : (
-                                <Play size={18} fill="currentColor" style={{ marginLeft: '1px' }} />
-                              )}
-                            </button>
-                          </div>
-                          <div className="card-v2-info">
-                            <div className="card-v2-title" title={item.title}>{item.title}</div>
-                            <div className="card-v2-artist" title={item.artist}>{item.artist}</div>
-                          </div>
-                        </div>
-                      );
-                    })}
-                  </div>
-                ) : (
-                  <div className="slider-wrapper">
-                    <button className="slider-nav-btn slider-nav-left" onClick={() => scrollSlider(recentScrollRef, 'left')} aria-label="Scroll left">
-                      <ChevronLeft size={20} />
-                    </button>
-                    <div className="card-scroll-container" ref={recentScrollRef}>
-                      {playHistory.map((item, i) => {
-                        const isThisPlaying = currentSong?.id === item.id && isPlaying;
-                        const isThisCurrent = currentSong?.id === item.id;
-                        return (
-                          <div
-                            key={item.id || i}
-                            className={`music-card-v2 ${isThisCurrent ? 'music-card-v2-playing' : ''}`}
-                            onClick={() => {
-                              if (isThisCurrent) togglePlay();
-                              else playSingleSong(item);
-                            }}
-                            onContextMenu={(e) => handleContextMenu(e, item)}
-                            draggable={true}
-                            onDragStart={(e) => { setDraggedGlobalSong(item); applyDragGhost(e, item); }}
-                            onDragEnd={(e) => { setDraggedGlobalSong(null); (e.currentTarget as HTMLElement).classList.remove('dragging-origin'); }}
-                            title={isThisPlaying ? t('btnPause') : `${t('btnPlay')} ${item.title}`}
-                          >
-                            <div className="card-v2-art">
-                              <img src={(getCleanThumbnail(item.thumbnail) || getHighResImage(item.cover))} alt={item.title} loading="lazy" />
-                              {isThisPlaying && (
-                                <div className="card-v2-eq">
-                                  <div className="eq-bar" /><div className="eq-bar" /><div className="eq-bar" />
-                                </div>
-                              )}
-                              <button
-                                type="button"
-                                className={`card-v2-play-btn ${isThisCurrent ? 'is-active' : ''}`}
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  if (isThisCurrent) togglePlay();
-                                  else playSingleSong(item);
-                                }}
-                                title={isThisPlaying ? t('btnPause') : t('playSongBtn')}
-                              >
-                                {isThisPlaying ? (
-                                  <Pause size={18} fill="currentColor" />
-                                ) : (
-                                  <Play size={18} fill="currentColor" style={{ marginLeft: '1px' }} />
-                                )}
-                              </button>
-                            </div>
-                            <div className="card-v2-info">
-                              <div className="card-v2-title" title={item.title}>{item.title}</div>
-                              <div className="card-v2-artist" title={item.artist}>{item.artist}</div>
-                            </div>
-                          </div>
-                        );
-                      })}
-                    </div>
-                    <button className="slider-nav-btn slider-nav-right" onClick={() => scrollSlider(recentScrollRef, 'right')} aria-label="Scroll right">
-                      <ChevronRight size={20} />
-                    </button>
-                  </div>
-                )}
-              </section>
-            )}
-
-
-
-            {/* ── Hits Sections ───────────── */}
-            {(() => {
-              const renderHitsSection = (title: string, songs: any[], ref: React.RefObject<HTMLDivElement | null>, icon: string | React.ReactNode, isExpanded: boolean, setIsExpanded: (val: boolean) => void) => {
-                if (songs.length === 0) return null;
-                return (
-                  <section className="home-section">
-                    <div className="section-header-v2">
-                      <div className="section-header-left">
-                        {typeof icon === 'string' && icon.startsWith('http') ? (
-                          <img src={icon} alt="" style={{ width: '24px', height: '16px', objectFit: 'cover', borderRadius: '3px' }} />
-                        ) : (
-                          <span style={{ display: 'flex', alignItems: 'center', color: 'var(--text-secondary)' }}>{icon}</span>
-                        )}
-                        <h2 className="section-title-v2">{title}</h2>
-                      </div>
-                      <div style={{ display: 'flex', gap: '16px', alignItems: 'center' }}>
-                        <span className="show-all" onClick={() => setIsExpanded(!isExpanded)}>{isExpanded ? t('showLess') : t('viewAll')}</span>
-                        <span className="show-all" onClick={() => startPlayingFromList(songs, 0)}>{t('playAll')}</span>
-                      </div>
-                    </div>
-
-                    {isExpanded ? (
-                      <div className="card-expanded-grid">
-                        {songs.map((item, i) => (
-                          <div key={i} className={`music-card-v2 ${currentSong?.id === item.id ? 'music-card-v2-playing' : ''}`} onClick={() => playSingleSong(item)} onContextMenu={(e) => handleContextMenu(e, item)} draggable={true} onDragStart={(e) => { setDraggedGlobalSong(item); applyDragGhost(e, item); }} onDragEnd={(e) => { setDraggedGlobalSong(null); (e.currentTarget as HTMLElement).classList.remove('dragging-origin'); }}>
-                            <div className="card-v2-art">
-                              <img src={(getCleanThumbnail(item.thumbnail) || getHighResImage(item.cover))} alt={item.title} />
-                              {currentSong?.id === item.id && isPlaying ? (
-                                <div className="card-v2-eq"><div className="eq-bar" /><div className="eq-bar" /><div className="eq-bar" /></div>
-                              ) : (
-                                <button className="card-v2-play-btn"><Play size={18} fill="currentColor" style={{ marginLeft: '2px' }} /></button>
-                              )}
-                            </div>
-                            <div className="card-v2-info">
-                              <div className="card-v2-title" title={item.title}>{item.title}</div>
-                              <div className="card-v2-artist">{item.artist}</div>
-                            </div>
-                          </div>
-                        ))}
-                      </div>
-                    ) : (
-                      <div className="slider-wrapper">
-                        <button className="slider-nav-btn slider-nav-left" onClick={() => scrollSlider(ref, 'left')} aria-label="Scroll left"><ChevronLeft size={20} /></button>
-                        <div className="card-scroll-container" ref={ref}>
-                          {songs.map((item, i) => (
-                            <div key={i} className={`music-card-v2 ${currentSong?.id === item.id ? 'music-card-v2-playing' : ''}`} onClick={() => playSingleSong(item)} onContextMenu={(e) => handleContextMenu(e, item)} draggable={true} onDragStart={(e) => { setDraggedGlobalSong(item); applyDragGhost(e, item); }} onDragEnd={(e) => { setDraggedGlobalSong(null); (e.currentTarget as HTMLElement).classList.remove('dragging-origin'); }}>
-                              <div className="card-v2-art">
-                                <img src={(getCleanThumbnail(item.thumbnail) || getHighResImage(item.cover))} alt={item.title} />
-                                {currentSong?.id === item.id && isPlaying ? (
-                                  <div className="card-v2-eq"><div className="eq-bar" /><div className="eq-bar" /><div className="eq-bar" /></div>
-                                ) : (
-                                  <button className="card-v2-play-btn"><Play size={18} fill="currentColor" style={{ marginLeft: '2px' }} /></button>
-                                )}
-                              </div>
-                              <div className="card-v2-info">
-                                <div className="card-v2-title" title={item.title}>{item.title}</div>
-                                <div className="card-v2-artist">{item.artist}</div>
-                              </div>
-                            </div>
-                          ))}
-                        </div>
-                        <button className="slider-nav-btn slider-nav-right" onClick={() => scrollSlider(ref, 'right')} aria-label="Scroll right"><ChevronRight size={20} /></button>
-                      </div>
-                    )}
-                  </section>
-                );
-              };
-
-              return (
-                <>
-                  {localCountry && hitsLocal.length > 0 &&
-                    renderHitsSection(`${t('trendingLocal')} ${localCountry.name}`, hitsLocal, localScrollRef, `https://flagcdn.com/w40/${localCountry.code.toLowerCase()}.png`, isLocalExpanded, setIsLocalExpanded)}
-                  {renderHitsSection(t('hitsInt'), hitsInternational, intScrollRef, <Globe size={20} />, isIntExpanded, setIsIntExpanded)}
-                  {renderHitsSection(t('hitsId'), hitsIndonesia, idScrollRef, 'https://flagcdn.com/w40/id.png', isIdExpanded, setIsIdExpanded)}
-                  {renderHitsSection(t('hitsJp'), hitsJapan, jpScrollRef, 'https://flagcdn.com/w40/jp.png', isJpExpanded, setIsJpExpanded)}
-                  {renderHitsSection(t('hitsKr'), hitsKorean, krScrollRef, 'https://flagcdn.com/w40/kr.png', isKrExpanded, setIsKrExpanded)}
-                  {renderHitsSection(t('hitsLatin'), hitsLatin, latinScrollRef, 'https://flagcdn.com/w40/mx.png', isLatinExpanded, setIsLatinExpanded)}
-                </>
-              );
-            })()}
-          </>)}
-
-        </div>
-      ) : (
-        <>
-          <div className="hero-section">
-            <div className="hero-art-container">
-              <div className="hero-glow"></div>
-              {currentSong ? (
-                <img src={(getCleanThumbnail(currentSong.thumbnail) || getHighResImage(currentSong.cover))} className="hero-art" alt="album art" />
-              ) : searchResults.length > 0 ? (
-                <img src={(getCleanThumbnail(currentSong.thumbnail) || getHighResImage(currentSong.cover))} className="hero-art" alt="album art" />
-              ) : (
-                <div className="hero-art" style={{ backgroundColor: 'var(--bg-card)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                  <Music size={64} color="var(--text-muted)" />
-                </div>
-              )}
-            </div>
-            <div className="hero-info">
-              <div className="hero-tag">ALBUM</div>
-              {currentSong ? (
-                <>
-                  <h1 className="hero-title" title={currentSong.title}>{currentSong.title}</h1>
-                  <div className="hero-artist-row">
-                    <UserCircle size={24} color="var(--accent-primary)" />
-                    <span className="hero-artist-name">{currentSong.artist}</span>
-                    <ChevronRight size={14} color="var(--text-muted)" />
-                  </div>
-                  <div className="hero-meta">YouTube Audio • 1 Song • {formatTime(currentSong.duration)}</div>
-                  <div className="hero-buttons">
-                    <button className="btn-primary" onClick={togglePlay}>
-                      {isPlaying ? <Pause size={18} fill="currentColor" /> : <Play size={18} fill="currentColor" />} {isPlaying ? 'Pause' : 'Play'}
-                    </button>
-                    <button className="btn-secondary" onClick={toggleShuffle}>
-                      <Shuffle size={16} color={isShuffled ? 'var(--accent-primary)' : 'currentColor'} /> Shuffle
-                    </button>
-                    <button className={`btn-secondary ${isLiked(currentSong.id) ? 'liked-btn' : ''}`} onClick={() => toggleLike(currentSong)}>
-                      <Heart size={16} fill={isLiked(currentSong.id) ? 'currentColor' : 'none'} />
-                    </button>
-                    <button className="btn-secondary" onClick={() => setAddToPlaylistSong(currentSong)}>
-                      <FolderPlus size={16} />
-                    </button>
-                  </div>
-                </>
-              ) : searchResults.length > 0 ? (
-                <>
-                  <h1 className="hero-title">Search Results</h1>
-                  <div className="hero-artist-row"><span className="hero-artist-name">YouTube</span></div>
-                  <div className="hero-meta">{searchResults.length} Songs found</div>
-                  <div className="hero-buttons">
-                    <button className="btn-primary" onClick={() => startPlayingFromList(searchResults, 0)}>
-                      <Play size={18} fill="currentColor" /> Play All
-                    </button>
-                    <button className="btn-secondary" onClick={toggleShuffle}><Shuffle size={16} /> Shuffle</button>
-                  </div>
-                </>
-              ) : null}
-            </div>
-          </div>
-          {searchResults.length > 0 && (
-            <div className="tracklist-container">
-              {searchResults.map((song, idx) => (
-                <div key={idx} className={`tracklist-item ${currentSong?.id === song.id ? 'playing' : ''}`} onClick={() => playSingleSong(song)} onContextMenu={(e) => handleContextMenu(e, song)}
-                  draggable={true}
-                  onDragStart={(e) => { setDraggedGlobalSong(song); applyDragGhost(e, song); }}
-                  onDragEnd={(e) => { setDraggedGlobalSong(null); (e.currentTarget as HTMLElement).classList.remove('dragging-origin'); }}
-                >
-                  <div className="track-index">{currentSong?.id === song.id && isPlaying ? <Headset size={16} /> : (idx + 1)}</div>
-                  <div className="track-title" title={song.title}>{song.title}</div>
-                  <button className={`library-item-action ${isLiked(song.id) ? 'liked' : ''}`} style={{ marginLeft: 'auto', marginRight: '8px' }}
-                    onClick={e => { e.stopPropagation(); toggleLike(song); }}>
-                    <Heart size={14} fill={isLiked(song.id) ? 'currentColor' : 'none'} />
-                  </button>
-                  <button className="library-item-action" style={{ marginRight: '12px' }}
-                    onClick={e => { e.stopPropagation(); setAddToPlaylistSong(song); }}>
-                    <FolderPlus size={14} />
-                  </button>
-                  <div className="track-duration">{formatTime(song.duration)}</div>
-                </div>
-              ))}
-            </div>
-          )}
-        </>
-      )}
-    </div>
+    <HomePage
+      searchResults={searchResults}
+      getGreeting={getGreeting}
+      language={language}
+      homeMode={homeMode}
+      setHomeMode={setHomeMode}
+      wrappedData={wrappedData}
+      setWrappedStoryIndex={setWrappedStoryIndex}
+      setShowWrappedStory={setShowWrappedStory}
+      selectedVibeMood={selectedVibeMood}
+      setSelectedVibeMood={setSelectedVibeMood}
+      madeForYouPlaylists={madeForYouPlaylists}
+      isMixGeneratingId={isMixGeneratingId}
+      generateOrGetMixTracks={generateOrGetMixTracks}
+      playMadeForYouPlaylist={playMadeForYouPlaylist}
+      regenerateMadeForYouMix={regenerateMadeForYouMix}
+      openMadeForYouPlaylist={openMadeForYouPlaylist}
+      playHistory={playHistory}
+      setPlayHistory={setPlayHistory}
+      likedSongs={likedSongs}
+      recommendations={recommendations}
+      hitsInternational={hitsInternational}
+      hitsIndonesia={hitsIndonesia}
+      hitsJapan={hitsJapan}
+      hitsKorean={hitsKorean}
+      hitsLatin={hitsLatin}
+      hitsLocal={hitsLocal}
+      localCountry={localCountry}
+      topPodcasts={topPodcasts}
+      podcastsUs={podcastsUs}
+      podcastsId={podcastsId}
+      podcastsJp={podcastsJp}
+      podcastsKr={podcastsKr}
+      podcastsLatin={podcastsLatin}
+      podcastHeroIndex={podcastHeroIndex}
+      currentSong={currentSong}
+      isPlaying={isPlaying}
+      isShuffled={isShuffled}
+      togglePlay={togglePlay}
+      toggleShuffle={toggleShuffle}
+      playSingleSong={playSingleSong}
+      startPlayingFromList={startPlayingFromList}
+      toggleLike={toggleLike}
+      isLiked={isLiked}
+      handleContextMenu={handleContextMenu}
+      setDraggedGlobalSong={setDraggedGlobalSong}
+      openArtistPage={openArtistPage}
+      setAddToPlaylistSong={setAddToPlaylistSong}
+      setSearchQuery={setSearchQuery}
+      setSuggestions={setSuggestions}
+      isRecentExpanded={isRecentExpanded}
+      setIsRecentExpanded={setIsRecentExpanded}
+      isLocalExpanded={isLocalExpanded}
+      setIsLocalExpanded={setIsLocalExpanded}
+      isIntExpanded={isIntExpanded}
+      setIsIntExpanded={setIsIntExpanded}
+      isIdExpanded={isIdExpanded}
+      setIsIdExpanded={setIsIdExpanded}
+      isJpExpanded={isJpExpanded}
+      setIsJpExpanded={setIsJpExpanded}
+      isKrExpanded={isKrExpanded}
+      setIsKrExpanded={setIsKrExpanded}
+      isLatinExpanded={isLatinExpanded}
+      setIsLatinExpanded={setIsLatinExpanded}
+      intScrollRef={intScrollRef}
+      idScrollRef={idScrollRef}
+      jpScrollRef={jpScrollRef}
+      krScrollRef={krScrollRef}
+      latinScrollRef={latinScrollRef}
+      localScrollRef={localScrollRef}
+      recentScrollRef={recentScrollRef}
+      scrollSlider={scrollSlider}
+      formatTime={formatTime}
+      showToast={showToast}
+      t={t}
+    />
   );
 
 
@@ -7918,108 +5203,7 @@ function App() {
       )}
 
       {/* Modal: Keyboard Shortcuts Cheat Sheet */}
-      {showShortcutsModal && (
-        <div className="modal-overlay" onClick={() => setShowShortcutsModal(false)} style={{ zIndex: 99999 }}>
-          <div className="modal" onClick={e => e.stopPropagation()} style={{ maxWidth: '580px', width: '92%', padding: '24px 28px', borderRadius: '16px', background: 'var(--bg-modal, #18181b)', border: '1px solid var(--border-color, rgba(255,255,255,0.1))', boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.7)' }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                <div style={{ background: 'var(--accent-primary, #6366f1)', color: 'white', borderRadius: '8px', padding: '6px', display: 'flex' }}>
-                  <Keyboard size={18} />
-                </div>
-                <div>
-                  <h3 className="modal-title" style={{ margin: 0, fontSize: '18px', fontWeight: '700' }}>Keyboard Shortcuts</h3>
-                  <p style={{ margin: '2px 0 0 0', fontSize: '12px', color: 'var(--text-secondary)' }}>Tekan shortcut di bawah untuk kontrol instan</p>
-                </div>
-              </div>
-              <button className="btn-icon" onClick={() => setShowShortcutsModal(false)} style={{ padding: '6px' }} title="Close">
-                <X size={18} />
-              </button>
-            </div>
-
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: '16px', maxHeight: '55vh', overflowY: 'auto', paddingRight: '4px' }}>
-              <div>
-                <div style={{ fontSize: '11px', fontWeight: '700', textTransform: 'uppercase', color: 'var(--accent-primary, #6366f1)', marginBottom: '10px', letterSpacing: '0.05em' }}>Playback</div>
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '13px' }}>
-                    <span style={{ color: 'var(--text-primary)' }}>Play / Pause</span>
-                    <kbd style={{ background: 'rgba(255,255,255,0.08)', padding: '3px 8px', borderRadius: '5px', fontSize: '12px', border: '1px solid rgba(255,255,255,0.15)', fontFamily: 'monospace' }}>Space</kbd>
-                  </div>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '13px' }}>
-                    <span style={{ color: 'var(--text-primary)' }}>Lagu Berikutnya</span>
-                    <div style={{ display: 'flex', gap: '4px' }}>
-                      <kbd style={{ background: 'rgba(255,255,255,0.08)', padding: '3px 6px', borderRadius: '5px', fontSize: '12px', border: '1px solid rgba(255,255,255,0.15)', fontFamily: 'monospace' }}>Ctrl</kbd>
-                      <kbd style={{ background: 'rgba(255,255,255,0.08)', padding: '3px 6px', borderRadius: '5px', fontSize: '12px', border: '1px solid rgba(255,255,255,0.15)', fontFamily: 'monospace' }}>→</kbd>
-                    </div>
-                  </div>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '13px' }}>
-                    <span style={{ color: 'var(--text-primary)' }}>Lagu Sebelumnya</span>
-                    <div style={{ display: 'flex', gap: '4px' }}>
-                      <kbd style={{ background: 'rgba(255,255,255,0.08)', padding: '3px 6px', borderRadius: '5px', fontSize: '12px', border: '1px solid rgba(255,255,255,0.15)', fontFamily: 'monospace' }}>Ctrl</kbd>
-                      <kbd style={{ background: 'rgba(255,255,255,0.08)', padding: '3px 6px', borderRadius: '5px', fontSize: '12px', border: '1px solid rgba(255,255,255,0.15)', fontFamily: 'monospace' }}>←</kbd>
-                    </div>
-                  </div>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '13px' }}>
-                    <span style={{ color: 'var(--text-primary)' }}>Maju 5 Detik</span>
-                    <kbd style={{ background: 'rgba(255,255,255,0.08)', padding: '3px 8px', borderRadius: '5px', fontSize: '12px', border: '1px solid rgba(255,255,255,0.15)', fontFamily: 'monospace' }}>→</kbd>
-                  </div>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '13px' }}>
-                    <span style={{ color: 'var(--text-primary)' }}>Mundur 5 Detik</span>
-                    <kbd style={{ background: 'rgba(255,255,255,0.08)', padding: '3px 8px', borderRadius: '5px', fontSize: '12px', border: '1px solid rgba(255,255,255,0.15)', fontFamily: 'monospace' }}>←</kbd>
-                  </div>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '13px' }}>
-                    <span style={{ color: 'var(--text-primary)' }}>Toggle Acak (Shuffle)</span>
-                    <kbd style={{ background: 'rgba(255,255,255,0.08)', padding: '3px 8px', borderRadius: '5px', fontSize: '12px', border: '1px solid rgba(255,255,255,0.15)', fontFamily: 'monospace' }}>S</kbd>
-                  </div>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '13px' }}>
-                    <span style={{ color: 'var(--text-primary)' }}>Toggle Ulang (Repeat)</span>
-                    <kbd style={{ background: 'rgba(255,255,255,0.08)', padding: '3px 8px', borderRadius: '5px', fontSize: '12px', border: '1px solid rgba(255,255,255,0.15)', fontFamily: 'monospace' }}>R</kbd>
-                  </div>
-                </div>
-              </div>
-
-              <div>
-                <div style={{ fontSize: '11px', fontWeight: '700', textTransform: 'uppercase', color: 'var(--accent-primary, #6366f1)', marginBottom: '10px', letterSpacing: '0.05em' }}>Audio & Kontrol</div>
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '13px' }}>
-                    <span style={{ color: 'var(--text-primary)' }}>Volume Naik (+5%)</span>
-                    <kbd style={{ background: 'rgba(255,255,255,0.08)', padding: '3px 8px', borderRadius: '5px', fontSize: '12px', border: '1px solid rgba(255,255,255,0.15)', fontFamily: 'monospace' }}>↑</kbd>
-                  </div>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '13px' }}>
-                    <span style={{ color: 'var(--text-primary)' }}>Volume Turun (-5%)</span>
-                    <kbd style={{ background: 'rgba(255,255,255,0.08)', padding: '3px 8px', borderRadius: '5px', fontSize: '12px', border: '1px solid rgba(255,255,255,0.15)', fontFamily: 'monospace' }}>↓</kbd>
-                  </div>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '13px' }}>
-                    <span style={{ color: 'var(--text-primary)' }}>Bisu (Mute)</span>
-                    <kbd style={{ background: 'rgba(255,255,255,0.08)', padding: '3px 8px', borderRadius: '5px', fontSize: '12px', border: '1px solid rgba(255,255,255,0.15)', fontFamily: 'monospace' }}>M</kbd>
-                  </div>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '13px' }}>
-                    <span style={{ color: 'var(--text-primary)' }}>Sukai Lagu (Like)</span>
-                    <kbd style={{ background: 'rgba(255,255,255,0.08)', padding: '3px 8px', borderRadius: '5px', fontSize: '12px', border: '1px solid rgba(255,255,255,0.15)', fontFamily: 'monospace' }}>L</kbd>
-                  </div>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '13px' }}>
-                    <span style={{ color: 'var(--text-primary)' }}>Fokus Pencarian</span>
-                    <kbd style={{ background: 'rgba(255,255,255,0.08)', padding: '3px 8px', borderRadius: '5px', fontSize: '12px', border: '1px solid rgba(255,255,255,0.15)', fontFamily: 'monospace' }}>/</kbd>
-                  </div>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '13px' }}>
-                    <span style={{ color: 'var(--text-primary)' }}>Shortcut Cheat Sheet</span>
-                    <kbd style={{ background: 'rgba(255,255,255,0.08)', padding: '3px 8px', borderRadius: '5px', fontSize: '12px', border: '1px solid rgba(255,255,255,0.15)', fontFamily: 'monospace' }}>?</kbd>
-                  </div>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '13px' }}>
-                    <span style={{ color: 'var(--text-primary)' }}>Tutup Modal / Batal</span>
-                    <kbd style={{ background: 'rgba(255,255,255,0.08)', padding: '3px 8px', borderRadius: '5px', fontSize: '12px', border: '1px solid rgba(255,255,255,0.15)', fontFamily: 'monospace' }}>Esc</kbd>
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            <div style={{ marginTop: '20px', paddingTop: '16px', borderTop: '1px solid rgba(255,255,255,0.08)', display: 'flex', justifyContent: 'flex-end' }}>
-              <button className="btn-primary" onClick={() => setShowShortcutsModal(false)} style={{ padding: '8px 20px' }}>
-                Tutup
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+      <ShortcutsModal isOpen={showShortcutsModal} onClose={() => setShowShortcutsModal(false)} />
 
 
       {/* Modal: Hapus Cache */}
@@ -9506,7 +6690,6 @@ function App() {
                                   }
                                   const augSong = augmentSongWithUser(song);
                                   setQueue(prev => [...prev, augSong]);
-                                  setOriginalQueue(prev => [...prev, augSong]);
                                   if (currentIndex === -1) {
                                     setCurrentIndex(0);
                                     executePlay(song);
@@ -9568,17 +6751,13 @@ function App() {
                                     showToast('Gagal menemukan audio untuk diunduh.', 'error');
                                   }
                                 }
-                                setShowSuggestions(false);
                               }}
                             >
                               <Download size={16} />
                             </button>
-                          </>
-                        )}
-                      </div>
-                      <div className="suggestion-duration">
-                        {song.isPodcastShow || homeMode === 'podcast' ? (song.genre || 'Podcast') : (song.duration ? formatTime(song.duration) : '')}
-                      </div>
+                              </>
+                            )}
+                          </div>
                         </div>
                       ))}
                     </>
@@ -9656,10 +6835,17 @@ function App() {
           {activePage === 'profile' && renderProfilePage()}
           {activePage === 'sound-map' && (
             <div className="main-scroll" style={{ padding: '24px' }}>
-              <SoundMap t={t} onPlaySong={startPlayingFromList} theme={settings.theme || 'default'} onCountrySelect={(alpha2, name) => {
-                setTrendingCountry({ code: alpha2, name });
-                fetchTrendingSongs(alpha2, name);
-              }} />
+              <SoundMap
+                t={t}
+                onPlaySong={startPlayingFromList}
+                theme={settings.theme || 'default'}
+                trendingSongs={trendingSongs}
+                isTrendingLoading={isTrendingLoading}
+                onCountrySelect={(alpha2, name) => {
+                  setTrendingCountry({ code: alpha2, name });
+                  fetchTrendingSongs(alpha2, name);
+                }}
+              />
             </div>
           )}
           {activePage === 'library' && (
@@ -9711,12 +6897,63 @@ function App() {
               <div className="player-center">
                 <div className="player-controls">
                   <button className="chat-btn" onClick={toggleShuffle} style={{ color: isShuffled ? 'var(--accent-primary)' : 'var(--text-secondary)' }} title={t('btnShuffle')}><Shuffle size={18} /></button>
+                  {currentSong?.isPodcast && !(isGuest && activePartyId) && (
+                    <button
+                      className="chat-btn"
+                      onClick={() => {
+                        if (audioRef.current) {
+                          const nextT = Math.max(0, audioRef.current.currentTime - 15);
+                          audioRef.current.currentTime = nextT;
+                          setProgress(nextT);
+                        }
+                      }}
+                      title={t('podcastSkipBack')}
+                      style={{ fontSize: '11px', fontWeight: 700, padding: '2px 6px' }}
+                    >
+                      -15s
+                    </button>
+                  )}
                   <button className="chat-btn" onClick={handlePrev} disabled={(loopMode === 'off' && currentIndex <= 0) || (isGuest && !!activePartyId)} style={{ opacity: ((loopMode === 'off' && currentIndex <= 0) || (isGuest && !!activePartyId)) ? 0.3 : 1, cursor: (isGuest && activePartyId) ? 'not-allowed' : 'pointer' }} title={t('btnPrevious')}><SkipBack size={22} fill="currentColor" /></button>
                   <button className="chat-play-btn" onClick={togglePlay} disabled={!currentSong || (isGuest && !!activePartyId)} style={{ opacity: (!currentSong || (isGuest && !!activePartyId)) ? 0.3 : 1, cursor: (isGuest && activePartyId) ? 'not-allowed' : 'pointer' }} title={isPlaying ? t('btnPause') : t('btnPlay')}>
                     {isPlaying ? <Pause size={20} fill="currentColor" /> : <Play size={20} fill="currentColor" style={{ marginLeft: '4px' }} />}
                   </button>
                   <button className="chat-btn" onClick={handleNext} disabled={(loopMode === 'off' && settings.autoplay === false && currentIndex >= queue.length - 1) || (isGuest && !!activePartyId)} style={{ opacity: ((loopMode === 'off' && settings.autoplay === false && currentIndex >= queue.length - 1) || (isGuest && !!activePartyId)) ? 0.3 : 1, cursor: (isGuest && activePartyId) ? 'not-allowed' : 'pointer' }} title={t('btnNext')}><SkipForward size={22} fill="currentColor" /></button>
+                  {currentSong?.isPodcast && !(isGuest && activePartyId) && (
+                    <button
+                      className="chat-btn"
+                      onClick={() => {
+                        if (audioRef.current) {
+                          const nextT = Math.min(audioRef.current.duration || duration, audioRef.current.currentTime + 30);
+                          audioRef.current.currentTime = nextT;
+                          setProgress(nextT);
+                        }
+                      }}
+                      title={t('podcastSkipForward')}
+                      style={{ fontSize: '11px', fontWeight: 700, padding: '2px 6px' }}
+                    >
+                      +30s
+                    </button>
+                  )}
                   <button className="chat-btn" onClick={toggleLoopMode} style={{ color: loopMode !== 'off' ? 'var(--accent-primary)' : 'var(--text-secondary)' }} title={loopMode === 'all' ? t('loopPlaylist') : loopMode === 'one' ? t('loopOne') : t('loopOff')}>{loopMode === 'one' ? <Repeat1 size={18} /> : <Repeat size={18} />}</button>
+                  {currentSong?.isPodcast && !(isGuest && activePartyId) && (
+                    <button
+                      onClick={() => {
+                        const speeds = [0.75, 1, 1.25, 1.5, 2];
+                        const nextSpeed = speeds[(speeds.indexOf(podcastSpeed) + 1) % speeds.length];
+                        setPodcastSpeed(nextSpeed);
+                        localStorage.setItem('donpollo_podcast_speed', String(nextSpeed));
+                        if (audioRef.current) audioRef.current.playbackRate = nextSpeed;
+                      }}
+                      title={t('podcastSpeedLabel')}
+                      style={{
+                        background: 'rgba(255,255,255,0.08)', border: '1px solid var(--border-color)',
+                        color: 'var(--accent-primary)', borderRadius: '999px', padding: '2px 8px',
+                        fontSize: '11px', fontWeight: 700, cursor: 'pointer', marginLeft: '4px'
+                      }}
+                    >
+                      {podcastSpeed}x
+                    </button>
+                  )}
                 </div>
                 <div className="player-progress-container">
                   <span className="chat-time">{formatTime(progress)}</span>
@@ -9729,6 +6966,11 @@ function App() {
                 </div>
               </div>
               <div className="player-right">
+                {settings.showVisualizer !== false && currentSong && (
+                  <div style={{ width: '72px', height: '24px', marginRight: '6px', display: 'flex', alignItems: 'center' }} title="Audio Visualizer">
+                    <AudioVisualizer analyser={analyserNodeRef.current} isPlaying={isPlaying} variant="compact" barCount={16} height={22} />
+                  </div>
+                )}
                 <button
                   onClick={() => {
                     const newVal = !(settings.autoplay !== false);
@@ -10210,7 +7452,7 @@ function App() {
           {rightSidebarMode === 'lyrics' ? (
             <div className="lyrics-mode" style={{ position: 'relative', zIndex: 1 }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
                   <div style={{ fontSize: '12px', color: 'var(--text-muted)', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '1px' }}>Sync</div>
                   <button
                     onClick={() => setShowRomanized(!showRomanized)}
@@ -10224,11 +7466,89 @@ function App() {
                   >
                     A/文
                   </button>
+                  <div style={{ position: 'relative' }}>
+                    <button
+                      onClick={() => setShowLyricTranslation(prev => !prev)}
+                      onContextMenu={(e) => {
+                        e.preventDefault();
+                        setShowSidebarLyricsLangMenu(prev => !prev);
+                      }}
+                      style={{
+                        background: showLyricTranslation ? 'var(--accent-primary)' : 'transparent',
+                        border: '1px solid var(--accent-primary)',
+                        color: showLyricTranslation ? (settings.theme === 'minimalist' ? 'black' : 'white') : 'var(--accent-primary)',
+                        fontSize: '10px', padding: '2px 6px', borderRadius: '4px', cursor: 'pointer', fontWeight: 600,
+                        display: 'inline-flex', alignItems: 'center', gap: '3px'
+                      }}
+                      title={`${t('translateLyrics')} (Klik kanan: pilih bahasa)`}
+                    >
+                      <Languages size={11} />
+                    </button>
+                    {showSidebarLyricsLangMenu && (
+                      <div
+                        onMouseLeave={() => setShowSidebarLyricsLangMenu(false)}
+                        style={{
+                          position: 'absolute',
+                          top: 'calc(100% + 6px)',
+                          left: 0,
+                          minWidth: '145px',
+                          background: 'var(--bg-secondary)',
+                          border: '1px solid var(--border-color)',
+                          borderRadius: '10px',
+                          padding: '4px',
+                          boxShadow: '0 10px 28px rgba(0,0,0,0.45)',
+                          zIndex: 50,
+                        }}
+                      >
+                        {[
+                          { code: 'auto', label: t('lyricsLangAuto') || 'Auto' },
+                          { code: 'id', label: 'Indonesia' },
+                          { code: 'en', label: 'English' },
+                          { code: 'ja', label: '日本語' },
+                          { code: 'ko', label: '한국어' },
+                          { code: 'es', label: 'Español' },
+                          { code: 'fr', label: 'Français' },
+                        ].map(opt => {
+                          const active = (settings.lyricsTargetLang || 'auto') === opt.code;
+                          return (
+                            <div
+                              key={opt.code}
+                              onClick={() => {
+                                handleChangeLyricsTargetLang(opt.code);
+                                setShowSidebarLyricsLangMenu(false);
+                              }}
+                              style={{
+                                padding: '6px 10px',
+                                borderRadius: '6px',
+                                fontSize: '11.5px',
+                                color: active ? 'var(--accent-primary)' : 'var(--text-primary)',
+                                fontWeight: active ? 700 : 500,
+                                cursor: 'pointer',
+                                display: 'flex',
+                                alignItems: 'center',
+                                justifyContent: 'space-between',
+                                background: active ? 'rgba(255,255,255,0.06)' : 'transparent',
+                              }}
+                            >
+                              <span>{opt.label}</span>
+                              {active && <Check size={12} />}
+                            </div>
+                          );
+                        })}
+                      </div>
+                    )}
+                  </div>
                 </div>
                 <div style={{ display: 'flex', gap: '4px', backgroundColor: 'var(--bg-card)', padding: '4px', borderRadius: '12px', border: '1px solid var(--border-color)' }}>
-                  <button onClick={() => setLyricsOffset(prev => prev - 0.5)} style={{ background: 'transparent', border: 'none', color: 'var(--text-secondary)', fontSize: '11px', padding: '4px 8px', borderRadius: '8px', cursor: 'pointer' }}>-0.5s</button>
-                  <div style={{ backgroundColor: 'var(--accent-primary)', color: settings.theme === 'minimalist' ? 'black' : 'white', fontSize: '11px', fontWeight: 'bold', padding: '4px 12px', borderRadius: '8px', display: 'flex', alignItems: 'center' }}>{lyricsOffset}s</div>
-                  <button onClick={() => setLyricsOffset(prev => prev + 0.5)} style={{ background: 'transparent', border: 'none', color: 'var(--text-secondary)', fontSize: '11px', padding: '4px 8px', borderRadius: '8px', cursor: 'pointer' }}>+0.5s</button>
+                  <button onClick={() => updateAndSaveLyricsOffset(-0.5)} style={{ background: 'transparent', border: 'none', color: 'var(--text-secondary)', fontSize: '11px', padding: '4px 8px', borderRadius: '8px', cursor: 'pointer' }}>-0.5s</button>
+                  <div
+                    onClick={() => updateAndSaveLyricsOffset(0, true)}
+                    title={t('resetOffsetTooltip')}
+                    style={{ backgroundColor: 'var(--accent-primary)', color: settings.theme === 'minimalist' ? 'black' : 'white', fontSize: '11px', fontWeight: 'bold', padding: '4px 12px', borderRadius: '8px', display: 'flex', alignItems: 'center', cursor: 'pointer' }}
+                  >
+                    {lyricsOffset}s
+                  </div>
+                  <button onClick={() => updateAndSaveLyricsOffset(0.5)} style={{ background: 'transparent', border: 'none', color: 'var(--text-secondary)', fontSize: '11px', padding: '4px 8px', borderRadius: '8px', cursor: 'pointer' }}>+0.5s</button>
                 </div>
               </div>
               <div className="lyrics-container" ref={sidebarLyricsRef} onWheel={handleUserScroll} onTouchMove={handleUserScroll} onMouseDown={handleUserScroll}>
@@ -10247,9 +7567,13 @@ function App() {
                         </div>
                       );
                     }
+                    const transLine = showLyricTranslation && translatedLyrics?.[i];
                     return (
                       <div key={i} data-lyric-idx={i} className={`lyrics-line ${isActive ? 'active' : 'inactive'}`} onClick={() => jumpToLyric(line.time)}>
-                        {showRomanized && line.romanizedText ? line.romanizedText : line.text}
+                        <div>{showRomanized && line.romanizedText ? line.romanizedText : line.text}</div>
+                        {transLine && (
+                          <div style={{ fontSize: '0.76em', opacity: 0.72, marginTop: '3px', fontWeight: 400 }}>{transLine}</div>
+                        )}
                       </div>
                     );
                   })
@@ -10501,122 +7825,43 @@ function App() {
       )}
 
       {/* FULLSCREEN PLAYER */}
-      {isWidgetMode && (
-        <div className="fullscreen-player">
-          <div className="fs-background">
-            <img
-              key={currentSong?.id || 'bg'}
-              src={(getCleanThumbnail(currentSong?.thumbnail) || getHighResImage(currentSong?.cover))}
-              onError={(e) => {
-                const target = e.currentTarget as HTMLImageElement;
-                const fallback = 'https://images.unsplash.com/photo-1614680376573-df3480f0c6ff?auto=format&fit=crop&w=500&q=80';
-                if (target.src.includes('maxresdefault.jpg')) {
-                  target.src = target.src.replace('maxresdefault.jpg', 'hqdefault.jpg');
-                } else if (target.src.includes('hqdefault.jpg')) {
-                  target.src = target.src.replace('hqdefault.jpg', 'mqdefault.jpg');
-                } else if (target.src !== fallback) {
-                  target.src = fallback;
-                }
-              }}
-              alt="bg"
-            />
-          </div>
-
-          <div className="fs-content">
-            <div className="fs-left">
-              <div className="fs-art-container" onMouseEnter={() => setShowWidgetOverlay(true)} onMouseLeave={() => setShowWidgetOverlay(false)}>
-                <img
-                  key={currentSong?.id || 'art'}
-                  src={(getCleanThumbnail(currentSong?.thumbnail) || getHighResImage(currentSong?.cover))}
-                  onError={(e) => {
-                    const target = e.currentTarget as HTMLImageElement;
-                    const fallback = 'https://images.unsplash.com/photo-1614680376573-df3480f0c6ff?auto=format&fit=crop&w=500&q=80';
-                    if (target.src.includes('maxresdefault.jpg')) {
-                      target.src = target.src.replace('maxresdefault.jpg', 'hqdefault.jpg');
-                    } else if (target.src.includes('hqdefault.jpg')) {
-                      target.src = target.src.replace('hqdefault.jpg', 'mqdefault.jpg');
-                    } else if (target.src !== fallback) {
-                      target.src = fallback;
-                    }
-                  }}
-                  alt="art"
-                  className="fs-art"
-                />
-
-                <div className={`fs-art-overlay ${showWidgetOverlay ? 'visible' : ''}`}>
-                  <div className="fs-overlay-top">
-                    <button className="fs-overlay-btn" onClick={() => setIsWidgetMode(false)} title="Close Fullscreen"><X size={20} /></button>
-                  </div>
-
-                  <div className="fs-overlay-center">
-                    <div className="fs-giant-heart" onClick={() => currentSong && toggleLike(currentSong)}>
-                      <svg width="120" height="120" viewBox="0 0 24 24" fill={currentSong && isLiked(currentSong.id) ? '#ff6b9d' : 'none'} stroke={currentSong && isLiked(currentSong.id) ? '#ff6b9d' : 'currentColor'} strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
-                        <path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"></path>
-                      </svg>
-                    </div>
-                  </div>
-
-                  <div className="fs-overlay-bottom">
-                    <div className="fs-overlay-controls">
-                      <button onClick={toggleShuffle} style={{ color: isShuffled ? 'var(--accent-primary)' : 'white' }}><Shuffle size={20} /></button>
-                      <button onClick={handlePrev}><SkipBack size={24} fill="currentColor" /></button>
-                      <button className="fs-overlay-play" onClick={togglePlay}>
-                        {isPlaying ? <Pause size={28} fill="black" /> : <Play size={28} fill="black" style={{ marginLeft: '6px' }} />}
-                      </button>
-                      <button onClick={handleNext}><SkipForward size={24} fill="currentColor" /></button>
-                      <button onClick={toggleLoopMode} style={{ color: loopMode !== 'off' ? 'var(--accent-primary)' : 'white' }} title={loopMode === 'all' ? t('loopPlaylist') : loopMode === 'one' ? t('loopOne') : t('loopOff')}>{loopMode === 'one' ? <Repeat1 size={20} /> : <Repeat size={20} />}</button>
-                    </div>
-
-                    <div className="fs-overlay-progress">
-                      <span>{formatTime(progress)}</span>
-                      <div className="fs-overlay-progress-bar" onClick={handleSeek}>
-                        <div className="fs-overlay-progress-fill" style={{ width: `${duration ? (progress / duration) * 100 : 0}%` }}></div>
-                      </div>
-                      <span>{formatTime(duration)}</span>
-                    </div>
-                  </div>
-                </div>
-              </div>
-
-              <div className="fs-info">
-                <div className="fs-title" title={currentSong ? currentSong.title : ""}>{currentSong ? currentSong.title : "No Music Playing"}</div>
-                <div className="fs-artist">{currentSong ? currentSong.artist : 'Select a song'}</div>
-              </div>
-            </div>
-
-            <div className="fs-right" style={{ position: 'relative' }}>
-              <div style={{ position: 'absolute', top: '32px', right: '32px', zIndex: 10, display: 'flex', gap: '8px' }}>
-                <button
-                  onClick={() => setShowRomanized(!showRomanized)}
-                  style={{
-                    background: showRomanized ? 'rgba(255,255,255,0.2)' : 'transparent',
-                    border: '1px solid rgba(255,255,255,0.3)',
-                    color: 'white',
-                    fontSize: '12px', padding: '4px 10px', borderRadius: '8px', cursor: 'pointer', fontWeight: 600,
-                    backdropFilter: 'blur(10px)',
-                    transition: 'all 0.2s'
-                  }}
-                  title="Toggle Romanization"
-                >
-                  A/文
-                </button>
-              </div>
-              <div className="fs-lyrics-container" ref={widgetLyricsRef} onWheel={handleUserScroll} onTouchMove={handleUserScroll} onMouseDown={handleUserScroll}>
-                {lyricsData && lyricsData.length > 0 ? (
-                  lyricsData.map((line, idx) => {
-                    const nextLineTime = idx < lyricsData.length - 1 ? lyricsData[idx + 1].time : duration;
-                    const isActive = (progress - lyricsOffset) >= line.time && (progress - lyricsOffset) < nextLineTime;
-                    if (line.isInstrumental) return null;
-                    return <div key={idx} data-lyric-idx={idx} className={`fs-lyric-line ${isActive ? 'active' : ''}`} onClick={() => jumpToLyric(line.time)}>{showRomanized && line.romanizedText ? line.romanizedText : line.text}</div>;
-                  })
-                ) : (
-                  <div className="fs-lyric-line active">{plainLyrics || 'Instrumental'}</div>
-                )}
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
+      <FullscreenPlayer
+        isOpen={isWidgetMode}
+        onClose={() => setIsWidgetMode(false)}
+        currentSong={currentSong}
+        isPlaying={isPlaying}
+        progress={progress}
+        duration={duration}
+        isShuffled={isShuffled}
+        loopMode={loopMode}
+        showWidgetOverlay={showWidgetOverlay}
+        setShowWidgetOverlay={setShowWidgetOverlay}
+        lyricsData={lyricsData}
+        plainLyrics={plainLyrics}
+        lyricsOffset={lyricsOffset}
+        updateAndSaveLyricsOffset={updateAndSaveLyricsOffset}
+        showRomanized={showRomanized}
+        setShowRomanized={setShowRomanized}
+        showLyricTranslation={showLyricTranslation}
+        setShowLyricTranslation={setShowLyricTranslation}
+        translatedLyrics={translatedLyrics}
+        isTranslatingLyrics={isTranslatingLyrics}
+        lyricsTargetLang={settings.lyricsTargetLang || 'auto'}
+        onChangeLyricsTargetLang={handleChangeLyricsTargetLang}
+        widgetLyricsRef={widgetLyricsRef}
+        handleUserScroll={handleUserScroll}
+        jumpToLyric={jumpToLyric}
+        isLiked={isLiked}
+        toggleLike={toggleLike}
+        toggleShuffle={toggleShuffle}
+        togglePlay={togglePlay}
+        handlePrev={handlePrev}
+        handleNext={handleNext}
+        toggleLoopMode={toggleLoopMode}
+        handleSeek={handleSeek}
+        formatTime={formatTime}
+        t={t}
+      />
       {contextMenu && (() => {
         const left = Math.max(10, Math.min(contextMenu.x, window.innerWidth - 230));
         const top = Math.max(10, Math.min(contextMenu.y, window.innerHeight - 260));
@@ -10809,221 +8054,168 @@ function App() {
       )}
 
       {/* Wrapped Story Modal */}
-      {showWrappedStory && wrappedData && (
-        <div className="wrapped-story-modal-overlay" onClick={() => setShowWrappedStory(false)}>
-          
-          {/* Hardcoded background audio for dramatic effect */}
-          {wrappedData.topSongs?.[0]?.song && (
-            <audio 
-               autoPlay 
-               loop 
-               src={`${API_BASE_URL}/api/stream?id=${wrappedData.topSongs[0].song.id}&quality=auto`} 
-               onCanPlay={(e: any) => { e.target.volume = 0.4; }} 
-               style={{ display: 'none' }} 
-            />
-          )}
+      <WrappedStoryModal
+        isOpen={showWrappedStory}
+        wrappedData={wrappedData}
+        wrappedStoryIndex={wrappedStoryIndex}
+        setWrappedStoryIndex={setWrappedStoryIndex}
+        onClose={() => setShowWrappedStory(false)}
+        discordUser={discordUser}
+        apiBaseUrl={API_BASE_URL}
+        t={t}
+        startPlayingFromList={startPlayingFromList}
+      />
 
-          <div className="wrapped-story-modal-wrapper">
-            <button className="story-close-btn" onClick={(e) => { e.stopPropagation(); setShowWrappedStory(false); }}>
-              <X size={32} />
-            </button>
+      {/* Command Palette (Ctrl+K) */}
+      <CommandPalette
+        isOpen={showCommandPalette}
+        onClose={() => setShowCommandPalette(false)}
+        t={t}
+        playlists={playlists}
+        madeForYouPlaylists={madeForYouPlaylists}
+        playHistory={playHistory}
+        likedSongs={likedSongs}
+        onPlaySong={(song) => playSingleSong(song)}
+        onOpenPlaylist={(pl) => {
+          if (pl.isTemporary) openMadeForYouPlaylist(pl);
+          else navigate('playlist-detail', { playlistId: pl.id });
+        }}
+        onSearchQuery={(q) => {
+          setSearchQuery(q);
+          setShowSuggestions(true);
+          navigate('home');
+          setTimeout(() => searchInputRef.current?.focus(), 60);
+        }}
+        actions={[
+          {
+            id: 'act-play-pause',
+            category: t('cmdCatActions'),
+            title: isPlaying ? t('btnPause') : t('btnPlay'),
+            subtitle: currentSong ? `${currentSong.title} — ${currentSong.artist}` : undefined,
+            icon: isPlaying ? <Pause size={16} /> : <Play size={16} />,
+            onSelect: () => togglePlay(),
+          },
+          {
+            id: 'act-next',
+            category: t('cmdCatActions'),
+            title: t('btnNext'),
+            icon: <SkipForward size={16} />,
+            onSelect: () => handleNext(),
+          },
+          {
+            id: 'act-prev',
+            category: t('cmdCatActions'),
+            title: t('btnPrevious'),
+            icon: <SkipBack size={16} />,
+            onSelect: () => handlePrev(),
+          },
+          {
+            id: 'act-shuffle',
+            category: t('cmdCatActions'),
+            title: t('btnShuffle'),
+            icon: <Shuffle size={16} />,
+            onSelect: () => toggleShuffle(),
+          },
+          {
+            id: 'act-repeat',
+            category: t('cmdCatActions'),
+            title: loopMode === 'all' ? t('loopPlaylist') : loopMode === 'one' ? t('loopOne') : t('loopOff'),
+            icon: <Repeat size={16} />,
+            onSelect: () => toggleLoopMode(),
+          },
+          {
+            id: 'act-theater',
+            category: t('cmdCatActions'),
+            title: t('btnFullscreen'),
+            icon: <Maximize2 size={16} />,
+            onSelect: () => setIsWidgetMode(true),
+          },
+          {
+            id: 'act-nav-home',
+            category: t('cmdCatActions'),
+            title: t('home'),
+            icon: <Home size={16} />,
+            onSelect: () => goHome(),
+          },
+          {
+            id: 'act-nav-library',
+            category: t('cmdCatActions'),
+            title: t('yourLibrary'),
+            icon: <Library size={16} />,
+            onSelect: () => navigate('library'),
+          },
+          {
+            id: 'act-nav-soundmap',
+            category: t('cmdCatActions'),
+            title: t('soundMap') || 'Sound Map',
+            icon: <MapIcon size={16} />,
+            onSelect: () => navigate('sound-map'),
+          },
+          {
+            id: 'act-nav-downloads',
+            category: t('cmdCatActions'),
+            title: t('downloads'),
+            icon: <Download size={16} />,
+            onSelect: () => navigate('downloads'),
+          },
+          {
+            id: 'act-nav-settings',
+            category: t('cmdCatActions'),
+            title: t('settings'),
+            icon: <Settings size={16} />,
+            onSelect: () => navigate('settings'),
+          },
+          {
+            id: 'act-theme-default',
+            category: t('themeDisplay'),
+            title: `${t('themeDisplay')}: ${t('themeDefault')}`,
+            icon: <Paintbrush size={16} />,
+            onSelect: () => {
+              const next = { ...settings, theme: 'default' };
+              setSettings(next);
+              localStorage.setItem('donpollo_settings', JSON.stringify(next));
+            },
+          },
+          {
+            id: 'act-theme-minimalist',
+            category: t('themeDisplay'),
+            title: `${t('themeDisplay')}: ${t('themeMinimalist')}`,
+            icon: <Paintbrush size={16} />,
+            onSelect: () => {
+              const next = { ...settings, theme: 'minimalist' };
+              setSettings(next);
+              localStorage.setItem('donpollo_settings', JSON.stringify(next));
+            },
+          },
+          {
+            id: 'act-theme-vibrant',
+            category: t('themeDisplay'),
+            title: `${t('themeDisplay')}: ${t('themeVibrant')}`,
+            icon: <Paintbrush size={16} />,
+            onSelect: () => {
+              const next = { ...settings, theme: 'vibrant' };
+              setSettings(next);
+              localStorage.setItem('donpollo_settings', JSON.stringify(next));
+            },
+          },
+        ]}
+      />
 
-            {wrappedStoryIndex > 0 && (
-              <button className="story-nav-btn left" onClick={(e) => { e.stopPropagation(); setWrappedStoryIndex(prev => prev - 1); }}>
-                <ChevronLeft size={32} />
-              </button>
-            )}
-
-            <div className="wrapped-story-modal" onClick={(e) => e.stopPropagation()}>
-              {/* Dynamic Animated Background */}
-              <div className="wrapped-bg-animated">
-                <div className="orb orb-1"></div>
-                <div className="orb orb-2"></div>
-                <div className="orb orb-3"></div>
-                <div className="orb orb-4"></div>
-              </div>
-
-          <div className="story-progress-container">
-             {[0, 1, 2, 3, 4, 5, 6, 7, 8].map(i => (
-                <div key={i} className="story-progress-bar">
-                   <div className={`story-progress-fill ${i === wrappedStoryIndex ? 'active' : i < wrappedStoryIndex ? 'completed' : ''}`} />
-                </div>
-             ))}
-          </div>
-          
-          <div className="story-content">
-             {wrappedStoryIndex === 0 && (
-                <div className="story-slide slide-1">
-                   <div className="story-user-profile zoom-in-anim">
-                      <div className="avatar-ring-container">
-                         <img 
-                            src={discordUser?.avatar ? `https://cdn.discordapp.com/avatars/${discordUser.id}/${discordUser.avatar}.png` : `https://ui-avatars.com/api/?name=${encodeURIComponent(discordUser?.global_name || discordUser?.username || 'User')}&background=random`} 
-                            alt="Avatar" 
-                            className="story-avatar" 
-                         />
-                         <div className="avatar-ring"></div>
-                      </div>
-                      <h2 className="story-username slide-up-anim delay-1">{discordUser?.global_name || discordUser?.username || 'User'}</h2>
-                   </div>
-                   <h1 className="story-title-massive slide-up-anim delay-2" style={{ marginTop: '30px' }}>{t('storyWelcome')}</h1>
-                </div>
-             )}
-             {wrappedStoryIndex === 1 && (
-                <div className="story-slide slide-2">
-                   <h2 className="story-subtitle slide-right-anim">{t('storyUniqueSongs').replace('{0}', '')}</h2>
-                   <div className="story-minutes-highlight pop-in-anim delay-1">
-                      {(wrappedData.uniqueSongsCount || 0).toLocaleString()}
-                   </div>
-                </div>
-             )}
-             {wrappedStoryIndex === 2 && (
-                <div className="story-slide slide-3">
-                   <h2 className="story-subtitle slide-left-anim">{t('storyUniqueArtists').replace('{0}', '')}</h2>
-                   <div className="story-minutes-highlight pop-in-anim delay-1" style={{ color: '#fff' }}>
-                      {(wrappedData.uniqueArtistsCount || 0).toLocaleString()}
-                   </div>
-                </div>
-             )}
-             {wrappedStoryIndex === 3 && (
-                <div className="story-slide slide-4">
-                   <h2 className="story-subtitle slide-down-anim" style={{ letterSpacing: '8px' }}>TIME SPENT</h2>
-                   <div className="story-minutes-highlight pop-in-anim delay-1">
-                      {Math.floor(wrappedData.totalListenSeconds / 60).toLocaleString()}
-                   </div>
-                   <h1 className="story-title slide-up-anim delay-1">MINUTES</h1>
-                   <div className="story-vibe-box slide-up-anim delay-2">
-                      <span className="vibe-emoji">{wrappedData.topMood === 'happy' ? '☀️' : wrappedData.topMood === 'sad' ? '🌧️' : wrappedData.topMood === 'chill' ? '☕' : '⚡'}</span>
-                      <div className="vibe-text-container">
-                         <span className="vibe-label">Your Vibe</span>
-                         <span className="vibe-text">{wrappedData.topMood ? t(`mood${wrappedData.topMood.charAt(0).toUpperCase() + wrappedData.topMood.slice(1)}` as any).replace(/☀️ |🌧️ |☕ |⚡ /g, '') : '-'}</span> 
-                      </div>
-                   </div>
-                </div>
-             )}
-             {wrappedStoryIndex === 4 && (
-                <div className="story-slide slide-5">
-                   <div className="spotify-21-top-song-layout pop-in-anim delay-1">
-                      {wrappedData.topSongs?.[0] && (
-                         <>
-                            <div className="s21-cover-container">
-                               <div className="s21-band">
-                                  <div className="s21-band-text">2026 2026 2026 2026 2026 2026</div>
-                               </div>
-                               <img src={(getCleanThumbnail(wrappedData.topSongs[0].song.thumbnail) || getHighResImage(wrappedData.topSongs[0].song.cover))} className="s21-top-song-cover" alt="Top Song" />
-                            </div>
-                            
-                            <div className="s21-top-song-text-block slide-up-anim delay-2">
-                               <p className="s21-text-normal">Your top song of the year</p>
-                               <p className="s21-text-normal">was <span className="s21-text-highlight">{wrappedData.topSongs[0].song.title}</span></p>
-                               <p className="s21-text-normal">by <span className="s21-text-highlight">{wrappedData.topSongs[0].song.artist}</span></p>
-                            </div>
-                            
-                            <div className="s21-top-song-stat-block slide-up-anim delay-2">
-                               <p className="s21-text-small">You played it a totally reasonable</p>
-                               <p className="s21-text-small"><span className="s21-text-highlight">{wrappedData.topSongs[0].count}</span> times. As is your right.</p>
-                            </div>
-                         </>
-                      )}
-                   </div>
-                </div>
-             )}
-             {wrappedStoryIndex === 5 && (
-                <div className="story-slide slide-6">
-                   <h1 className="story-title-massive slide-down-anim" style={{ fontSize: '48px', marginBottom: '20px' }}>{t('storySongs')}</h1>
-                   <div className="story-top-songs staggered-list">
-                      {wrappedData.topSongs.slice(0, 5).map((item: any, idx: number) => (
-                         <div key={idx} className={`story-song-item pop-in-anim delay-list-${idx + 1}`}>
-                            <span className="story-song-rank">#{idx + 1}</span>
-                            <img src={(getCleanThumbnail(item.song.thumbnail) || getHighResImage(item.song.cover))} alt={item.song.title} />
-                            <div className="story-song-info">
-                               <span className="story-song-title">{item.song.title}</span>
-                               <span className="story-song-artist">{item.song.artist}</span>
-                            </div>
-                         </div>
-                      ))}
-                   </div>
-                   <button className="btn-primary slide-up-anim delay-list-6 glass-btn" style={{ marginTop: '50px' }} onClick={() => {
-                       setShowWrappedStory(false);
-                       const playlistSongs = wrappedData.topSongs.map((item: any) => item.song);
-                       startPlayingFromList(playlistSongs, 0);
-                   }}>
-                      <Play size={20} fill="currentColor" style={{ marginRight: '10px' }} />
-                      {t('playYourTopSongs')}
-                   </button>
-                </div>
-             )}
-             {wrappedStoryIndex === 6 && (
-                <div className="story-slide slide-7">
-                   <div className="spotify-top-artist-layout pop-in-anim delay-1">
-                      {wrappedData.topArtists?.[0]?.cover && (
-                         <img src={(getCleanThumbnail(wrappedData.topArtists[0].cover) || getHighResImage(wrappedData.topArtists[0].cover))} className="spotify-top-artist-cover" alt="Top Artist" />
-                      )}
-                      <h1 className="spotify-top-artist-name">{wrappedData.topArtists?.[0]?.artist || 'Unknown'}</h1>
-                      <div className="spotify-top-artist-sub">Your Top Artist</div>
-                   </div>
-                </div>
-             )}
-             {wrappedStoryIndex === 7 && (
-                <div className="story-slide slide-8">
-                   <h1 className="story-title-massive slide-down-anim" style={{ fontSize: '48px', marginBottom: '20px' }}>{t('storyTopArtistsList')}</h1>
-                   <div className="story-top-songs staggered-list">
-                      {wrappedData.topArtists.slice(0, 5).map((item: any, idx: number) => (
-                         <div key={idx} className={`story-song-item pop-in-anim delay-list-${idx + 1} artist-list-item`}>
-                            <span className="story-song-rank">#{idx + 1}</span>
-                            {item.cover && (
-                               <img src={(getCleanThumbnail(item.cover) || getHighResImage(item.cover))} className="artist-cover-small" alt={item.artist} />
-                            )}
-                            <div className="story-song-info">
-                               <span className="story-song-title">{item.artist}</span>
-                               <span className="story-song-artist">{item.count} Plays</span>
-                            </div>
-                         </div>
-                      ))}
-                   </div>
-                </div>
-             )}
-             {wrappedStoryIndex === 8 && (
-                <div className="story-slide slide-9">
-                   <div className="final-spotify-layout pop-in-anim delay-1">
-                      {wrappedData.topArtists?.[0]?.cover && (
-                         <img src={(getCleanThumbnail(wrappedData.topArtists[0].cover) || getHighResImage(wrappedData.topArtists[0].cover))} className="final-spotify-cover" alt="Top Artist" />
-                      )}
-                      <div className="final-spotify-columns">
-                         <div className="final-spotify-col">
-                            <div className="final-spotify-col-title">Top Artists</div>
-                            {wrappedData.topArtists.slice(0, 5).map((item: any, idx: number) => (
-                               <div key={idx} className="final-spotify-col-item">
-                                  <span className="idx">{idx + 1}</span> <span className="name">{item.artist}</span>
-                               </div>
-                            ))}
-                            <div className="final-spotify-col-title" style={{ marginTop: '30px' }}>Minutes Listened</div>
-                            <div className="final-spotify-col-stat">{Math.floor(wrappedData.totalListenSeconds / 60).toLocaleString()}</div>
-                         </div>
-                         <div className="final-spotify-col">
-                            <div className="final-spotify-col-title">Top Songs</div>
-                            {wrappedData.topSongs.slice(0, 5).map((item: any, idx: number) => (
-                               <div key={idx} className="final-spotify-col-item">
-                                  <span className="idx">{idx + 1}</span> <span className="name">{item.song.title}</span>
-                               </div>
-                            ))}
-                            <div className="final-spotify-col-title" style={{ marginTop: '30px' }}>Top Vibe</div>
-                            <div className="final-spotify-col-stat">{wrappedData.topMood ? t(`mood${wrappedData.topMood.charAt(0).toUpperCase() + wrappedData.topMood.slice(1)}` as any).replace(/☀️ |🌧️ |☕ |⚡ /g, '') : '-'}</div>
-                         </div>
-                      </div>
-                   </div>
-                </div>
-             )}
-          </div>
-          </div>
-          
-          {wrappedStoryIndex < 8 && (
-            <button className="story-nav-btn right" onClick={(e) => { e.stopPropagation(); setWrappedStoryIndex(prev => prev + 1); }}>
-              <ChevronRight size={32} />
-            </button>
-          )}
-          </div>
-        </div>
-      )}
+      {/* Live Party Chat & Floating Emoji Reactions (Listen Along) */}
+      {(() => {
+        const isHostingParty = !!(discordUser && onlineUsers.some(u => u.partyId === discordUser.id));
+        const effectivePartyId = activePartyId || (isHostingParty ? discordUser!.id : null);
+        const partyUser = discordUser
+          ? { id: discordUser.id, name: discordUser.global_name || discordUser.username, avatar: getDiscordAvatar(discordUser) }
+          : null;
+        return (
+          <PartyChatOverlay
+            partyId={effectivePartyId}
+            currentUser={partyUser}
+            t={t}
+          />
+        );
+      })()}
     </div>
   );
 }

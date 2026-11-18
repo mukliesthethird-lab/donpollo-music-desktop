@@ -606,6 +606,38 @@ type TranslationKeys = {
   customStatusSet: string;
   customStatusEdit: string;
   customStatusTooltip: string;
+
+  // Upgraded Features (Visualizer, Custom EQ, Podcast, Lyrics, SoundMap)
+  audioVisualizerLabel: string;
+  audioVisualizerDesc: string;
+  eqReset: string;
+  eqPresetPlaceholder: string;
+  eqSave: string;
+  eqSavedToast: string;
+  podcastResumedToast: string;
+  podcastSkipBack: string;
+  podcastSkipForward: string;
+  podcastSpeedLabel: string;
+  translateLyrics: string;
+  translatingLyrics: string;
+  resetOffsetTooltip: string;
+  lyricsTranslateLangLabel: string;
+  lyricsTranslateLangDesc: string;
+  lyricsLangAuto: string;
+  soundMapPlayTopMix: string;
+  soundMapQuickJump: string;
+
+  // Command Palette & Party Chat
+  cmdPlaceholder: string;
+  cmdNoResults: string;
+  cmdCatSearch: string;
+  cmdCatSongs: string;
+  cmdCatActions: string;
+  cmdSearchOnline: string;
+  cmdSearchOnlineDesc: string;
+  partyChatTitle: string;
+  partyChatEmpty: string;
+  partyChatPlaceholder: string;
 };
 
 const translations: Record<Language, TranslationKeys> = {
@@ -1213,6 +1245,38 @@ const translations: Record<Language, TranslationKeys> = {
     customStatusSet: 'Pasang Status',
     customStatusEdit: 'Ubah Custom Status',
     customStatusTooltip: 'Klik untuk ubah status',
+
+    // Upgraded Features
+    audioVisualizerLabel: 'Audio Visualizer',
+    audioVisualizerDesc: 'Tampilkan spektrum frekuensi audio real-time di player bar & fullscreen',
+    eqReset: 'Reset',
+    eqPresetPlaceholder: 'Nama preset...',
+    eqSave: 'Simpan',
+    eqSavedToast: 'Preset EQ "{name}" tersimpan',
+    podcastResumedToast: 'Melanjutkan podcast dari {time}',
+    podcastSkipBack: 'Mundur 15 detik',
+    podcastSkipForward: 'Maju 30 detik',
+    podcastSpeedLabel: 'Kecepatan Putar Podcast',
+    translateLyrics: 'Terjemahkan',
+    translatingLyrics: 'Menerjemahkan...',
+    resetOffsetTooltip: 'Klik untuk reset offset',
+    lyricsTranslateLangLabel: 'Bahasa Terjemahan Lirik',
+    lyricsTranslateLangDesc: 'Bahasa tujuan saat fitur terjemahan lirik diaktifkan (klik kanan tombol terjemahan untuk ubah cepat)',
+    lyricsLangAuto: 'Otomatis (Ikuti Bahasa Aplikasi)',
+    soundMapPlayTopMix: 'Putar Top Mix',
+    soundMapQuickJump: 'Cari cepat negara...',
+
+    // Command Palette & Party Chat
+    cmdPlaceholder: 'Ketik perintah, playlist, atau judul lagu...',
+    cmdNoResults: 'Tidak ada perintah atau lagu yang cocok.',
+    cmdCatSearch: 'Pencarian',
+    cmdCatSongs: 'Koleksimu',
+    cmdCatActions: 'Aksi Cepat',
+    cmdSearchOnline: 'Cari & putar',
+    cmdSearchOnlineDesc: 'Cari di seluruh DonPollo Music',
+    partyChatTitle: 'Chat Party',
+    partyChatEmpty: 'Sapa teman atau kirim reaksi emoji!',
+    partyChatPlaceholder: 'Kirim pesan ke party...',
   },
 
   en: {
@@ -1819,6 +1883,38 @@ const translations: Record<Language, TranslationKeys> = {
     customStatusSet: 'Set Custom Status',
     customStatusEdit: 'Edit Custom Status',
     customStatusTooltip: 'Click to edit status',
+
+    // Upgraded Features
+    audioVisualizerLabel: 'Audio Visualizer',
+    audioVisualizerDesc: 'Show real-time audio frequency spectrum in the player bar & fullscreen',
+    eqReset: 'Reset',
+    eqPresetPlaceholder: 'Preset name...',
+    eqSave: 'Save',
+    eqSavedToast: 'Saved EQ preset "{name}"',
+    podcastResumedToast: 'Resumed podcast from {time}',
+    podcastSkipBack: 'Skip -15s',
+    podcastSkipForward: 'Skip +30s',
+    podcastSpeedLabel: 'Podcast Playback Speed',
+    translateLyrics: 'Translate',
+    translatingLyrics: 'Translating...',
+    resetOffsetTooltip: 'Click to reset offset',
+    lyricsTranslateLangLabel: 'Lyrics Translation Language',
+    lyricsTranslateLangDesc: 'Target language when lyrics translation is enabled (right-click the translate button to switch quickly)',
+    lyricsLangAuto: 'Auto (Follow App Language)',
+    soundMapPlayTopMix: 'Play Top Mix',
+    soundMapQuickJump: 'Quick jump country...',
+
+    // Command Palette & Party Chat
+    cmdPlaceholder: 'Type a command, playlist, or song...',
+    cmdNoResults: 'No matching commands or items.',
+    cmdCatSearch: 'Search',
+    cmdCatSongs: 'Your Library',
+    cmdCatActions: 'Quick Actions',
+    cmdSearchOnline: 'Search & play',
+    cmdSearchOnlineDesc: 'Search across DonPollo Music',
+    partyChatTitle: 'Party Chat',
+    partyChatEmpty: 'Say hi or drop an emoji reaction!',
+    partyChatPlaceholder: 'Message party...',
   },
 
   ja: {
@@ -2425,6 +2521,38 @@ const translations: Record<Language, TranslationKeys> = {
     customStatusSet: 'カスタムステータスを設定',
     customStatusEdit: 'カスタムステータスを編集',
     customStatusTooltip: 'クリックしてステータスを編集',
+
+    // Upgraded Features
+    audioVisualizerLabel: 'オーディオビジュアライザー',
+    audioVisualizerDesc: 'プレイヤーバーと全画面モードでリアルタイムの周波数スペクトルを表示',
+    eqReset: 'リセット',
+    eqPresetPlaceholder: 'プリセット名...',
+    eqSave: '保存',
+    eqSavedToast: 'EQプリセット「{name}」を保存しました',
+    podcastResumedToast: '{time} からポッドキャストを再開しました',
+    podcastSkipBack: '15秒戻る',
+    podcastSkipForward: '30秒進む',
+    podcastSpeedLabel: 'ポッドキャスト再生速度',
+    translateLyrics: '翻訳',
+    translatingLyrics: '翻訳中...',
+    resetOffsetTooltip: 'クリックしてオフセットをリセット',
+    lyricsTranslateLangLabel: '歌詞の翻訳言語',
+    lyricsTranslateLangDesc: '歌詞翻訳を有効にした際のターゲット言語（翻訳ボタンを右クリックで素早く変更可能）',
+    lyricsLangAuto: '自動（アプリの言語に合わせる）',
+    soundMapPlayTopMix: 'トップミックスを再生',
+    soundMapQuickJump: '国名でクイック検索...',
+
+    // Command Palette & Party Chat
+    cmdPlaceholder: 'コマンド、プレイリスト、曲名を入力...',
+    cmdNoResults: '一致する項目がありません。',
+    cmdCatSearch: '検索',
+    cmdCatSongs: 'ライブラリ',
+    cmdCatActions: 'クイックアクション',
+    cmdSearchOnline: '検索して再生',
+    cmdSearchOnlineDesc: 'DonPollo Music 全体を検索',
+    partyChatTitle: 'パーティーチャット',
+    partyChatEmpty: '挨拶したり絵文字リアクションを送ろう！',
+    partyChatPlaceholder: 'パーティーにメッセージ...',
   },
 
   ko: {
@@ -3032,6 +3160,38 @@ const translations: Record<Language, TranslationKeys> = {
     customStatusSet: '맞춤 상태 설정',
     customStatusEdit: '맞춤 상태 변경',
     customStatusTooltip: '클릭하여 상태 변경',
+
+    // Upgraded Features
+    audioVisualizerLabel: '오디오 비주얼라이저',
+    audioVisualizerDesc: '플레이어 바와 전체 화면에서 실시간 오디오 주파수 스펙트럼 표시',
+    eqReset: '초기화',
+    eqPresetPlaceholder: '프리셋 이름...',
+    eqSave: '저장',
+    eqSavedToast: 'EQ 프리셋 "{name}" 저장됨',
+    podcastResumedToast: '{time}부터 팟캐스트 이어 듣기',
+    podcastSkipBack: '15초 뒤로',
+    podcastSkipForward: '30초 앞으로',
+    podcastSpeedLabel: '팟캐스트 재생 속도',
+    translateLyrics: '번역',
+    translatingLyrics: '번역 중...',
+    resetOffsetTooltip: '클릭하여 오프셋 초기화',
+    lyricsTranslateLangLabel: '가사 번역 언어',
+    lyricsTranslateLangDesc: '가사 번역 활성화 시 대상 언어 (번역 버튼 우클릭으로 빠르게 변경)',
+    lyricsLangAuto: '자동 (앱 언어 따르기)',
+    soundMapPlayTopMix: '인기 믹스 재생',
+    soundMapQuickJump: '국가 빠른 검색...',
+
+    // Command Palette & Party Chat
+    cmdPlaceholder: '명령어, 플레이리스트 또는 곡 제목 입력...',
+    cmdNoResults: '일치하는 항목이 없습니다.',
+    cmdCatSearch: '검색',
+    cmdCatSongs: '보관함',
+    cmdCatActions: '빠른 작업',
+    cmdSearchOnline: '검색 및 재생',
+    cmdSearchOnlineDesc: 'DonPollo Music 전체에서 검색',
+    partyChatTitle: '파티 채팅',
+    partyChatEmpty: '인사하거나 이모지 반응을 보내보세요!',
+    partyChatPlaceholder: '파티에 메시지 보내기...',
   }
 };
 

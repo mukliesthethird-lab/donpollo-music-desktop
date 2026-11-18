@@ -106,4 +106,6 @@ contextBridge.exposeInMainWorld('electronAPI', {
   getAnalytics: () => ipcRenderer.invoke('get-analytics'),
   searchYTMusic: (query: string, limit?: number) => ipcRenderer.invoke('search-ytmusic', query, limit),
   setCustomStatus: (data: { discordId: string, customStatus: string }) => ipcRenderer.invoke('set-custom-status', data),
+  sendPartyMessage: (data: any) => ipcRenderer.invoke('send-party-message', data),
+  pollPartyMessages: (partyId: string, afterId?: number) => ipcRenderer.invoke('poll-party-messages', partyId, afterId),
 });

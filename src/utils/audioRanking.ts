@@ -1,4 +1,4 @@
-﻿/**
+/**
  * Audio Ranking & Query Optimization Helper for Don Pollo Music
  * 
  * Prioritizes official album audio and studio master releases over music videos (MV),
@@ -454,6 +454,8 @@ export async function searchItunesTracks(
         id: null,
         title: t.trackName,
         artist: t.artistName,
+        album: t.collectionName || '',
+        genre: t.primaryGenreName || '',
         thumbnail: highResArt,
         duration: (t.trackTimeMillis && t.trackTimeMillis > 0) ? Math.floor(t.trackTimeMillis / 1000) : 0,
         originalQuery: `${t.artistName} ${t.trackName} official audio`,

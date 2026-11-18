@@ -1,6 +1,7 @@
-import { rankAudioResults, formatTrackLikeSpotify, isUnwantedTrackVariant, cleanBaseSongTitle, deduplicateTracks, interleaveByArtist } from './audioRanking';
+import { rankAudioResults, formatTrackLikeSpotify, isUnwantedTrackVariant, cleanBaseSongTitle, deduplicateTracks, interleaveByArtist, searchItunesTracks } from './audioRanking';
 import { generateSpotifyMixCover } from './spotifyMixCover';
 import { FEATURE_FLAGS } from '../config/features';
+import { filterAndRankByMood } from './moodClassifier';
 
 export type VibeType = 'happy' | 'sad' | 'chill' | 'energetic';
 
@@ -125,56 +126,46 @@ function isJunkMusicVideo(title?: string, artist?: string): boolean {
 }
 
 /**
- * Helper to fetch YouTube Music official audio in small throttled batches.
- * Limits total queries to max 6, processes in chunks of 2, and terminates early
- * once sufficient tracks are collected, protecting backend server RAM.
+ * Lazy-resolution mix fetcher: uses Apple's public iTunes Search API (0 load on backend api.py)
+ * to gather clean studio metadata & high-res artwork. Tracks are returned with `id: null` and
+ * resolved on-demand Just-In-Time by `executePlay` only when the user actually plays them.
  */
 async function fetchYouTubeMusicBatches(
   queries: { q: string; artist?: string }[],
-  apiBaseUrl: string,
+  _apiBaseUrl: string,
   fetchUrlFn?: (url: string) => Promise<any>
 ): Promise<any[]> {
   if (!FEATURE_FLAGS.ENABLE_PLAYLIST_MIX) {
     return [];
   }
   const combined: any[] = [];
-  // Cap queries to max 6 high-yield queries
-  const selectedQueries = queries.slice(0, 6);
+  const selectedQueries = queries.slice(0, 14);
 
-  // Process in small chunks of 2 to avoid RAM spikes on backend
-  for (let i = 0; i < selectedQueries.length; i += 2) {
-    const chunk = selectedQueries.slice(i, i + 2);
+  for (let i = 0; i < selectedQueries.length; i += 3) {
+    const chunk = selectedQueries.slice(i, i + 3);
     const chunkPromises = chunk.map(async ({ q, artist }) => {
-      const url = `${apiBaseUrl}/api/search?q=${encodeURIComponent(q)}`;
-      let results: any[] = [];
+      // Keep mood/song keywords in query (only strip YouTube-only noise)
+      const cleanQ = q.replace(/\b(official audio|2024|latest release)\b/gi, '').replace(/\s+/g, ' ').trim();
+      const searchTerm = cleanQ.length >= 2 ? cleanQ : (artist || '');
       try {
-        const res = await fetch(url);
-        if (res.ok) {
-          const data = await res.json();
-          results = data.results || [];
-        }
+        const itunesResults = await searchItunesTracks(searchTerm, 6, fetchUrlFn);
+        return itunesResults
+          .filter((item: any) => item && item.title && (!item.duration || (item.duration >= 50 && item.duration <= 540)) && !isJunkMusicVideo(item.title, item.artist) && !isUnwantedTrackVariant(item.title, item.artist))
+          .map((item: any) => {
+            const formatted = formatTrackLikeSpotify({ ...item, id: null }, artist);
+            return {
+              ...formatted,
+              id: null,
+              cover: formatted.cover || formatted.thumbnail || item.thumbnail,
+              thumbnail: formatted.thumbnail || formatted.cover || item.thumbnail,
+              originalQuery: `${formatted.artist} ${formatted.title} official audio`,
+              isLazyMixTrack: true,
+            };
+          })
+          .filter((item: any) => item && !isUnwantedTrackVariant(item.title, item.artist));
       } catch {
-        if (fetchUrlFn) {
-          try {
-            const raw = await fetchUrlFn(url);
-            const data = typeof raw === 'string' ? JSON.parse(raw) : raw;
-            results = data?.results || [];
-          } catch {}
-        }
+        return [];
       }
-
-      if (results.length === 0 && fetchUrlFn) {
-        try {
-          const raw = await fetchUrlFn(url);
-          const data = typeof raw === 'string' ? JSON.parse(raw) : raw;
-          results = data?.results || [];
-        } catch {}
-      }
-
-      return results
-        .filter((item: any) => item && item.id && item.duration >= 50 && item.duration <= 540 && !isJunkMusicVideo(item.title, item.artist) && !isUnwantedTrackVariant(item.title, item.artist))
-        .map((item: any) => formatTrackLikeSpotify(item, artist))
-        .filter((item: any) => item && !isUnwantedTrackVariant(item.title, item.artist));
     });
 
     const chunkBatches = await Promise.all(chunkPromises);
@@ -182,8 +173,7 @@ async function fetchYouTubeMusicBatches(
       if (Array.isArray(b)) combined.push(...b);
     });
 
-    // If we already collected 50+ candidates, stop early to save server resources
-    if (combined.length >= 50) {
+    if (combined.length >= 45) {
       break;
     }
   }
@@ -221,32 +211,22 @@ export async function generateVibeRecommendations(
   switch (vibe) {
     case 'happy':
       ytQueries = [
-        { q: `${a1} pop official audio`, artist: a1 },
-        { q: `${a1} upbeat official audio`, artist: a1 },
-        { q: `${a2} happy official audio`, artist: a2 },
-        { q: `${a2} upbeat official audio`, artist: a2 },
-        { q: `${a3} feel good official audio`, artist: a3 },
-        { q: `${a3} pop official audio`, artist: a3 },
-        { q: `${a4} dance official audio`, artist: a4 },
-        { q: `${a5} upbeat official audio`, artist: a5 },
-        { q: `${a6} ceria official audio`, artist: a6 },
-        { q: `${a7} upbeat official audio`, artist: a7 },
-        { q: `${a8} happy official audio`, artist: a8 },
-        { q: 'Dua Lipa upbeat official audio', artist: 'Dua Lipa' },
-        { q: 'Bruno Mars upbeat official audio', artist: 'Bruno Mars' },
-        { q: 'Harry Styles upbeat official audio', artist: 'Harry Styles' },
-        { q: 'Lizzo upbeat official audio', artist: 'Lizzo' },
-        { q: 'Yura Yunita ceria official audio', artist: 'Yura Yunita' },
-        { q: "Maliq & D'Essentials official audio", artist: "Maliq & D'Essentials" },
-        { q: 'RAN official audio', artist: 'RAN' },
-        { q: 'HIVI official audio', artist: 'HIVI!' },
-        { q: 'Juicy Luicy upbeat official audio', artist: 'Juicy Luicy' },
-        { q: 'Diskoria official audio', artist: 'Diskoria' },
-        { q: 'OneRepublic upbeat official audio', artist: 'OneRepublic' },
-        { q: 'Maroon 5 pop official audio', artist: 'Maroon 5' },
-        { q: 'Justin Timberlake dance official audio', artist: 'Justin Timberlake' },
-        { q: 'Katy Perry pop official audio', artist: 'Katy Perry' },
-        { q: 'Kunto Aji ceria official audio', artist: 'Kunto Aji' }
+        { q: 'Pharrell Williams Happy', artist: 'Pharrell Williams' },
+        { q: 'Bruno Mars Treasure Uptown Funk', artist: 'Bruno Mars' },
+        { q: 'Dua Lipa Levitating Don\'t Start Now', artist: 'Dua Lipa' },
+        { q: 'Justin Timberlake Can\'t Stop the Feeling', artist: 'Justin Timberlake' },
+        { q: "Maliq & D'Essentials", artist: "Maliq & D'Essentials" },
+        { q: 'RAN Dekat di Hati', artist: 'RAN' },
+        { q: 'HIVI! Siapkah Kau Tuk Jatuh Cinta Lagi', artist: 'HIVI!' },
+        { q: 'Diskoria Serenata Jiwa Lara', artist: 'Diskoria' },
+        { q: 'Harry Styles Watermelon Sugar As It Was', artist: 'Harry Styles' },
+        { q: 'Katy Perry Teenage Dream Firework', artist: 'Katy Perry' },
+        { q: 'Maroon 5 Sugar Sunday Morning', artist: 'Maroon 5' },
+        { q: 'Carly Rae Jepsen Call Me Maybe', artist: 'Carly Rae Jepsen' },
+        { q: 'OneRepublic Sunshine I Ain\'t Worried', artist: 'OneRepublic' },
+        { q: 'Yura Yunita Dunia Tipu-Tipu Tutur Batin', artist: 'Yura Yunita' },
+        { q: `${a1} upbeat pop`, artist: a1 },
+        { q: `${a2} happy`, artist: a2 }
       ];
       break;
 
@@ -346,9 +326,13 @@ export async function generateVibeRecommendations(
   try {
     const rawTracks = await fetchYouTubeMusicBatches(ytQueries, apiBaseUrl, fetchUrlFn);
 
+    const isSadTitle = (title: string) =>
+      /\b(sad|cry|crying|tears|broken|heartbreak|lonely|goodbye|die|death|grief|pain|hurt|galau|sedih|luka|pergi|hancur|menangis|duka|kecewa|sesal|pilu)\b/i.test(title);
+
     const unique: any[] = [];
     for (const item of rawTracks) {
-      if (!item || !item.title || !item.id) continue;
+      if (!item || !item.title || (!item.id && !item.isLazyMixTrack)) continue;
+      if ((vibe === 'happy' || vibe === 'energetic') && isSadTitle(item.title)) continue;
       unique.push({
         ...item,
         isVibeMix: true,
@@ -360,8 +344,10 @@ export async function generateVibeRecommendations(
     }
 
     // Deduplicate strictly with clean base titles, artist caps, and no unwanted variants
-    const deduped = deduplicateTracks(unique, 4, 50);
-    const ranked = rankAudioResults(deduped, `${a1} ${vibe}`);
+    const deduped = deduplicateTracks(unique, 4, 60);
+    // Multi-signal mood verification (Genre + Deezer BPM + Keyword Scoring)
+    const moodVerified = await filterAndRankByMood(deduped, vibe, fetchUrlFn);
+    const ranked = rankAudioResults(moodVerified, `${a1} ${vibe}`);
     const interleaved = interleaveByArtist(ranked);
     // Return up to 50 official audio tracks!
     return {
@@ -637,7 +623,7 @@ export async function generateAlgorithmicMix(
     const unique: any[] = [];
 
     for (const item of combined) {
-      if (!item || !item.title || !item.id) continue;
+      if (!item || !item.title || (!item.id && !item.isLazyMixTrack)) continue;
 
       // If Discover Weekly: filter out heavily played songs to encourage new discovery
       if (mixType === 'discover_weekly' && playHistory.length > 5) {
