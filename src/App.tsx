@@ -1,17 +1,17 @@
 import React, { useState, useRef, useEffect, useCallback, useMemo } from 'react';
-import { Home, Library, Plus, Mic2, Settings, Play, Pause, SkipBack, SkipForward, Repeat, Repeat1, Shuffle, Volume2, VolumeX, ListMusic, UserCircle, ChevronRight, Search, AlertCircle, Loader2, Maximize2, X, ChevronLeft, ChevronUp, ChevronDown, Music, PanelRight, Trash2, Heart, LogOut, Check, FolderPlus, Headphones, Download, DownloadCloud, WifiOff, CheckCircle2, Paintbrush, Clock, Trophy, MinusCircle, Share2, Copy, Smartphone, Lock, Map as MapIcon, Users, FileText, Film, Upload, Keyboard, MessageSquare, Languages } from 'lucide-react';
+import { Home, Library, Plus, Mic2, Settings, Play, Pause, SkipBack, SkipForward, Repeat, Repeat1, Shuffle, Volume2, VolumeX, ListMusic, UserCircle, ChevronRight, Search, AlertCircle, Loader2, Maximize2, X, ChevronLeft, ChevronUp, ChevronDown, Music, PanelRight, Trash2, Heart, LogOut, Check, FolderPlus, Headphones, Download, DownloadCloud, WifiOff, CheckCircle2, Paintbrush, Clock, Trophy, MinusCircle, Share2, Copy, Smartphone, Lock, Unlock, Subtitles, PenLine, Map as MapIcon, Users, FileText, Film, Upload, Keyboard, MessageSquare, Languages, ShieldCheck } from 'lucide-react';
 import './index.css';
 import './themes.css';
 import { createTranslator } from './translations';
 import type { Language } from './translations';
 
 const API_BASE_URL = 'http://179.41.4.182:7097';
-import { SoundMap } from './components/SoundMap';
+const SoundMap = React.lazy(() => import('./components/SoundMap').then(m => ({ default: m.SoundMap })));
 import { AudioVisualizer } from './components/AudioVisualizer';
 import { CommandPalette } from './components/CommandPalette';
 import { PartyChatOverlay } from './components/PartyChatOverlay';
 import { ShortcutsModal } from './components/ShortcutsModal';
-import { WrappedStoryModal } from './components/WrappedStoryModal';
+const WrappedStoryModal = React.lazy(() => import('./components/WrappedStoryModal').then(m => ({ default: m.WrappedStoryModal })));
 import { FullscreenPlayer } from './components/FullscreenPlayer';
 import { LibraryPage } from './pages/LibraryPage';
 import { DownloadsPage } from './pages/DownloadsPage';
@@ -20,6 +20,7 @@ import { ProfilePage } from './pages/ProfilePage';
 import { SettingsPage } from './pages/SettingsPage';
 import { PlaylistPage } from './pages/PlaylistPage';
 import { HomePage } from './pages/HomePage';
+const QaReviewPage = React.lazy(() => import('./pages/QaReviewPage').then(m => ({ default: m.QaReviewPage })));
 import { useMediaSession } from './hooks/useMediaSession';
 import {
   renderMixIcon,
@@ -31,6 +32,9 @@ import {
   type DiscordUser,
 } from './utils/mediaHelpers';
 import { translateLyricsLines } from './utils/lyricsTranslator';
+import { parseEnhancedLrcLine, parseNetEaseYRC, injectInstrumentalCues, type LyricWord } from './utils/karaokeLyrics';
+import { KaraokeLine } from './components/KaraokeLine';
+const WordLyricsEditorModal = React.lazy(() => import('./components/WordLyricsEditorModal').then(m => ({ default: m.WordLyricsEditorModal })));
 import { rankAudioResults, buildSmartSearchQuery, getAudioBadge, searchItunesTracks, formatTrackLikeSpotify, isUnwantedTrackVariant, userExplicitlyWantsAcoustic, userExplicitlyWantsRemix, userExplicitlyWantsLive, deduplicateTracks, cleanBaseSongTitle } from './utils/audioRanking';
 import { generateAlgorithmicMix, DEFAULT_MADE_FOR_YOU_PLAYLISTS, VIBE_CONFIGS } from './utils/vibeRecommendation';
 import type { VibeType } from './utils/vibeRecommendation';
@@ -58,7 +62,7 @@ function App() {
 
   useEffect(() => {
     if ((window as any).electronAPI?.getAnalytics) {
-       (window as any).electronAPI.getAnalytics().then(setWrappedData);
+      (window as any).electronAPI.getAnalytics().then(setWrappedData);
     }
   }, []);
 
@@ -273,7 +277,7 @@ function App() {
           }
 
           if (typeof searchData === 'string') {
-            try { searchData = JSON.parse(searchData); } catch {}
+            try { searchData = JSON.parse(searchData); } catch { }
           }
 
           if (searchData?.results && Array.isArray(searchData.results)) {
@@ -339,7 +343,7 @@ function App() {
                 const newFromItunes = itunesResults.filter((r: any) => !r.id || !ytIds.has(r.id));
                 results = [...newFromItunes, ...results].slice(0, 5);
               }
-            } catch (err) {}
+            } catch (err) { }
           }
         }
 
@@ -384,6 +388,7 @@ function App() {
 
   // ─── Profile & Social State ────────────────────────────────
   const [profileData, setProfileData] = useState<any>(null);
+  const [profileApprovedLyricsCount, setProfileApprovedLyricsCount] = useState(0);
   const [isLoadingProfile, setIsLoadingProfile] = useState(false);
   const [savedPlaylists, setSavedPlaylists] = useState<string[]>([]);
   const [playlistToRemove, setPlaylistToRemove] = useState<string | null>(null);
@@ -796,7 +801,7 @@ function App() {
           const suffix = discordUser ? `_${discordUser.id}` : '';
           try {
             localStorage.setItem(`donpollo_playlists${suffix}`, JSON.stringify(dbPlaylists));
-          } catch {}
+          } catch { }
         }
       }
     } catch (e) {
@@ -815,7 +820,7 @@ function App() {
   const [playlistToDelete, setPlaylistToDelete] = useState<string | null>(null);
   const [isEditingPlaylistName, setIsEditingPlaylistName] = useState(false);
   const [editPlaylistNameValue, setEditPlaylistNameValue] = useState('');
-  
+
   // Feature: Drag and Drop
   const [draggedGlobalSong, setDraggedGlobalSong] = useState<any | null>(null);
   const [dragOverPlaylistId, setDragOverPlaylistId] = useState<string | null>(null);
@@ -823,7 +828,7 @@ function App() {
   const [dragOverPlaylistSongIdx, setDragOverPlaylistSongIdx] = useState<number | null>(null);
 
   // Feature: Download Manager
-  const [activeDownloads, setActiveDownloads] = useState<Record<string, {progress: number, songData: any}>>({});
+  const [activeDownloads, setActiveDownloads] = useState<Record<string, { progress: number, songData: any }>>({});
   const [playlistContextMenu, setPlaylistContextMenu] = useState<{ x: number, y: number, playlist: any } | null>(null);
 
   const [showImportPlaylist, setShowImportPlaylist] = useState(false);
@@ -880,7 +885,7 @@ function App() {
   const [isMuted, setIsMuted] = useState(false);
   const [loopMode, setLoopMode] = useState<'off' | 'all' | 'one'>('off');
   const [rightSidebarMode, setRightSidebarMode] = useState<'queue' | 'lyrics' | 'trending'>('queue');
-  const [trendingCountry, setTrendingCountry] = useState<{name: string, code: string} | null>(null);
+  const [trendingCountry, setTrendingCountry] = useState<{ name: string, code: string } | null>(null);
   const [trendingSongs, setTrendingSongs] = useState<any[]>([]);
   const [isTrendingLoading, setIsTrendingLoading] = useState(false);
   const [trendingError, setTrendingError] = useState('');
@@ -927,7 +932,7 @@ function App() {
         const data = (window as any).electronAPI
           ? await (window as any).electronAPI.fetchUrl(fallbackUrl)
           : await (await fetch(`https://api.allorigins.win/get?url=${encodeURIComponent(fallbackUrl)}`)).json();
-        
+
         let searchData = data;
         if (data && data.contents) {
           try { searchData = JSON.parse(data.contents); } catch { }
@@ -1297,18 +1302,26 @@ function App() {
           const duration = audioRef.current?.duration || 0;
 
           // Bucket to ~5s to avoid flooding IPC, but still keep progress bar accurate
-          const bucket = isPlayingNow && activeSong
-            ? `${activeSong.id}-${Math.floor(progress / 5)}`
+          const bucket = activeSong
+            ? (isPlayingNow ? `${activeSong.id}-${Math.floor(progress / 5)}` : `paused-${activeSong.id}-${Math.floor(progress)}`)
             : 'idle';
 
           const isHosting = !isGuest && !!discordUser && activePartyId === discordUser.id;
           const currentPartyId = isGuest ? activePartyId : (isHosting ? discordUser.id : null);
+          const hostFriend = isGuest && activePartyId ? onlineUsers.find((u: any) => u.discordId === activePartyId) : null;
+          const partyPeersCount = currentPartyId
+            ? onlineUsers.filter((u: any) => u.partyId === currentPartyId && u.discordId !== discordUser.id).length
+            : 0;
 
           const extraData = {
             discordId: discordUser.id,
             username: discordUser.global_name || discordUser.username,
             partyId: currentPartyId,
+            hostId: isGuest ? activePartyId : discordUser.id,
+            hostUsername: hostFriend?.username || null,
+            partyPeersCount,
             isGuest: isGuest,
+            isPlaying: isPlayingNow,
             progress,
             duration,
           };
@@ -1321,7 +1334,7 @@ function App() {
           } else {
             if (lastActivityRef.current !== bucket) {
               lastActivityRef.current = bucket;
-              if (isPlayingNow && activeSong) {
+              if (activeSong) {
                 (window as any).electronAPI.setActivity(activeSong, extraData);
               } else {
                 (window as any).electronAPI.setActivity(null, extraData);
@@ -1433,7 +1446,7 @@ function App() {
           });
           // Persist to localStorage for next session
           if (cacheUpdated) {
-            try { localStorage.setItem('donpollo_collab_user_cache', JSON.stringify(collabUserCacheRef.current)); } catch {}
+            try { localStorage.setItem('donpollo_collab_user_cache', JSON.stringify(collabUserCacheRef.current)); } catch { }
           }
 
           // ── Host-left detection with grace period ──
@@ -1586,8 +1599,14 @@ function App() {
   }, [currentSong?.id, isPlaying, isGuest, discordUser, activePartyId]);
 
   // ─── Lyrics ──────────────────────────────────────────────────
-  const [lyricsData, setLyricsData] = useState<{ time: number, text: string, romanizedText?: string, isInstrumental?: boolean }[] | null>(null);
+  const [lyricsData, setLyricsData] = useState<{ time: number, text: string, romanizedText?: string, isInstrumental?: boolean, words?: LyricWord[] }[] | null>(null);
+  const [lyricsContributor, setLyricsContributor] = useState<string | null>(null);
   const [showRomanized, setShowRomanized] = useState(true);
+  const [isLyricsOverlayOpen, setIsLyricsOverlayOpen] = useState(false);
+  const [isLyricsOverlayLocked, setIsLyricsOverlayLocked] = useState(true);
+  const [showWordLyricsEditor, setShowWordLyricsEditor] = useState(false);
+  const [isLyricsQaAdmin, setIsLyricsQaAdmin] = useState(false);
+  const [pendingLyricsQaCount, setPendingLyricsQaCount] = useState(0);
   const [showLyricTranslation, setShowLyricTranslation] = useState(false);
   const [translatedLyrics, setTranslatedLyrics] = useState<string[] | null>(null);
   const [isTranslatingLyrics, setIsTranslatingLyrics] = useState(false);
@@ -1623,7 +1642,7 @@ function App() {
           if (next === 0) delete map[sid];
           else map[sid] = next;
           localStorage.setItem('donpollo_lyrics_offsets', JSON.stringify(map));
-        } catch {}
+        } catch { }
       }
       return next;
     });
@@ -1652,7 +1671,7 @@ function App() {
       } else {
         localStorage.setItem('donpollo_podcast_progress', JSON.stringify(map));
       }
-    } catch {}
+    } catch { }
   };
   const sidebarLyricsRef = useRef<HTMLDivElement>(null);
   const widgetLyricsRef = useRef<HTMLDivElement>(null);
@@ -1766,14 +1785,14 @@ function App() {
         }
         prevNode.connect(autoGainNodeRef.current);
         autoGainNodeRef.current.connect(compressorNodeRef.current);
-        
+
         if (!analyserNodeRef.current) {
           const analyser = ctx.createAnalyser();
           analyser.fftSize = 256;
           analyser.smoothingTimeConstant = 0.8;
           analyserNodeRef.current = analyser;
         }
-        
+
         compressorNodeRef.current.connect(analyserNodeRef.current);
         analyserNodeRef.current.connect(ctx.destination);
       } else {
@@ -1995,7 +2014,7 @@ function App() {
               try {
                 localStorage.setItem(`donpollo_listen_seconds${suffix}`, String(next));
                 localStorage.setItem('donpollo_listen_seconds', String(next));
-              } catch (e) {}
+              } catch (e) { }
               return next;
             });
           }
@@ -2042,6 +2061,10 @@ function App() {
 
   useEffect(() => {
     if (activePage !== 'profile' || !activeProfileId) return;
+    fetch(`${API_BASE_URL}/api/lyrics/contributor/stats?discord_id=${encodeURIComponent(activeProfileId)}`)
+      .then((r) => (r.ok ? r.json() : { approvedCount: 0 }))
+      .then((d) => setProfileApprovedLyricsCount(Number(d?.approvedCount || 0)))
+      .catch(() => setProfileApprovedLyricsCount(0));
     const cached = profileCacheRef.current[activeProfileId];
     const isFresh = cached && Date.now() - cached.ts < 20000;
     if (cached) {
@@ -2178,16 +2201,16 @@ function App() {
         if (!trackedSongIdsRef.current.has(songId)) {
           trackedSongIdsRef.current.add(songId);
           songsPlayedInSessionRef.current += 1;
-          
+
           if ((window as any).electronAPI?.trackSong) {
-             (window as any).electronAPI.trackSong(currentSongRef.current);
+            (window as any).electronAPI.trackSong(currentSongRef.current);
           }
 
           const interval = settingsRef.current?.vibeCheckInterval !== undefined ? settingsRef.current.vibeCheckInterval : 15;
           const isEnabled = settingsRef.current?.vibeCheckEnabled !== false;
 
           if (isEnabled && interval > 0 && songsPlayedInSessionRef.current > 0 && songsPlayedInSessionRef.current % interval === 0) {
-             setShowVibeCheck(true);
+            setShowVibeCheck(true);
           }
         }
       }
@@ -2498,6 +2521,7 @@ function App() {
     setOriginalQueue([]);
     setCurrentIndex(-1);
     setLyricsData(null);
+    setLyricsContributor(null);
     if (discordUser && (window as any).electronAPI?.notifyClosing) {
       (window as any).electronAPI.notifyClosing(discordUser.id);
     }
@@ -2794,7 +2818,7 @@ function App() {
           const fallbackRes = await fetch(`${API_BASE_URL}/api/search?q=${encodeURIComponent(playlistSearchQuery)}`);
           const fallbackData = await fallbackRes.json();
           ytResults = fallbackData.results || [];
-        } catch {}
+        } catch { }
       }
       if (preferAudio) {
         ytResults = rankAudioResults(ytResults, playlistSearchQuery);
@@ -2859,7 +2883,7 @@ function App() {
         const idBig = BigInt(discordId);
         const index = Number((idBig >> 22n) % 6n);
         return `https://cdn.discordapp.com/embed/avatars/${index}.png`;
-      } catch {}
+      } catch { }
     }
     return `https://ui-avatars.com/api/?name=${encodeURIComponent(username || 'User')}&background=5865F2&color=fff&bold=true`;
   };
@@ -2969,8 +2993,8 @@ function App() {
             return freshUser;
           });
 
-          const avatar = freshUser.avatar 
-            ? `https://cdn.discordapp.com/avatars/${freshUser.id}/${freshUser.avatar}.png` 
+          const avatar = freshUser.avatar
+            ? `https://cdn.discordapp.com/avatars/${freshUser.id}/${freshUser.avatar}.png`
             : null;
 
           if ((window as any).electronAPI?.updateProfile) {
@@ -3023,17 +3047,17 @@ function App() {
         const sec = parseInt(match[2]);
         const ms = parseInt(match[3].padEnd(3, '0'));
         const time = min * 60 + sec + ms / 1000;
-        const text = match[4].trim();
-        rawLines.push({ time, text });
+        const { cleanText, words } = parseEnhancedLrcLine(match[4].trim());
+        rawLines.push({ time, text: cleanText, words });
       }
     }
     if (rawLines.length === 0) return null;
     for (let i = 0; i < rawLines.length; i++) {
-      const { time, text } = rawLines[i];
+      const { time, text, words } = rawLines[i];
       if (text === '' || text === '♪' || text === '♩') {
         result.push({ time, text: '', isInstrumental: true });
       } else {
-        result.push({ time, text });
+        result.push({ time, text, words });
       }
     }
     return result;
@@ -3043,6 +3067,7 @@ function App() {
     const reqId = ++lyricsRequestIdRef.current;
     setPlainLyrics(t('lyricsSearching'));
     setLyricsData(null);
+    setLyricsContributor(null);
     try {
       let cleanTitle = title.replace(/\(.*?\)|\[.*?\]|【.*?】/g, '').replace(/(official|music|video|audio|lyric|lyrics|remastered|remaster|hd|hq|m\/v|mv|live|performance|teaser|dance|practice)/gi, '').replace(/\|/g, '').trim();
       let finalArtist = artist.replace(/VEVO|Official|Topic/gi, '').trim();
@@ -3143,6 +3168,31 @@ function App() {
             if (lyricsRequestIdRef.current !== reqId) return;
             setLyricsData(parsed);
 
+            // Try Community MySQL word-synced lyrics first, then NetEase YRC (0% AI CPU)
+            const hasEnhancedWords = parsed.some((p: any) => p.words && p.words.length > 0);
+            const songIdForSync = currentSongRef.current?.id || '';
+            if (!hasEnhancedWords) {
+              (async () => {
+                try {
+                  const yrcRes = await fetch(
+                    `${API_BASE_URL}/api/lyrics/word_synced?id=${encodeURIComponent(songIdForSync)}&title=${encodeURIComponent(cleanTitle)}&artist=${encodeURIComponent(finalArtist)}&duration=${Math.round(songDuration || 0)}`
+                  );
+                  if (!yrcRes.ok) return;
+                  const yrcData = await yrcRes.json();
+                  if (!yrcData?.available || lyricsRequestIdRef.current !== reqId) return;
+                  if (yrcData.source === 'community' && Array.isArray(yrcData.lines) && yrcData.lines.length > 0) {
+                    setLyricsData(injectInstrumentalCues(yrcData.lines));
+                    setLyricsContributor(yrcData.contributor || 'Community');
+                  } else if (yrcData.yrc) {
+                    const yrcParsed = parseNetEaseYRC(yrcData.yrc);
+                    if (yrcParsed && yrcParsed.length > 0) {
+                      setLyricsData(yrcParsed);
+                    }
+                  }
+                } catch { }
+              })();
+            }
+
             // Auto Romanization
             setTimeout(async () => {
               if (lyricsRequestIdRef.current !== reqId) return;
@@ -3237,6 +3287,7 @@ function App() {
         setDuration(cleanSong.duration || song.duration || 0);
         setIsPlaying(true);
         setLyricsData(null);
+        setLyricsContributor(null);
         setTranslatedLyrics(null);
         setLyricsOffset(0);
 
@@ -3288,9 +3339,9 @@ function App() {
           let resData = (window as any).electronAPI
             ? await (window as any).electronAPI.fetchUrl(url)
             : await (await fetch(url)).json();
-            
+
           if (typeof resData === 'string') {
-            try { resData = JSON.parse(resData); } catch (e) {}
+            try { resData = JSON.parse(resData); } catch (e) { }
           }
 
           if (resData && resData.results && resData.results.length > 0) {
@@ -3346,6 +3397,7 @@ function App() {
 
 
       setLyricsData(null);
+      setLyricsContributor(null);
       setTranslatedLyrics(null);
       setLyricsOffset(getSavedLyricsOffset(song.id) ?? 0);
 
@@ -3353,7 +3405,7 @@ function App() {
       const cleanSong = formatTrackLikeSpotify(song);
       setCurrentSong(cleanSong);
       addToHistory(cleanSong);
-      
+
       setDuration(cleanSong.duration || song.duration || 0);
       setIsPlaying(true);
       if (settings.autoLyrics) {
@@ -3736,6 +3788,90 @@ function App() {
   const handleNextRef = useRef<(isAutomatic?: boolean) => void>(() => { });
   const handlePrevRef = useRef<() => void>(() => { });
   const togglePlayRef = useRef<() => void>(() => { });
+
+  // Check whether logged-in Discord user is a Lyrics QA Admin
+  useEffect(() => {
+    if (!discordUser?.id) {
+      setIsLyricsQaAdmin(false);
+      setPendingLyricsQaCount(0);
+      return;
+    }
+    fetch(`${API_BASE_URL}/api/lyrics/qa/check?discord_id=${encodeURIComponent(discordUser.id)}`)
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d) => {
+        if (d) {
+          setIsLyricsQaAdmin(!!d.isAdmin);
+          setPendingLyricsQaCount(Number(d.pendingCount || 0));
+        }
+      })
+      .catch(() => { });
+  }, [discordUser?.id]);
+
+  // Floating Lyrics Overlay listeners & active-line sync
+  useEffect(() => {
+    const api = (window as any).electronAPI;
+    if (!api) return;
+    const unsubState = api.onLyricsOverlayState?.((isOpen: boolean) => setIsLyricsOverlayOpen(isOpen));
+    const unsubLock = api.onLyricsOverlayLockState?.((locked: boolean) => setIsLyricsOverlayLocked(locked));
+    return () => {
+      unsubState?.();
+      unsubLock?.();
+    };
+  }, []);
+
+  const activeOverlayLyricIdx = useMemo(() => {
+    if (!isLyricsOverlayOpen || !lyricsData || lyricsData.length === 0) return -1;
+    const effectiveProgress = progress - lyricsOffset;
+    return lyricsData.findIndex((line, i) => {
+      const nextLineTime = i < lyricsData.length - 1 ? lyricsData[i + 1].time : duration;
+      return effectiveProgress >= line.time && effectiveProgress < nextLineTime;
+    });
+  }, [isLyricsOverlayOpen, lyricsData, progress, lyricsOffset, duration]);
+
+  useEffect(() => {
+    if (!isLyricsOverlayOpen) return;
+    const api = (window as any).electronAPI;
+    if (!api?.syncLyricsOverlay) return;
+
+    if (!currentSong) {
+      api.syncLyricsOverlay({ activeText: '♪ No song playing ♪', nextText: '', translatedText: '', isPlaying: false });
+      return;
+    }
+
+    if (lyricsData && lyricsData.length > 0) {
+      const idx = activeOverlayLyricIdx >= 0 ? activeOverlayLyricIdx : 0;
+      const line = lyricsData[idx];
+      const nextLine = lyricsData[idx + 1];
+      const nextLineTime = idx < lyricsData.length - 1 ? lyricsData[idx + 1].time : duration;
+      const effectiveProgress = progress - lyricsOffset;
+      const getText = (l: any) => !l ? '' : (l.isInstrumental ? '• • •' : (showRomanized && l.romanizedText ? l.romanizedText : l.text));
+      const transText = showLyricTranslation && translatedLyrics?.[idx] ? translatedLyrics[idx] : '';
+      const hasRealWords = Boolean(line.words && line.words.length > 0 && !(showRomanized && line.romanizedText));
+      api.syncLyricsOverlay({
+        activeText: getText(line) || `${currentSong.title} — ${currentSong.artist}`,
+        nextText: getText(nextLine),
+        translatedText: transText,
+        songTitle: currentSong.title,
+        artist: currentSong.artist,
+        isPlaying,
+        karaokeMode: hasRealWords && !line.isInstrumental,
+        lineStartTime: line.time,
+        lineEndTime: nextLineTime,
+        currentTime: effectiveProgress,
+        enhancedWords: hasRealWords ? line.words : undefined,
+      });
+    } else {
+      api.syncLyricsOverlay({
+        activeText: `${currentSong.title} — ${currentSong.artist}`,
+        nextText: plainLyrics && plainLyrics !== 'Lyrics not found.' ? plainLyrics.split('\n')[0] : '',
+        translatedText: '',
+        songTitle: currentSong.title,
+        artist: currentSong.artist,
+        isPlaying,
+        karaokeMode: false,
+      });
+    }
+  }, [isLyricsOverlayOpen, currentSong?.id, activeOverlayLyricIdx, lyricsData, showRomanized, showLyricTranslation, translatedLyrics, isPlaying, plainLyrics, duration, lyricsOffset]);
 
   useMediaSession({
     currentSong,
@@ -4469,6 +4605,13 @@ function App() {
   // ─── Global Keyboard Shortcuts ───
   useEffect(() => {
     const handleGlobalKeyDown = (e: KeyboardEvent) => {
+      if (showWordLyricsEditor) {
+        if (e.key === 'Escape') {
+          setShowWordLyricsEditor(false);
+        }
+        return;
+      }
+
       const activeEl = document.activeElement as HTMLElement | null;
       const isInput = activeEl && (
         activeEl.tagName === 'INPUT' ||
@@ -4603,7 +4746,7 @@ function App() {
 
     window.addEventListener('keydown', handleGlobalKeyDown);
     return () => window.removeEventListener('keydown', handleGlobalKeyDown);
-  }, [showShortcutsModal, toggleShuffle, toggleLoopMode, toggleLike]);
+  }, [showShortcutsModal, showWordLyricsEditor, toggleShuffle, toggleLoopMode, toggleLike]);
 
   // ═══════════════════════════════════════════════════════════════
   // PAGE RENDERERS
@@ -4719,6 +4862,7 @@ function App() {
       playlists={playlists}
       setPlaylists={setPlaylists}
       madeForYouPlaylists={madeForYouPlaylists}
+      profilePlaylists={profileData?.playlists || []}
       discordUser={discordUser}
       settings={settings}
       playHistory={playHistory}
@@ -4799,6 +4943,8 @@ function App() {
       setSavedPlaylists={setSavedPlaylists}
       setActivePlaylistId={setActivePlaylistId}
       setActivePage={setActivePage}
+      navigate={navigate}
+      approvedLyricsCount={profileApprovedLyricsCount}
       handleAvatarError={handleAvatarError}
       startPlayingFromList={startPlayingFromList}
       handleContextMenu={handleContextMenu}
@@ -5008,7 +5154,7 @@ function App() {
           <div className="login-brand">
             <img src="https://donpollobot.vercel.app/donpollo-icon.jpg" alt="Don Pollo" className="login-brand-logo" />
             <span className="login-brand-title">Don Pollo Music</span>
-            <span className="login-version-pill">v1.3.4</span>
+            <span className="login-version-pill">v1.4.0</span>
           </div>
 
           <div className="login-topbar-right">
@@ -5832,7 +5978,7 @@ function App() {
         if (!pl) return null;
         const isMyPlaylist = !pl.discordId || pl.discordId === discordUser?.id;
         const currentCollabs = pl.collaborators || [];
-        
+
         return (
           <div className="modal-overlay" onClick={() => setShowCollabModal(false)}>
             <div className="modal" onClick={e => e.stopPropagation()} style={{ maxWidth: '480px' }}>
@@ -5840,7 +5986,7 @@ function App() {
                 <Users size={24} />
                 <h3 className="modal-title" style={{ margin: 0 }}>{t('collabModalTitle')}</h3>
               </div>
-              
+
               <p style={{ color: 'var(--text-secondary)', fontSize: '13px', marginBottom: '20px' }}>
                 {t('collabModalDesc', { '0': pl.name })}
               </p>
@@ -5965,6 +6111,19 @@ function App() {
               <div className={`nav-item ${activePage === 'sound-map' ? 'active' : ''}`} onClick={() => navigate('sound-map')}>
                 <MapIcon size={24} /> <span className="nav-label">{t('soundMap')}</span>
               </div>
+              {isLyricsQaAdmin && (
+                <div className={`nav-item ${activePage === 'qa-review' ? 'active' : ''}`} onClick={() => navigate('qa-review')}>
+                  <ShieldCheck size={24} />
+                  <span className="nav-label" style={{ display: 'inline-flex', alignItems: 'center', gap: '8px' }}>
+                    {t('qaReview')}
+                    {pendingLyricsQaCount > 0 && (
+                      <span style={{ background: '#EF4444', color: '#fff', fontSize: '10px', borderRadius: '999px', padding: '1px 6px', lineHeight: '14px', fontWeight: 800 }}>
+                        {pendingLyricsQaCount}
+                      </span>
+                    )}
+                  </span>
+                </div>
+              )}
               <div className={`nav-item ${activePage === 'settings' ? 'active' : ''}`} onClick={() => navigate('settings')}>
                 <Settings size={24} /> <span className="nav-label">{t('settings')}</span>
               </div>
@@ -6017,7 +6176,7 @@ function App() {
 
               {/* Playlists */}
               {playlists.filter(pl => pl.discordId === discordUser?.id || savedPlaylists.includes(pl.id) || pl.collaborators?.includes(discordUser?.id || '')).map(pl => (
-                <button key={pl.id} className={`sidebar-list-item ${(activePage === 'playlist-detail' && activePlaylistId === pl.id) ? 'active' : ''}`} 
+                <button key={pl.id} className={`sidebar-list-item ${(activePage === 'playlist-detail' && activePlaylistId === pl.id) ? 'active' : ''}`}
                   onClick={() => {
                     setActivePlaylistId(pl.id);
                     navigate('playlist-detail', { playlistId: pl.id });
@@ -6525,6 +6684,20 @@ function App() {
                     color: activePage === 'downloads' ? (settings.theme === 'minimalist' ? 'var(--accent-text, black)' : 'var(--accent-primary)') : 'var(--text-primary)',
                     background: activePage === 'downloads' && settings.theme === 'minimalist' ? 'var(--accent-primary)' : ''
                   }} title={t('offlineVault') || 'Offline Vault'}><FolderPlus size={20} /></button>
+                  {isLyricsQaAdmin && (
+                    <button className="btn-icon" onClick={() => navigate('qa-review')} style={{
+                      color: activePage === 'qa-review' ? (settings.theme === 'minimalist' ? 'var(--accent-text, black)' : 'var(--accent-primary)') : 'var(--text-primary)',
+                      background: activePage === 'qa-review' && settings.theme === 'minimalist' ? 'var(--accent-primary)' : '',
+                      position: 'relative'
+                    }} title={t('qaReview')}>
+                      <ShieldCheck size={20} />
+                      {pendingLyricsQaCount > 0 && (
+                        <span style={{ position: 'absolute', top: '2px', right: '2px', background: '#EF4444', color: '#fff', fontSize: '9px', borderRadius: '999px', padding: '0 4px', lineHeight: '12px', fontWeight: 800 }}>
+                          {pendingLyricsQaCount}
+                        </span>
+                      )}
+                    </button>
+                  )}
                   <button className="btn-icon" onClick={() => navigate('settings')} style={{
                     color: activePage === 'settings' ? (settings.theme === 'minimalist' ? 'var(--accent-text, black)' : 'var(--accent-primary)') : 'var(--text-primary)',
                     background: activePage === 'settings' && settings.theme === 'minimalist' ? 'var(--accent-primary)' : ''
@@ -6682,79 +6855,79 @@ function App() {
                                   onClick={(e) => {
                                     e.stopPropagation();
                                     simulateLoading(async () => {
-                                  if (isGuest && activePartyId) {
-                                    await (window as any).electronAPI.sendQueueRequest(activePartyId, discordUser?.id, discordUser?.global_name || discordUser?.username, song);
-                                    showToast(`Berhasil meminta Host untuk menambahkan "${song.title}" ke antrean!`, 'success');
-                                    setShowSuggestions(false);
-                                    return;
-                                  }
-                                  const augSong = augmentSongWithUser(song);
-                                  setQueue(prev => [...prev, augSong]);
-                                  if (currentIndex === -1) {
-                                    setCurrentIndex(0);
-                                    executePlay(song);
-                                  } else {
-                                    showToast(t('toastAddedToQueue'));
-                                  }
-                                  setShowSuggestions(false);
-                                });
-                              }}
-                            >
-                              <ListMusic size={16} />
-                            </button>
-                            <button
-                              className="suggestion-btn"
-                              title={t('addToPlaylist')}
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                setAddToPlaylistSong(song);
-                                setShowSuggestions(false);
-                              }}
-                            >
-                              <Plus size={16} />
-                            </button>
-                            <button
-                              className="suggestion-btn"
-                              title={t('downloadSong')}
-                              onClick={async (e) => {
-                                e.stopPropagation();
-                                if ((window as any).electronAPI) {
-                                  let songToCache = { ...song };
-                                  if (!songToCache.id) {
-                                    showToast('Menyiapkan audio...', 'music');
-                                    try {
-                                      const q = songToCache.originalQuery || `${songToCache.artist} ${songToCache.title} official audio`;
-                                      const url = `${API_BASE_URL}/api/search?q=${encodeURIComponent(q)}`;
-                                      const data = (window as any).electronAPI
-                                        ? await (window as any).electronAPI.fetchUrl(url)
-                                        : await (await fetch(url)).json();
-                                      const resData = typeof data === 'string' ? JSON.parse(data) : data;
-                                      if (resData && resData.results && resData.results.length > 0) {
-                                        let candidates = resData.results.filter((item: any) => item.duration >= 50 && item.duration <= 720);
-                                        candidates = rankAudioResults(candidates, songToCache.title, songToCache.duration || 0);
-                                        const studioCandidates = candidates.filter((item: any) => !isUnwantedTrackVariant(item.title, item.artist));
-                                        const validYt = studioCandidates[0] || candidates[0] || resData.results[0];
-                                        if (validYt) {
-                                          songToCache.id = validYt.id;
-                                        }
+                                      if (isGuest && activePartyId) {
+                                        await (window as any).electronAPI.sendQueueRequest(activePartyId, discordUser?.id, discordUser?.global_name || discordUser?.username, song);
+                                        showToast(`Berhasil meminta Host untuk menambahkan "${song.title}" ke antrean!`, 'success');
+                                        setShowSuggestions(false);
+                                        return;
                                       }
-                                    } catch (err) { }
-                                  }
-                                  if (songToCache.id) {
-                                    let streamUrl = `${API_BASE_URL}/api/stream?id=${songToCache.id}`;
-                                    if (settings.audioQuality && settings.audioQuality !== 'auto') {
-                                      streamUrl += `&quality=${settings.audioQuality}`;
+                                      const augSong = augmentSongWithUser(song);
+                                      setQueue(prev => [...prev, augSong]);
+                                      if (currentIndex === -1) {
+                                        setCurrentIndex(0);
+                                        executePlay(song);
+                                      } else {
+                                        showToast(t('toastAddedToQueue'));
+                                      }
+                                      setShowSuggestions(false);
+                                    });
+                                  }}
+                                >
+                                  <ListMusic size={16} />
+                                </button>
+                                <button
+                                  className="suggestion-btn"
+                                  title={t('addToPlaylist')}
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    setAddToPlaylistSong(song);
+                                    setShowSuggestions(false);
+                                  }}
+                                >
+                                  <Plus size={16} />
+                                </button>
+                                <button
+                                  className="suggestion-btn"
+                                  title={t('downloadSong')}
+                                  onClick={async (e) => {
+                                    e.stopPropagation();
+                                    if ((window as any).electronAPI) {
+                                      let songToCache = { ...song };
+                                      if (!songToCache.id) {
+                                        showToast('Menyiapkan audio...', 'music');
+                                        try {
+                                          const q = songToCache.originalQuery || `${songToCache.artist} ${songToCache.title} official audio`;
+                                          const url = `${API_BASE_URL}/api/search?q=${encodeURIComponent(q)}`;
+                                          const data = (window as any).electronAPI
+                                            ? await (window as any).electronAPI.fetchUrl(url)
+                                            : await (await fetch(url)).json();
+                                          const resData = typeof data === 'string' ? JSON.parse(data) : data;
+                                          if (resData && resData.results && resData.results.length > 0) {
+                                            let candidates = resData.results.filter((item: any) => item.duration >= 50 && item.duration <= 720);
+                                            candidates = rankAudioResults(candidates, songToCache.title, songToCache.duration || 0);
+                                            const studioCandidates = candidates.filter((item: any) => !isUnwantedTrackVariant(item.title, item.artist));
+                                            const validYt = studioCandidates[0] || candidates[0] || resData.results[0];
+                                            if (validYt) {
+                                              songToCache.id = validYt.id;
+                                            }
+                                          }
+                                        } catch (err) { }
+                                      }
+                                      if (songToCache.id) {
+                                        let streamUrl = `${API_BASE_URL}/api/stream?id=${songToCache.id}`;
+                                        if (settings.audioQuality && settings.audioQuality !== 'auto') {
+                                          streamUrl += `&quality=${settings.audioQuality}`;
+                                        }
+                                        (window as any).electronAPI.cacheAudio(songToCache, streamUrl);
+                                        showToast(`${t('toastDownloadStarted')} "${songToCache.title}"...`, 'success');
+                                      } else {
+                                        showToast('Gagal menemukan audio untuk diunduh.', 'error');
+                                      }
                                     }
-                                    (window as any).electronAPI.cacheAudio(songToCache, streamUrl);
-                                    showToast(`${t('toastDownloadStarted')} "${songToCache.title}"...`, 'success');
-                                  } else {
-                                    showToast('Gagal menemukan audio untuk diunduh.', 'error');
-                                  }
-                                }
-                              }}
-                            >
-                              <Download size={16} />
-                            </button>
+                                  }}
+                                >
+                                  <Download size={16} />
+                                </button>
                               </>
                             )}
                           </div>
@@ -6835,17 +7008,19 @@ function App() {
           {activePage === 'profile' && renderProfilePage()}
           {activePage === 'sound-map' && (
             <div className="main-scroll" style={{ padding: '24px' }}>
-              <SoundMap
-                t={t}
-                onPlaySong={startPlayingFromList}
-                theme={settings.theme || 'default'}
-                trendingSongs={trendingSongs}
-                isTrendingLoading={isTrendingLoading}
-                onCountrySelect={(alpha2, name) => {
-                  setTrendingCountry({ code: alpha2, name });
-                  fetchTrendingSongs(alpha2, name);
-                }}
-              />
+              <React.Suspense fallback={null}>
+                <SoundMap
+                  t={t}
+                  onPlaySong={startPlayingFromList}
+                  theme={settings.theme || 'default'}
+                  trendingSongs={trendingSongs}
+                  isTrendingLoading={isTrendingLoading}
+                  onCountrySelect={(alpha2, name) => {
+                    setTrendingCountry({ code: alpha2, name });
+                    fetchTrendingSongs(alpha2, name);
+                  }}
+                />
+              </React.Suspense>
             </div>
           )}
           {activePage === 'library' && (
@@ -6853,6 +7028,26 @@ function App() {
           )}
           {(activePage === 'playlist' || activePage === 'playlist-detail') && (
             <div className="main-scroll">{renderPlaylistPage()}</div>
+          )}
+          {activePage === 'qa-review' && isLyricsQaAdmin && (
+            <div className="main-scroll">
+              <React.Suspense fallback={null}>
+                <QaReviewPage
+                  apiBaseUrl={API_BASE_URL}
+                  adminId={discordUser?.id}
+                  theme={settings.theme || 'default'}
+                  pauseMainPlayer={() => {
+                    if (audioRef.current && !audioRef.current.paused) {
+                      audioRef.current.pause();
+                      setIsPlaying(false);
+                    }
+                  }}
+                  onQaCountChange={(cnt) => setPendingLyricsQaCount(cnt)}
+                  showToast={(msg, type) => showToast(msg, type)}
+                  t={t}
+                />
+              </React.Suspense>
+            </div>
           )}
           {activePage === 'settings' && (
             <div className="main-scroll">{renderSettingsPage()}</div>
@@ -7484,6 +7679,55 @@ function App() {
                     >
                       <Languages size={11} />
                     </button>
+                    <button
+                      onClick={() => (window as any).electronAPI?.toggleLyricsOverlay?.()}
+                      style={{
+                        background: isLyricsOverlayOpen ? 'var(--accent-primary)' : 'transparent',
+                        border: '1px solid var(--accent-primary)',
+                        color: isLyricsOverlayOpen ? (settings.theme === 'minimalist' ? 'black' : 'white') : 'var(--accent-primary)',
+                        fontSize: '10px', padding: '2px 6px', borderRadius: '4px', cursor: 'pointer', fontWeight: 600,
+                        display: 'inline-flex', alignItems: 'center', gap: '3px'
+                      }}
+                      title="Floating Lyrics Overlay (Ctrl+Shift+L)"
+                    >
+                      <Subtitles size={11} />
+                    </button>
+                    {currentSong && !currentSong.isPodcast && (
+                      <button
+                        onClick={() => setShowWordLyricsEditor(true)}
+                        style={{
+                          position: 'relative',
+                          background: 'transparent',
+                          border: '1px solid var(--border-color)',
+                          color: 'var(--text-secondary)',
+                          fontSize: '10px', padding: '2px 6px', borderRadius: '4px', cursor: 'pointer', fontWeight: 600,
+                          display: 'inline-flex', alignItems: 'center', gap: '3px'
+                        }}
+                        title="Contribute Word-Synced Lyrics"
+                      >
+                        <PenLine size={11} />
+                        {isLyricsQaAdmin && pendingLyricsQaCount > 0 && (
+                          <span style={{ background: '#EF4444', color: '#fff', fontSize: '9px', borderRadius: '999px', padding: '0 4px', lineHeight: '13px', fontWeight: 800 }}>
+                            {pendingLyricsQaCount}
+                          </span>
+                        )}
+                      </button>
+                    )}
+                    {isLyricsOverlayOpen && (
+                      <button
+                        onClick={() => (window as any).electronAPI?.setLyricsOverlayLock?.(!isLyricsOverlayLocked)}
+                        style={{
+                          background: !isLyricsOverlayLocked ? '#F59E0B' : 'transparent',
+                          border: `1px solid ${!isLyricsOverlayLocked ? '#F59E0B' : 'var(--border-color)'}`,
+                          color: !isLyricsOverlayLocked ? '#111' : 'var(--text-secondary)',
+                          fontSize: '10px', padding: '2px 6px', borderRadius: '4px', cursor: 'pointer', fontWeight: 600,
+                          display: 'inline-flex', alignItems: 'center', gap: '3px'
+                        }}
+                        title={isLyricsOverlayLocked ? 'Unlock Overlay to Move/Resize (Ctrl+Shift+K)' : 'Lock Overlay Click-Through (Ctrl+Shift+K)'}
+                      >
+                        {isLyricsOverlayLocked ? <Lock size={11} /> : <Unlock size={11} />}
+                      </button>
+                    )}
                     {showSidebarLyricsLangMenu && (
                       <div
                         onMouseLeave={() => setShowSidebarLyricsLangMenu(false)}
@@ -7568,9 +7812,26 @@ function App() {
                       );
                     }
                     const transLine = showLyricTranslation && translatedLyrics?.[i];
+                    const displayLineText = showRomanized && line.romanizedText ? line.romanizedText : line.text;
+                    const hasRealWords = Boolean(line.words && line.words.length > 0 && !(showRomanized && line.romanizedText));
                     return (
                       <div key={i} data-lyric-idx={i} className={`lyrics-line ${isActive ? 'active' : 'inactive'}`} onClick={() => jumpToLyric(line.time)}>
-                        <div>{showRomanized && line.romanizedText ? line.romanizedText : line.text}</div>
+                        <div>
+                          {isActive && hasRealWords ? (
+                            <KaraokeLine
+                              text={displayLineText}
+                              lineStartTime={line.time}
+                              lineEndTime={nextLineTime}
+                              currentTime={effectiveProgress}
+                              isPlaying={isPlaying}
+                              enhancedWords={line.words}
+                              activeColor={settings.theme === 'minimalist' ? '#111111' : '#FFFFFF'}
+                              inactiveColor={settings.theme === 'minimalist' ? 'rgba(0,0,0,0.35)' : 'rgba(255,255,255,0.36)'}
+                            />
+                          ) : (
+                            displayLineText
+                          )}
+                        </div>
                         {transLine && (
                           <div style={{ fontSize: '0.76em', opacity: 0.72, marginTop: '3px', fontWeight: 400 }}>{transLine}</div>
                         )}
@@ -7579,6 +7840,11 @@ function App() {
                   })
                 ) : (
                   <div style={{ textAlign: 'center', color: 'var(--text-secondary)', marginTop: '40px', fontSize: '14px' }}>{plainLyrics}</div>
+                )}
+                {lyricsContributor && lyricsData && lyricsData.length > 0 && (
+                  <div style={{ marginTop: '24px', paddingTop: '14px', borderTop: '1px solid var(--border-color)', textAlign: 'center', fontSize: '12px', color: 'var(--text-muted)', letterSpacing: '0.2px' }}>
+                    ✦ {t('wordSyncedBy')} <span style={{ color: 'var(--accent-primary)', fontWeight: 700 }}>{lyricsContributor}</span>
+                  </div>
                 )}
               </div>
             </div>
@@ -7597,8 +7863,8 @@ function App() {
               ) : trendingSongs.length > 0 ? (
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
                   <div style={{ marginBottom: '8px' }}>
-                    <button 
-                      className="btn-primary pop-in-anim" 
+                    <button
+                      className="btn-primary pop-in-anim"
                       style={{ width: '100%', padding: '10px 16px', fontSize: '13px', borderRadius: '12px', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px', background: 'var(--accent-primary)', color: 'white', border: 'none', cursor: 'pointer', fontWeight: 600, boxShadow: '0 4px 12px rgba(0,0,0,0.2)' }}
                       onClick={() => startPlayingFromList(trendingSongs, 0)}
                     >
@@ -7606,17 +7872,17 @@ function App() {
                     </button>
                   </div>
                   {trendingSongs.map((song, i) => (
-                    <div 
-                      key={i} 
-                      className={`suggestion-item pop-in-anim`} 
+                    <div
+                      key={i}
+                      className={`suggestion-item pop-in-anim`}
                       onClick={() => playSingleSong(song)}
                       onContextMenu={(e) => handleContextMenu(e, song)}
-                      draggable={true} 
-                      onDragStart={(e) => { setDraggedGlobalSong(song); applyDragGhost(e, song); }} 
+                      draggable={true}
+                      onDragStart={(e) => { setDraggedGlobalSong(song); applyDragGhost(e, song); }}
                       onDragEnd={(e) => { setDraggedGlobalSong(null); (e.currentTarget as HTMLElement).classList.remove('dragging-origin'); }}
-                      style={{ 
-                        borderRadius: '8px', 
-                        padding: '8px 12px', 
+                      style={{
+                        borderRadius: '8px',
+                        padding: '8px 12px',
                         background: 'rgba(255,255,255,0.03)',
                         animationDelay: `${(i + 1) * 0.05}s`
                       }}
@@ -7647,34 +7913,34 @@ function App() {
             </div>
           ) : (
             <div className="queue-list"
-                 onDragOver={(e) => {
-                   if (draggedGlobalSong) {
-                     e.preventDefault();
-                     setDragOverQueueList(true);
-                   }
-                 }}
-                 onDragLeave={() => setDragOverQueueList(false)}
-                 onDrop={async () => {
-                   if (draggedGlobalSong) {
-                     if (isGuest && activePartyId) {
-                       await (window as any).electronAPI.sendQueueRequest(activePartyId, discordUser?.id, discordUser?.global_name || discordUser?.username, draggedGlobalSong);
-                       showToast(`Berhasil meminta Host untuk menambahkan "${draggedGlobalSong.title}" ke antrean!`, 'success');
-                     } else {
-                       const augSong = augmentSongWithUser(draggedGlobalSong);
-                       setQueue(prev => [...prev, augSong]);
-                       setOriginalQueue(prev => [...prev, augSong]);
-                       if (currentIndex === -1) {
-                         setCurrentIndex(0);
-                         executePlay(augSong);
-                       } else {
-                         showToast(t('toastAddedToQueue'));
-                       }
-                     }
-                     setDraggedGlobalSong(null);
-                     setDragOverQueueList(false);
-                   }
-                 }}
-                 style={{ border: dragOverQueueList ? '2px dashed var(--accent-primary)' : '2px solid transparent', background: dragOverQueueList ? 'rgba(255,255,255,0.05)' : 'transparent', boxSizing: 'border-box', transition: 'all 0.2s' }}
+              onDragOver={(e) => {
+                if (draggedGlobalSong) {
+                  e.preventDefault();
+                  setDragOverQueueList(true);
+                }
+              }}
+              onDragLeave={() => setDragOverQueueList(false)}
+              onDrop={async () => {
+                if (draggedGlobalSong) {
+                  if (isGuest && activePartyId) {
+                    await (window as any).electronAPI.sendQueueRequest(activePartyId, discordUser?.id, discordUser?.global_name || discordUser?.username, draggedGlobalSong);
+                    showToast(`Berhasil meminta Host untuk menambahkan "${draggedGlobalSong.title}" ke antrean!`, 'success');
+                  } else {
+                    const augSong = augmentSongWithUser(draggedGlobalSong);
+                    setQueue(prev => [...prev, augSong]);
+                    setOriginalQueue(prev => [...prev, augSong]);
+                    if (currentIndex === -1) {
+                      setCurrentIndex(0);
+                      executePlay(augSong);
+                    } else {
+                      showToast(t('toastAddedToQueue'));
+                    }
+                  }
+                  setDraggedGlobalSong(null);
+                  setDragOverQueueList(false);
+                }
+              }}
+              style={{ border: dragOverQueueList ? '2px dashed var(--accent-primary)' : '2px solid transparent', background: dragOverQueueList ? 'rgba(255,255,255,0.05)' : 'transparent', boxSizing: 'border-box', transition: 'all 0.2s' }}
             >
               {queue.length - Math.max(0, currentIndex) <= 0 ? (
                 <div style={{ color: 'var(--text-secondary)', fontSize: '13px', textAlign: 'center', marginTop: '32px' }}>{t('emptyQueue')}</div>
@@ -7813,6 +8079,17 @@ function App() {
             <Download size={22} />
             <span>{t('downloads')}</span>
           </button>
+          {isLyricsQaAdmin && (
+            <button
+              className={`vibrant-nav-btn ${activePage === 'qa-review' ? 'active' : ''}`}
+              onClick={() => navigate('qa-review')}
+              title={t('qaReview')}
+              style={{ position: 'relative' }}
+            >
+              <ShieldCheck size={22} />
+              <span>{t('qaReview')}{pendingLyricsQaCount > 0 ? ` (${pendingLyricsQaCount})` : ''}</span>
+            </button>
+          )}
           <button
             className={`vibrant-nav-btn ${activePage === 'settings' ? 'active' : ''}`}
             onClick={() => navigate('settings')}
@@ -7825,6 +8102,35 @@ function App() {
       )}
 
       {/* FULLSCREEN PLAYER */}
+      {showWordLyricsEditor && (
+        <React.Suspense fallback={null}>
+          <WordLyricsEditorModal
+            isOpen={showWordLyricsEditor}
+            onClose={() => setShowWordLyricsEditor(false)}
+            currentSong={currentSong}
+            audioSrc={audioRef.current?.src || ''}
+            pauseMainPlayer={() => {
+              if (audioRef.current && !audioRef.current.paused) {
+                audioRef.current.pause();
+                setIsPlaying(false);
+              }
+            }}
+            lyricsData={lyricsData}
+            plainLyrics={plainLyrics}
+            apiBaseUrl={API_BASE_URL}
+            contributorId={discordUser?.id}
+            contributorName={discordUser?.username}
+            isQaAdmin={isLyricsQaAdmin}
+            onQaCountChange={(cnt) => setPendingLyricsQaCount(cnt)}
+            onPublished={(newLines) => {
+              setLyricsData(newLines);
+              setLyricsContributor(discordUser?.username || 'Community');
+            }}
+            showToast={(msg, type) => showToast(msg, type)}
+          />
+        </React.Suspense>
+      )}
+
       <FullscreenPlayer
         isOpen={isWidgetMode}
         onClose={() => setIsWidgetMode(false)}
@@ -7837,6 +8143,7 @@ function App() {
         showWidgetOverlay={showWidgetOverlay}
         setShowWidgetOverlay={setShowWidgetOverlay}
         lyricsData={lyricsData}
+        lyricsContributor={lyricsContributor}
         plainLyrics={plainLyrics}
         lyricsOffset={lyricsOffset}
         updateAndSaveLyricsOffset={updateAndSaveLyricsOffset}
@@ -8054,17 +8361,19 @@ function App() {
       )}
 
       {/* Wrapped Story Modal */}
-      <WrappedStoryModal
-        isOpen={showWrappedStory}
-        wrappedData={wrappedData}
-        wrappedStoryIndex={wrappedStoryIndex}
-        setWrappedStoryIndex={setWrappedStoryIndex}
-        onClose={() => setShowWrappedStory(false)}
-        discordUser={discordUser}
-        apiBaseUrl={API_BASE_URL}
-        t={t}
-        startPlayingFromList={startPlayingFromList}
-      />
+      <React.Suspense fallback={null}>
+        <WrappedStoryModal
+          isOpen={showWrappedStory}
+          wrappedData={wrappedData}
+          wrappedStoryIndex={wrappedStoryIndex}
+          setWrappedStoryIndex={setWrappedStoryIndex}
+          onClose={() => setShowWrappedStory(false)}
+          discordUser={discordUser}
+          apiBaseUrl={API_BASE_URL}
+          t={t}
+          startPlayingFromList={startPlayingFromList}
+        />
+      </React.Suspense>
 
       {/* Command Palette (Ctrl+K) */}
       <CommandPalette

@@ -2,7 +2,7 @@ import React from 'react';
 import { Coffee, Sun, Zap, CloudRain, Compass, Headphones, Flame, Music } from 'lucide-react';
 import type { VibeType, MixType } from './vibeRecommendation';
 
-export type Page = 'home' | 'library' | 'playlist' | 'playlist-detail' | 'settings' | 'downloads' | 'artist' | 'profile' | 'sound-map';
+export type Page = 'home' | 'library' | 'playlist' | 'playlist-detail' | 'settings' | 'downloads' | 'artist' | 'profile' | 'sound-map' | 'qa-review';
 
 export interface Playlist {
   id: string;

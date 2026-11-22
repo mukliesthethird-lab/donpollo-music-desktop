@@ -638,6 +638,18 @@ type TranslationKeys = {
   partyChatTitle: string;
   partyChatEmpty: string;
   partyChatPlaceholder: string;
+  qaReview: string;
+  qaReviewTitle: string;
+  qaReviewSubtitle: string;
+  qaQueueEmpty: string;
+  qaQueueEmptyDesc: string;
+  qaApprovePublish: string;
+  qaReject: string;
+  qaRejectReason: string;
+  qaRejectPlaceholder: string;
+  qaConfirmReject: string;
+  verifiedLyrics: string;
+  wordSyncedBy: string;
 };
 
 const translations: Record<Language, TranslationKeys> = {
@@ -1277,6 +1289,18 @@ const translations: Record<Language, TranslationKeys> = {
     partyChatTitle: 'Chat Party',
     partyChatEmpty: 'Sapa teman atau kirim reaksi emoji!',
     partyChatPlaceholder: 'Kirim pesan ke party...',
+    qaReview: 'Admin Mode',
+    qaReviewTitle: 'QA Review Lirik Komunitas',
+    qaReviewSubtitle: 'Periksa sinkronisasi kata per kata sebelum di-ACC',
+    qaQueueEmpty: 'Antrean QA Kosong',
+    qaQueueEmptyDesc: 'Belum ada kontribusi lirik word-synced baru yang menunggu ACC.',
+    qaApprovePublish: 'ACC & Publish',
+    qaReject: 'Tolak',
+    qaRejectReason: 'Alasan Penolakan:',
+    qaRejectPlaceholder: 'Contoh: Timing telat 0.5 detik di reff (opsional)',
+    qaConfirmReject: 'Konfirmasi Tolak',
+    verifiedLyrics: 'Lirik Terverifikasi',
+    wordSyncedBy: 'Word-synced lyrics by',
   },
 
   en: {
@@ -1915,6 +1939,18 @@ const translations: Record<Language, TranslationKeys> = {
     partyChatTitle: 'Party Chat',
     partyChatEmpty: 'Say hi or drop an emoji reaction!',
     partyChatPlaceholder: 'Message party...',
+    qaReview: 'Admin Mode',
+    qaReviewTitle: 'Community Lyrics QA Review',
+    qaReviewSubtitle: 'Verify word-by-word sync before approving',
+    qaQueueEmpty: 'QA Queue is Empty',
+    qaQueueEmptyDesc: 'No new word-synced lyrics contributions waiting for approval.',
+    qaApprovePublish: 'Approve & Publish',
+    qaReject: 'Reject',
+    qaRejectReason: 'Rejection Reason:',
+    qaRejectPlaceholder: 'e.g., 0.5s late on chorus (optional)',
+    qaConfirmReject: 'Confirm Reject',
+    verifiedLyrics: 'Verified Lyrics',
+    wordSyncedBy: 'Word-synced lyrics by',
   },
 
   ja: {
@@ -2553,6 +2589,18 @@ const translations: Record<Language, TranslationKeys> = {
     partyChatTitle: 'パーティーチャット',
     partyChatEmpty: '挨拶したり絵文字リアクションを送ろう！',
     partyChatPlaceholder: 'パーティーにメッセージ...',
+    qaReview: '管理者モード',
+    qaReviewTitle: 'コミュニティ歌詞QAレビュー',
+    qaReviewSubtitle: '承認前に単語ごとの同期を確認',
+    qaQueueEmpty: 'QAキューは空です',
+    qaQueueEmptyDesc: '承認待ちの歌詞投稿はまだありません。',
+    qaApprovePublish: '承認して公開',
+    qaReject: '却下',
+    qaRejectReason: '却下理由:',
+    qaRejectPlaceholder: '例: サビが0.5秒遅れています（任意）',
+    qaConfirmReject: '却下を確定',
+    verifiedLyrics: '認証済み歌詞',
+    wordSyncedBy: '単語同期歌詞:',
   },
 
   ko: {
@@ -3192,6 +3240,18 @@ const translations: Record<Language, TranslationKeys> = {
     partyChatTitle: '파티 채팅',
     partyChatEmpty: '인사하거나 이모지 반응을 보내보세요!',
     partyChatPlaceholder: '파티에 메시지 보내기...',
+    qaReview: '관리자 모드',
+    qaReviewTitle: '커뮤니티 가사 QA 리뷰',
+    qaReviewSubtitle: '승인 전에 단어별 싱크를 확인하세요',
+    qaQueueEmpty: 'QA 대기열이 비어 있습니다',
+    qaQueueEmptyDesc: '승인 대기 중인 가사 기여가 없습니다.',
+    qaApprovePublish: '승인 및 게시',
+    qaReject: '거절',
+    qaRejectReason: '거절 사유:',
+    qaRejectPlaceholder: '예: 후렴구 타이밍이 0.5초 늦음 (선택)',
+    qaConfirmReject: '거절 확인',
+    verifiedLyrics: '인증된 가사',
+    wordSyncedBy: '단어 싱크 가사:',
   }
 };
 

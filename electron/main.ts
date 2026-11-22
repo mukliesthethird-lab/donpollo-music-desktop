@@ -12,6 +12,10 @@ const isDev = !app.isPackaged;
 dotenv.config({ path: path.join(__dirname, '../.env') });
 
 let mainWindow: BrowserWindow | null = null;
+let lyricsOverlayWindow: BrowserWindow | null = null;
+let lyricsOverlayLocked = true;
+let lyricsOverlayBounds: { x: number; y: number; width: number; height: number } | null = null;
+let lastOverlayPayload: any = null;
 let db: mysql.Pool | null = null;
 let dbReconnecting = false;
 let minimizeToMiniPlayerEnabled = false; // kept for manual enter-mini-player IPC
@@ -137,8 +141,10 @@ function updateTrayMenu(songTitle: string, isPlaying: boolean) {
 }
 
 let thumbarIcons: any = {};
+let lastThumbarState = { isPlaying: false, hasSong: false };
 function updateThumbar(isPlaying: boolean, hasSong: boolean = true) {
-  if (!mainWindow || !thumbarIcons.play) return;
+  lastThumbarState = { isPlaying, hasSong };
+  if (!mainWindow || mainWindow.isDestroyed() || !thumbarIcons.play) return;
 
   const flags: string[] = hasSong ? [] : ['disabled'];
 
@@ -346,6 +352,29 @@ async function initDB() {
           created_at TIMESTAMP(3) DEFAULT CURRENT_TIMESTAMP(3),
           INDEX idx_party_msg (party_id, id)
         )
+      `),
+      db.execute(`
+        CREATE TABLE IF NOT EXISTS music_badges (
+          id VARCHAR(64) PRIMARY KEY,
+          name VARCHAR(100) NOT NULL,
+          description VARCHAR(255) NULL,
+          icon MEDIUMTEXT NOT NULL,
+          color VARCHAR(32) NOT NULL DEFAULT '#5865F2',
+          rule_type VARCHAR(32) NOT NULL DEFAULT 'manual',
+          rule_value INT NOT NULL DEFAULT 0,
+          created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )
+      `),
+      db.execute(`
+        CREATE TABLE IF NOT EXISTS music_user_badges (
+          id INT AUTO_INCREMENT PRIMARY KEY,
+          discord_id VARCHAR(64) NOT NULL,
+          badge_id VARCHAR(64) NOT NULL,
+          awarded_by VARCHAR(64) NULL,
+          awarded_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+          UNIQUE KEY uniq_user_badge (discord_id, badge_id),
+          INDEX idx_ub_discord (discord_id)
+        )
       `)
     ]);
 
@@ -359,6 +388,7 @@ async function initDB() {
       db.execute("ALTER TABLE playlists ADD COLUMN is_private BOOLEAN DEFAULT FALSE"),
       db.execute("ALTER TABLE playlists ADD COLUMN collaborators LONGTEXT"),
       db.execute("ALTER TABLE user_profiles ADD COLUMN banner_url VARCHAR(1000)"),
+      db.execute("ALTER TABLE music_badges MODIFY COLUMN icon MEDIUMTEXT NOT NULL"),
       db.execute("CREATE INDEX idx_collab_guest_status ON collab_invites (guest_id, status)"),
       db.execute("CREATE INDEX idx_queue_host_status ON queue_requests (host_id, status)"),
       db.execute("CREATE INDEX idx_join_host_status ON join_requests (host_id, status)"),
@@ -467,6 +497,14 @@ function createWindow() {
   });
 
   if (isDev) console.log('Creating window...');
+  const reapplyThumbar = () => {
+    setTimeout(() => {
+      updateThumbar(lastThumbarState.isPlaying, lastThumbarState.hasSong);
+    }, 150);
+  };
+  mainWindow.on('show', reapplyThumbar);
+  mainWindow.on('restore', reapplyThumbar);
+
   mainWindow.on('close', async (event: any) => {
     if (closeToTrayEnabled && !isQuitting) {
       event.preventDefault();
@@ -495,6 +533,10 @@ function createWindow() {
 
   mainWindow.on('closed', () => {
     mainWindow = null;
+    if (lyricsOverlayWindow && !lyricsOverlayWindow.isDestroyed()) {
+      lyricsOverlayWindow.close();
+      lyricsOverlayWindow = null;
+    }
   });
 }
 
@@ -585,6 +627,128 @@ ipcMain.on('exit-mini-player', () => {
     mainWindow.setBounds(previousBounds);
     mainWindow.webContents.send('mini-player-mode', false);
   }
+});
+
+function createLyricsOverlayWindow() {
+  if (lyricsOverlayWindow && !lyricsOverlayWindow.isDestroyed()) {
+    lyricsOverlayWindow.showInactive();
+    return;
+  }
+
+  const { workAreaSize } = screen.getPrimaryDisplay();
+  const width = lyricsOverlayBounds?.width || 780;
+  const height = lyricsOverlayBounds?.height || 150;
+  const x = lyricsOverlayBounds?.x ?? Math.round((workAreaSize.width - width) / 2);
+  const y = lyricsOverlayBounds?.y ?? Math.max(40, workAreaSize.height - 190);
+
+  lyricsOverlayWindow = new BrowserWindow({
+    width,
+    height,
+    x,
+    y,
+    minWidth: 360,
+    minHeight: 90,
+    transparent: true,
+    frame: false,
+    hasShadow: false,
+    skipTaskbar: true,
+    resizable: true,
+    maximizable: false,
+    minimizable: false,
+    alwaysOnTop: true,
+    focusable: !lyricsOverlayLocked,
+    backgroundColor: '#00000000',
+    webPreferences: {
+      preload: path.join(__dirname, 'preload.cjs'),
+      nodeIntegration: false,
+      contextIsolation: true,
+      backgroundThrottling: false,
+    },
+  });
+
+  lyricsOverlayWindow.setAlwaysOnTop(true, 'screen-saver');
+  lyricsOverlayWindow.setVisibleOnAllWorkspaces(true, { visibleOnFullScreen: true });
+  lyricsOverlayWindow.setIgnoreMouseEvents(lyricsOverlayLocked, { forward: true });
+
+  if (isDev) {
+    let baseUrl = 'http://localhost:5173/';
+    try {
+      const envPath = path.join(__dirname, '../.env');
+      if (fs.existsSync(envPath) && fs.readFileSync(envPath, 'utf-8').includes('LOAD_VERCEL=true')) {
+        baseUrl = 'https://donpollo-music-desktop.vercel.app/';
+      }
+    } catch {}
+    lyricsOverlayWindow.loadURL(`${baseUrl}#/lyrics-overlay`);
+  } else {
+    lyricsOverlayWindow.loadFile(path.join(__dirname, '../dist/index.html'), { hash: '/lyrics-overlay' });
+  }
+
+  lyricsOverlayWindow.webContents.on('did-finish-load', () => {
+    lyricsOverlayWindow?.webContents.send('lyrics-overlay-lock-state', lyricsOverlayLocked);
+    if (lastOverlayPayload) {
+      lyricsOverlayWindow?.webContents.send('lyrics-overlay-update', lastOverlayPayload);
+    }
+  });
+
+  lyricsOverlayWindow.on('moved', () => {
+    if (lyricsOverlayWindow && !lyricsOverlayWindow.isDestroyed()) {
+      lyricsOverlayBounds = lyricsOverlayWindow.getBounds();
+    }
+  });
+
+  lyricsOverlayWindow.on('resized', () => {
+    if (lyricsOverlayWindow && !lyricsOverlayWindow.isDestroyed()) {
+      lyricsOverlayBounds = lyricsOverlayWindow.getBounds();
+    }
+  });
+
+  lyricsOverlayWindow.on('closed', () => {
+    lyricsOverlayWindow = null;
+    mainWindow?.webContents.send('lyrics-overlay-state', false);
+  });
+
+  mainWindow?.webContents.send('lyrics-overlay-state', true);
+  mainWindow?.webContents.send('lyrics-overlay-lock-state', lyricsOverlayLocked);
+}
+
+function toggleLyricsOverlay() {
+  if (lyricsOverlayWindow && !lyricsOverlayWindow.isDestroyed()) {
+    lyricsOverlayWindow.close();
+  } else {
+    createLyricsOverlayWindow();
+  }
+}
+
+function setLyricsOverlayLock(locked: boolean) {
+  lyricsOverlayLocked = locked;
+  if (lyricsOverlayWindow && !lyricsOverlayWindow.isDestroyed()) {
+    lyricsOverlayWindow.setFocusable(!locked);
+    lyricsOverlayWindow.setIgnoreMouseEvents(locked, { forward: true });
+    lyricsOverlayWindow.setAlwaysOnTop(true, 'screen-saver');
+    lyricsOverlayWindow.webContents.send('lyrics-overlay-lock-state', locked);
+  }
+  mainWindow?.webContents.send('lyrics-overlay-lock-state', locked);
+}
+
+ipcMain.on('toggle-lyrics-overlay', () => {
+  toggleLyricsOverlay();
+});
+
+ipcMain.on('close-lyrics-overlay', () => {
+  if (lyricsOverlayWindow && !lyricsOverlayWindow.isDestroyed()) {
+    lyricsOverlayWindow.close();
+  }
+});
+
+ipcMain.on('lyrics-overlay-sync', (_event, payload) => {
+  lastOverlayPayload = payload;
+  if (lyricsOverlayWindow && !lyricsOverlayWindow.isDestroyed()) {
+    lyricsOverlayWindow.webContents.send('lyrics-overlay-update', payload);
+  }
+});
+
+ipcMain.on('set-lyrics-overlay-lock', (_event, locked: boolean) => {
+  setLyricsOverlayLock(!!locked);
 });
 
 ipcMain.on('set-minimize-to-miniplayer', (_event, _enabled) => {
@@ -715,6 +879,42 @@ ipcMain.handle('get-profile', async (event, discordId) => {
       isPrivate: false
     }));
 
+    let userBadges: any[] = [];
+    try {
+      const pRow = (rows as any[])[0];
+      let listenSec = 0;
+      let likedLen = 0;
+      try { listenSec = Number((pRow?.stats ? JSON.parse(pRow.stats) : {})?.totalListenSeconds || 0); } catch {}
+      try { likedLen = Array.isArray(pRow?.liked_songs ? JSON.parse(pRow.liked_songs) : []) ? JSON.parse(pRow.liked_songs).length : 0; } catch {}
+      let approvedLyricsCnt = 0;
+      try {
+        const [lyRows] = await db.execute('SELECT COUNT(*) AS cnt FROM community_word_lyrics WHERE contributor_id = ?', [discordId]);
+        approvedLyricsCnt = Number((lyRows as any[])[0]?.cnt || 0);
+      } catch {}
+      const [[allBadgeRows], [grantedRows]] = await Promise.all([
+        db.execute('SELECT * FROM music_badges ORDER BY created_at ASC'),
+        db.execute('SELECT badge_id FROM music_user_badges WHERE discord_id = ?', [discordId])
+      ]);
+      const grantedSet = new Set((grantedRows as any[]).map((r) => String(r.badge_id)));
+      userBadges = (allBadgeRows as any[]).filter((b) => {
+        if (grantedSet.has(String(b.id))) return true;
+        const val = Number(b.rule_value || 0);
+        if (b.rule_type === 'listen_hours') return listenSec / 3600 >= val;
+        if (b.rule_type === 'approved_lyrics') return approvedLyricsCnt >= val;
+        if (b.rule_type === 'playlists') return playlists.length >= val;
+        if (b.rule_type === 'liked_songs') return likedLen >= val;
+        return false;
+      }).map((b) => ({
+        id: b.id,
+        name: b.name,
+        description: b.description || '',
+        icon: b.icon,
+        color: b.color,
+        ruleType: b.rule_type,
+        ruleValue: Number(b.rule_value || 0),
+      }));
+    } catch {}
+
     if ((rows as any[]).length > 0) {
       const p = (rows as any[])[0];
       return {
@@ -728,10 +928,11 @@ ipcMain.handle('get-profile', async (event, discordId) => {
         following: p.following ? JSON.parse(p.following) : [],
         followers,
         bannerUrl: p.banner_url,
-        playlists
+        playlists,
+        badges: userBadges
       };
     } else {
-      return { discordId, playlists, followers };
+      return { discordId, playlists, followers, badges: userBadges };
     }
   } catch (error) {
     console.error('get-profile error:', error);
@@ -747,6 +948,379 @@ ipcMain.handle('update-banner', async (event, discordId, bannerUrl) => {
   } catch (error) {
     console.error('update-banner error:', error);
     return false;
+  }
+});
+
+ipcMain.handle('admin-get-overview', async () => {
+  if (!db) return null;
+  try {
+    const [[userRows], [plCountRows], [totalPlRows]] = await Promise.all([
+      db.execute('SELECT discord_id, username, avatar_url, stats, liked_songs, following FROM user_profiles'),
+      db.execute('SELECT discord_id, COUNT(*) AS cnt FROM playlists WHERE discord_id IS NOT NULL GROUP BY discord_id'),
+      db.execute('SELECT COUNT(*) AS cnt FROM playlists')
+    ]);
+
+    const plCounts: Record<string, number> = {};
+    for (const r of plCountRows as any[]) {
+      if (r.discord_id) plCounts[String(r.discord_id)] = Number(r.cnt || 0);
+    }
+
+    const lyricCounts: Record<string, number> = {};
+    const subCounts: Record<string, number> = {};
+    let totalApprovedLyrics = 0;
+    let pendingQaCount = 0;
+
+    try {
+      const [[lRows], [sRows], [pRows], [tlRows]] = await Promise.all([
+        db.execute('SELECT contributor_id, COUNT(*) AS cnt FROM community_word_lyrics WHERE contributor_id IS NOT NULL GROUP BY contributor_id'),
+        db.execute('SELECT contributor_id, COUNT(*) AS cnt FROM community_word_lyrics_submissions WHERE contributor_id IS NOT NULL GROUP BY contributor_id'),
+        db.execute("SELECT COUNT(*) AS cnt FROM community_word_lyrics_submissions WHERE status = 'pending'"),
+        db.execute('SELECT COUNT(*) AS cnt FROM community_word_lyrics')
+      ]);
+      for (const r of lRows as any[]) lyricCounts[String(r.contributor_id)] = Number(r.cnt || 0);
+      for (const r of sRows as any[]) subCounts[String(r.contributor_id)] = Number(r.cnt || 0);
+      pendingQaCount = Number((pRows as any[])[0]?.cnt || 0);
+      totalApprovedLyrics = Number((tlRows as any[])[0]?.cnt || 0);
+    } catch {
+      // Lyrics tables might not exist yet
+    }
+
+    const usersMap = new Map<string, any>();
+    let totalListenSeconds = 0;
+
+    for (const u of userRows as any[]) {
+      const did = String(u.discord_id);
+      let statsObj: any = {};
+      let likedArr: any[] = [];
+      let followingArr: any[] = [];
+      try { statsObj = u.stats ? JSON.parse(u.stats) : {}; } catch {}
+      try { likedArr = u.liked_songs ? JSON.parse(u.liked_songs) : []; } catch {}
+      try { followingArr = u.following ? JSON.parse(u.following) : []; } catch {}
+
+      const listenSec = Number(statsObj?.totalListenSeconds || 0);
+      totalListenSeconds += listenSec;
+      const historyArr = Array.isArray(statsObj?.playHistory) ? statsObj.playHistory : [];
+
+      usersMap.set(did, {
+        discordId: did,
+        username: u.username || 'Unknown',
+        avatarUrl: u.avatar_url || '',
+        totalListenSeconds: listenSec,
+        playHistoryCount: historyArr.length,
+        likedCount: Array.isArray(likedArr) ? likedArr.length : 0,
+        playlistCount: plCounts[did] || 0,
+        approvedLyricsCount: lyricCounts[did] || 0,
+        submissionsCount: subCounts[did] || 0,
+        followingCount: Array.isArray(followingArr) ? followingArr.length : 0,
+      });
+    }
+
+    // Include users who only have playlists or lyrics without a user_profiles row
+    for (const did of Object.keys(plCounts)) {
+      if (!usersMap.has(did)) {
+        usersMap.set(did, {
+          discordId: did,
+          username: `User ${did.slice(-4)}`,
+          avatarUrl: '',
+          totalListenSeconds: 0,
+          playHistoryCount: 0,
+          likedCount: 0,
+          playlistCount: plCounts[did] || 0,
+          approvedLyricsCount: lyricCounts[did] || 0,
+          submissionsCount: subCounts[did] || 0,
+          followingCount: 0,
+        });
+      }
+    }
+
+    const users = Array.from(usersMap.values()).sort((a, b) => b.totalListenSeconds - a.totalListenSeconds);
+    return {
+      summary: {
+        totalUsers: users.length,
+        totalPlaylists: Number((totalPlRows as any[])[0]?.cnt || 0),
+        totalApprovedLyrics,
+        pendingQaCount,
+        totalListenSeconds,
+      },
+      users,
+    };
+  } catch (error) {
+    console.error('admin-get-overview error:', error);
+    return null;
+  }
+});
+
+ipcMain.handle('admin-get-user', async (_event, targetId) => {
+  if (!db || !targetId) return null;
+  try {
+    const [[userRows], [plRows], [followerRows]] = await Promise.all([
+      db.execute('SELECT * FROM user_profiles WHERE discord_id = ? LIMIT 1', [targetId]),
+      db.execute('SELECT id, name, avatar, songs, is_private FROM playlists WHERE discord_id = ?', [targetId]),
+      db.execute('SELECT discord_id FROM user_profiles WHERE following LIKE ?', [`%"${targetId}"%`])
+    ]);
+
+    let approvedLyrics: any[] = [];
+    let submissions: any[] = [];
+    try {
+      const [[appRows], [subRows]] = await Promise.all([
+        db.execute('SELECT song_key, video_id, title, artist, updated_at FROM community_word_lyrics WHERE contributor_id = ? ORDER BY updated_at DESC LIMIT 50', [targetId]),
+        db.execute('SELECT id, song_key, video_id, title, artist, status, review_note, created_at, reviewed_at FROM community_word_lyrics_submissions WHERE contributor_id = ? ORDER BY created_at DESC LIMIT 50', [targetId])
+      ]);
+      approvedLyrics = (appRows as any[]).map((r) => ({
+        ...r,
+        id: r.song_key,
+        created_at: r.updated_at ? new Date(r.updated_at).toISOString() : null,
+      }));
+      submissions = (subRows as any[]).map((r) => ({
+        ...r,
+        created_at: r.created_at ? new Date(r.created_at).toISOString() : null,
+        reviewed_at: r.reviewed_at ? new Date(r.reviewed_at).toISOString() : null,
+      }));
+    } catch {}
+
+    const playlists = (plRows as any[]).map((pr) => {
+      let songs: any[] = [];
+      try { songs = pr.songs ? JSON.parse(pr.songs) : []; } catch {}
+      return {
+        id: pr.id,
+        name: pr.name,
+        avatar: pr.avatar,
+        songs,
+        isPrivate: Boolean(pr.is_private),
+      };
+    });
+
+    const u = (userRows as any[])[0];
+    let statsObj: any = {};
+    let likedArr: any[] = [];
+    let savedArr: any[] = [];
+    let followingArr: any[] = [];
+    let privacyObj: any = { publicLikedSongs: true, publicStats: true };
+
+    if (u) {
+      try { statsObj = u.stats ? JSON.parse(u.stats) : {}; } catch {}
+      try { likedArr = u.liked_songs ? JSON.parse(u.liked_songs) : []; } catch {}
+      try { savedArr = u.saved_playlists ? JSON.parse(u.saved_playlists) : []; } catch {}
+      try { followingArr = u.following ? JSON.parse(u.following) : []; } catch {}
+      try { privacyObj = u.privacy_settings ? JSON.parse(u.privacy_settings) : privacyObj; } catch {}
+    }
+
+    let badgeStatuses: any[] = [];
+    try {
+      const [[allBadgeRows], [grantedRows]] = await Promise.all([
+        db.execute('SELECT * FROM music_badges ORDER BY created_at DESC'),
+        db.execute('SELECT badge_id FROM music_user_badges WHERE discord_id = ?', [targetId])
+      ]);
+      const grantedSet = new Set((grantedRows as any[]).map((r) => String(r.badge_id)));
+      const listenSec = Number(statsObj?.totalListenSeconds || 0);
+      badgeStatuses = (allBadgeRows as any[]).map((b) => {
+        const val = Number(b.rule_value || 0);
+        const manualGranted = grantedSet.has(String(b.id));
+        let ruleMet = false;
+        if (b.rule_type === 'listen_hours') ruleMet = listenSec / 3600 >= val;
+        else if (b.rule_type === 'approved_lyrics') ruleMet = approvedLyrics.length >= val;
+        else if (b.rule_type === 'playlists') ruleMet = playlists.length >= val;
+        else if (b.rule_type === 'liked_songs') ruleMet = likedArr.length >= val;
+        return {
+          id: b.id,
+          name: b.name,
+          description: b.description || '',
+          icon: b.icon,
+          color: b.color,
+          ruleType: b.rule_type,
+          ruleValue: val,
+          manualGranted,
+          ruleMet,
+          earned: manualGranted || ruleMet,
+        };
+      });
+    } catch {}
+
+    return {
+      discordId: targetId,
+      username: u?.username || `User ${String(targetId).slice(-4)}`,
+      avatarUrl: u?.avatar_url || '',
+      bannerUrl: u?.banner_url || '',
+      privacySettings: privacyObj,
+      stats: statsObj,
+      likedSongs: likedArr,
+      savedPlaylists: savedArr,
+      following: followingArr,
+      followers: (followerRows as any[]).map((r) => r.discord_id),
+      playlists,
+      approvedLyrics,
+      submissions,
+      badgeStatuses,
+    };
+  } catch (error) {
+    console.error('admin-get-user error:', error);
+    return null;
+  }
+});
+
+ipcMain.handle('admin-get-qa-pending', async () => {
+  if (!db) return null;
+  try {
+    const [rows] = await db.execute(`
+      SELECT id, song_key, video_id, title, artist, lyrics_json, contributor_id, contributor_name, created_at
+      FROM community_word_lyrics_submissions
+      WHERE status = 'pending'
+      ORDER BY created_at ASC
+      LIMIT 50
+    `);
+    const submissions = (rows as any[]).map((r) => {
+      let lines: any[] = [];
+      try { lines = r.lyrics_json ? JSON.parse(r.lyrics_json) : []; } catch {}
+      return {
+        id: r.id,
+        song_key: r.song_key,
+        video_id: r.video_id,
+        title: r.title,
+        artist: r.artist,
+        lines,
+        contributor_id: r.contributor_id,
+        contributor_name: r.contributor_name || 'Community',
+        created_at: r.created_at ? new Date(r.created_at).toISOString() : null,
+      };
+    });
+    return { submissions };
+  } catch (error) {
+    console.error('admin-get-qa-pending error:', error);
+    return { submissions: [] };
+  }
+});
+
+ipcMain.handle('admin-review-qa', async (_event, submissionId, action, note) => {
+  if (!db || !submissionId || (action !== 'approve' && action !== 'reject')) {
+    return { success: false, error: 'Parameter review tidak valid' };
+  }
+  try {
+    const [rows] = await db.execute(
+      'SELECT * FROM community_word_lyrics_submissions WHERE id = ? LIMIT 1',
+      [submissionId]
+    );
+    const sub = (rows as any[])[0];
+    if (!sub) return { success: false, error: 'Submission tidak ditemukan' };
+
+    if (action === 'approve') {
+      await db.execute(
+        `INSERT INTO community_word_lyrics (song_key, video_id, title, artist, lyrics_json, contributor_id, contributor_name)
+         VALUES (?, ?, ?, ?, ?, ?, ?)
+         ON DUPLICATE KEY UPDATE
+           video_id = COALESCE(VALUES(video_id), video_id),
+           lyrics_json = VALUES(lyrics_json),
+           contributor_id = VALUES(contributor_id),
+           contributor_name = VALUES(contributor_name)`,
+        [sub.song_key, sub.video_id, sub.title, sub.artist, sub.lyrics_json, sub.contributor_id, sub.contributor_name]
+      );
+      await db.execute(
+        "UPDATE community_word_lyrics_submissions SET status = 'approved', review_note = ?, reviewed_at = NOW() WHERE id = ?",
+        [note || null, submissionId]
+      );
+    } else {
+      await db.execute(
+        "UPDATE community_word_lyrics_submissions SET status = 'rejected', review_note = ?, reviewed_at = NOW() WHERE id = ?",
+        [note || null, submissionId]
+      );
+    }
+    return { success: true, action };
+  } catch (error: any) {
+    console.error('admin-review-qa error:', error);
+    return { success: false, error: error?.message || 'Gagal memproses QA' };
+  }
+});
+
+ipcMain.handle('admin-get-badges', async () => {
+  if (!db) return [];
+  try {
+    const [[badgeRows], [grantCountRows]] = await Promise.all([
+      db.execute('SELECT * FROM music_badges ORDER BY created_at DESC'),
+      db.execute('SELECT badge_id, COUNT(*) AS cnt FROM music_user_badges GROUP BY badge_id')
+    ]);
+    const cntMap: Record<string, number> = {};
+    for (const r of grantCountRows as any[]) cntMap[String(r.badge_id)] = Number(r.cnt || 0);
+    return (badgeRows as any[]).map((b) => ({
+      id: b.id,
+      name: b.name,
+      description: b.description || '',
+      icon: b.icon,
+      color: b.color,
+      ruleType: b.rule_type,
+      ruleValue: Number(b.rule_value || 0),
+      manualGrants: cntMap[String(b.id)] || 0,
+    }));
+  } catch (error) {
+    console.error('admin-get-badges error:', error);
+    return [];
+  }
+});
+
+ipcMain.handle('admin-create-badge', async (_event, payload) => {
+  if (!db) return { success: false, error: 'Database belum terhubung' };
+  if (!payload?.name?.trim()) return { success: false, error: 'Nama badge wajib diisi' };
+  try {
+    await db.execute(`
+      CREATE TABLE IF NOT EXISTS music_badges (
+        id VARCHAR(64) PRIMARY KEY,
+        name VARCHAR(100) NOT NULL,
+        description VARCHAR(255) NULL,
+        icon MEDIUMTEXT NOT NULL,
+        color VARCHAR(32) NOT NULL DEFAULT '#5865F2',
+        rule_type VARCHAR(32) NOT NULL DEFAULT 'manual',
+        rule_value INT NOT NULL DEFAULT 0,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      )
+    `);
+    try { await db.execute("ALTER TABLE music_badges MODIFY COLUMN icon MEDIUMTEXT NOT NULL"); } catch {}
+    const id = `badge_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`;
+    await db.execute(
+      'INSERT INTO music_badges (id, name, description, icon, color, rule_type, rule_value) VALUES (?, ?, ?, ?, ?, ?, ?)',
+      [
+        id,
+        String(payload.name).trim().slice(0, 100),
+        String(payload.description || '').trim().slice(0, 255),
+        String(payload.icon || '🏆').trim(),
+        String(payload.color || '#5865F2').trim().slice(0, 32),
+        String(payload.ruleType || 'manual'),
+        Math.max(0, Number(payload.ruleValue || 0)),
+      ]
+    );
+    return { success: true, id };
+  } catch (error: any) {
+    return { success: false, error: error?.message || 'Gagal membuat badge' };
+  }
+});
+
+ipcMain.handle('admin-delete-badge', async (_event, badgeId) => {
+  if (!db || !badgeId) return { success: false };
+  try {
+    await Promise.all([
+      db.execute('DELETE FROM music_user_badges WHERE badge_id = ?', [badgeId]),
+      db.execute('DELETE FROM music_badges WHERE id = ?', [badgeId]),
+    ]);
+    return { success: true };
+  } catch {
+    return { success: false };
+  }
+});
+
+ipcMain.handle('admin-toggle-user-badge', async (_event, targetDiscordId, badgeId, grant, adminId) => {
+  if (!db || !targetDiscordId || !badgeId) return { success: false };
+  try {
+    if (grant) {
+      await db.execute(
+        'INSERT IGNORE INTO music_user_badges (discord_id, badge_id, awarded_by) VALUES (?, ?, ?)',
+        [targetDiscordId, badgeId, adminId || null]
+      );
+    } else {
+      await db.execute(
+        'DELETE FROM music_user_badges WHERE discord_id = ? AND badge_id = ?',
+        [targetDiscordId, badgeId]
+      );
+    }
+    return { success: true };
+  } catch {
+    return { success: false };
   }
 });
 
@@ -1566,31 +2140,40 @@ ipcMain.on('set-activity', (event, song, extraData) => {
     };
   } else {
     const cleanTitle = cleanSongTitle(song.title);
+    const isPlaying = d.isPlaying !== false;
     const progressMs = Math.floor((d.progress || 0) * 1000);
     const durationMs = Math.floor((d.duration || 0) * 1000);
 
-    // Progress bar: Discord derives it from start/end timestamps automatically
-    const startTimestamp = durationMs > 0 ? new Date(now - progressMs) : undefined;
+    // Progress bar: only pass start/end timestamps while playing so Discord stops advancing when paused
+    const startTimestamp = isPlaying && durationMs > 0 ? new Date(now - progressMs) : undefined;
+    const endTimestamp = isPlaying && durationMs > 0 ? new Date(now - progressMs + durationMs) : undefined;
     const VERCEL_URL = 'https://donpollo-music-desktop.vercel.app';
-    const listenUrl = d.discordId
-      ? `${VERCEL_URL}/listen?u=${d.discordId}${d.username ? '&name=' + encodeURIComponent(d.username) : ''}`
+    const targetListenId = d.hostId || d.partyId || d.discordId;
+    const targetListenName = d.isGuest ? d.hostUsername : d.username;
+    const listenUrl = targetListenId
+      ? `${VERCEL_URL}/listen?u=${targetListenId}${targetListenName ? '&name=' + encodeURIComponent(targetListenName) : ''}`
       : null;
 
-    const isInParty = d.isGuest || (d.partyId && d.partyId === d.discordId);
+    const artistName = song.artist || 'Unknown Artist';
+    const peersCount = Number(d.partyPeersCount || 0);
+    const friendLabel = peersCount > 1 ? 'friends' : 'friend';
+    const baseState = d.isGuest || (d.partyId && d.partyId === d.discordId)
+      ? `${artistName} • 🎧 with ${friendLabel}`
+      : artistName;
+    const activityState = isPlaying ? baseState : `⏸️ Paused • ${baseState}`;
 
     currentActivity = {
       type: 2, // 2 = Listening to
       details: cleanTitle,
-      state: isInParty
-        ? `🎧 with ${d.hostUsername || 'a friend'}`
-        : (song.artist || 'Unknown Artist'),
+      state: activityState,
       largeImageKey: song.thumbnail || 'logo',
       ...(song.album && song.album.trim().toLowerCase() !== cleanTitle.toLowerCase() ? { largeImageText: song.album } : {}),
       smallImageKey: 'logo',
-      smallImageText: 'Don Pollo Music',
+      smallImageText: isPlaying ? 'Don Pollo Music' : 'Paused',
       ...(startTimestamp ? { startTimestamp } : {}),
+      ...(endTimestamp ? { endTimestamp } : {}),
       instance: false,
-      ...(listenUrl && !d.isGuest ? {
+      ...(listenUrl ? {
         buttons: [
           { label: 'Listen Along', url: listenUrl },
         ]
@@ -2244,6 +2827,14 @@ if (!gotTheLock && !isDev) {
       });
       globalShortcut.register('MediaPreviousTrack', () => {
         mainWindow?.webContents.send('tray-control', 'prev');
+      });
+      globalShortcut.register('CommandOrControl+Shift+L', () => {
+        toggleLyricsOverlay();
+      });
+      globalShortcut.register('CommandOrControl+Shift+K', () => {
+        if (lyricsOverlayWindow && !lyricsOverlayWindow.isDestroyed()) {
+          setLyricsOverlayLock(!lyricsOverlayLocked);
+        }
       });
     } catch (e) {
       console.warn('Failed to register global media shortcuts:', e);

@@ -4,6 +4,25 @@ contextBridge.exposeInMainWorld('electronAPI', {
   discordLogin: (authUrl: string) => ipcRenderer.invoke('discord-login', authUrl),
   enterMiniPlayer: () => ipcRenderer.send('enter-mini-player'),
   exitMiniPlayer: () => ipcRenderer.send('exit-mini-player'),
+  toggleLyricsOverlay: () => ipcRenderer.send('toggle-lyrics-overlay'),
+  closeLyricsOverlay: () => ipcRenderer.send('close-lyrics-overlay'),
+  syncLyricsOverlay: (payload: any) => ipcRenderer.send('lyrics-overlay-sync', payload),
+  setLyricsOverlayLock: (locked: boolean) => ipcRenderer.send('set-lyrics-overlay-lock', locked),
+  onLyricsOverlayUpdate: (callback: (payload: any) => void) => {
+    const wrapped = (_event: any, payload: any) => callback(payload);
+    ipcRenderer.on('lyrics-overlay-update', wrapped);
+    return () => ipcRenderer.off('lyrics-overlay-update', wrapped);
+  },
+  onLyricsOverlayState: (callback: (isOpen: boolean) => void) => {
+    const wrapped = (_event: any, isOpen: boolean) => callback(isOpen);
+    ipcRenderer.on('lyrics-overlay-state', wrapped);
+    return () => ipcRenderer.off('lyrics-overlay-state', wrapped);
+  },
+  onLyricsOverlayLockState: (callback: (locked: boolean) => void) => {
+    const wrapped = (_event: any, locked: boolean) => callback(locked);
+    ipcRenderer.on('lyrics-overlay-lock-state', wrapped);
+    return () => ipcRenderer.off('lyrics-overlay-lock-state', wrapped);
+  },
   setMinimizeToMiniPlayer: (_enabled: boolean) => { /* Deprecated */ },
   setCloseToTray: (enabled: boolean) => ipcRenderer.send('set-close-to-tray', enabled),
   onMiniPlayerMode: (callback: (event: any, mode: boolean) => void) => {
@@ -70,6 +89,14 @@ contextBridge.exposeInMainWorld('electronAPI', {
   getCacheSize: () => ipcRenderer.invoke('get-cache-size'),
   getCacheLocation: () => ipcRenderer.invoke('get-cache-location'),
   getProfile: (discordId: string) => ipcRenderer.invoke('get-profile', discordId),
+  adminGetOverview: () => ipcRenderer.invoke('admin-get-overview'),
+  adminGetUser: (discordId: string) => ipcRenderer.invoke('admin-get-user', discordId),
+  adminGetQaPending: () => ipcRenderer.invoke('admin-get-qa-pending'),
+  adminReviewQa: (submissionId: number, action: 'approve' | 'reject', note?: string) => ipcRenderer.invoke('admin-review-qa', submissionId, action, note),
+  adminGetBadges: () => ipcRenderer.invoke('admin-get-badges'),
+  adminCreateBadge: (payload: any) => ipcRenderer.invoke('admin-create-badge', payload),
+  adminDeleteBadge: (badgeId: string) => ipcRenderer.invoke('admin-delete-badge', badgeId),
+  adminToggleUserBadge: (targetDiscordId: string, badgeId: string, grant: boolean, adminId?: string) => ipcRenderer.invoke('admin-toggle-user-badge', targetDiscordId, badgeId, grant, adminId),
   getUserPercentile: (discordId: string) => ipcRenderer.invoke('get-user-percentile', discordId),
   updateProfile: (profileData: any) => ipcRenderer.invoke('update-profile', profileData),
   toggleFollow: (discordId: string, targetId: string) => ipcRenderer.invoke('toggle-follow', discordId, targetId),

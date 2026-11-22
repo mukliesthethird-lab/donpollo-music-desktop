@@ -1,6 +1,8 @@
 import React, { useState } from 'react';
 import { X, Shuffle, SkipBack, Play, Pause, SkipForward, Repeat, Repeat1, Languages, Check } from 'lucide-react';
 import { getCleanThumbnail, getHighResImage } from '../utils/mediaHelpers';
+import { KaraokeLine } from './KaraokeLine';
+import type { LyricWord } from '../utils/karaokeLyrics';
 
 interface FullscreenPlayerProps {
   isOpen: boolean;
@@ -13,7 +15,8 @@ interface FullscreenPlayerProps {
   loopMode: 'off' | 'all' | 'one';
   showWidgetOverlay: boolean;
   setShowWidgetOverlay: (val: boolean) => void;
-  lyricsData: { time: number; text: string; romanizedText?: string; isInstrumental?: boolean }[] | null;
+  lyricsData: { time: number; text: string; romanizedText?: string; isInstrumental?: boolean; words?: LyricWord[] }[] | null;
+  lyricsContributor?: string | null;
   plainLyrics: string;
   lyricsOffset: number;
   updateAndSaveLyricsOffset: (delta: number, isReset?: boolean) => void;
@@ -62,6 +65,7 @@ export const FullscreenPlayer: React.FC<FullscreenPlayerProps> = ({
   showWidgetOverlay,
   setShowWidgetOverlay,
   lyricsData,
+  lyricsContributor,
   plainLyrics,
   lyricsOffset,
   updateAndSaveLyricsOffset,
@@ -260,12 +264,39 @@ export const FullscreenPlayer: React.FC<FullscreenPlayerProps> = ({
             {lyricsData && lyricsData.length > 0 ? (
               lyricsData.map((line, idx) => {
                 const nextLineTime = idx < lyricsData.length - 1 ? lyricsData[idx + 1].time : duration;
-                const isActive = (progress - lyricsOffset) >= line.time && (progress - lyricsOffset) < nextLineTime;
-                if (line.isInstrumental) return null;
+                const effectiveProgress = progress - lyricsOffset;
+                const isActive = effectiveProgress >= line.time && effectiveProgress < nextLineTime;
+                if (line.isInstrumental) {
+                  const timeLeft = nextLineTime - effectiveProgress;
+                  return (
+                    <div key={idx} data-lyric-idx={idx} className={`fs-lyric-line instrumental ${isActive ? 'active' : ''}`} onClick={() => jumpToLyric(line.time)}>
+                      <span className={`instrumental-dot ${isActive && timeLeft <= 3 ? 'lit' : ''}`}>•</span>
+                      <span className={`instrumental-dot ${isActive && timeLeft <= 2 ? 'lit' : ''}`}>•</span>
+                      <span className={`instrumental-dot ${isActive && timeLeft <= 1 ? 'lit' : ''}`}>•</span>
+                    </div>
+                  );
+                }
                 const transLine = showLyricTranslation && translatedLyrics?.[idx];
+                const displayLineText = showRomanized && line.romanizedText ? line.romanizedText : line.text;
+                const hasRealWords = Boolean(line.words && line.words.length > 0 && !(showRomanized && line.romanizedText));
                 return (
                   <div key={idx} data-lyric-idx={idx} className={`fs-lyric-line ${isActive ? 'active' : ''}`} onClick={() => jumpToLyric(line.time)}>
-                    <div>{showRomanized && line.romanizedText ? line.romanizedText : line.text}</div>
+                    <div>
+                      {isActive && hasRealWords ? (
+                        <KaraokeLine
+                          text={displayLineText}
+                          lineStartTime={line.time}
+                          lineEndTime={nextLineTime}
+                          currentTime={effectiveProgress}
+                          isPlaying={isPlaying}
+                          enhancedWords={line.words}
+                          activeColor="#FFFFFF"
+                          inactiveColor="rgba(255, 255, 255, 0.36)"
+                        />
+                      ) : (
+                        displayLineText
+                      )}
+                    </div>
                     {transLine && (
                       <div style={{ fontSize: '0.62em', opacity: 0.72, marginTop: '4px', fontWeight: 400 }}>{transLine}</div>
                     )}
@@ -274,6 +305,11 @@ export const FullscreenPlayer: React.FC<FullscreenPlayerProps> = ({
               })
             ) : (
               <div className="fs-lyric-line active">{plainLyrics || 'Instrumental'}</div>
+            )}
+            {lyricsContributor && lyricsData && lyricsData.length > 0 && (
+              <div style={{ marginTop: '28px', fontSize: '13px', color: 'rgba(255,255,255,0.5)', fontWeight: 500 }}>
+                ✦ {t('wordSyncedBy')} <span style={{ color: 'rgba(255,255,255,0.88)', fontWeight: 700 }}>{lyricsContributor}</span>
+              </div>
             )}
           </div>
         </div>

@@ -28,6 +28,8 @@ interface ProfilePageProps {
   setSavedPlaylists: React.Dispatch<React.SetStateAction<string[]>>;
   setActivePlaylistId: (id: string | null) => void;
   setActivePage: (page: Page) => void;
+  navigate?: (page: Page, opts?: any) => void;
+  approvedLyricsCount?: number;
   handleAvatarError: (e: any, userId?: string | null, username?: string) => void;
   startPlayingFromList: (list: any[], startIndex: number) => void;
   handleContextMenu: (e: React.MouseEvent, song: any) => void;
@@ -59,6 +61,8 @@ export const ProfilePage: React.FC<ProfilePageProps> = ({
   setSavedPlaylists,
   setActivePlaylistId,
   setActivePage,
+  navigate,
+  approvedLyricsCount = 0,
   handleAvatarError,
   startPlayingFromList,
   handleContextMenu,
@@ -194,10 +198,43 @@ export const ProfilePage: React.FC<ProfilePageProps> = ({
               return null;
             })()}
 
-            <div style={{ display: 'flex', gap: '20px', color: 'var(--text-secondary)', fontSize: '14px', fontWeight: '500', alignItems: 'center' }}>
+            <div style={{ display: 'flex', gap: '20px', color: 'var(--text-secondary)', fontSize: '14px', fontWeight: '500', alignItems: 'center', flexWrap: 'wrap' }}>
               <span><strong style={{ color: 'var(--text-primary)' }}>{profileData?.followers?.length || 0}</strong> {t('followers')}</span>
               {profileData?.playlists?.length > 0 && <span><strong style={{ color: 'var(--text-primary)' }}>{profileData.playlists.length}</strong> {t('publicPlaylists')}</span>}
+              {approvedLyricsCount > 0 && <span><strong style={{ color: '#10B981' }}>{approvedLyricsCount}</strong> {t('verifiedLyrics')}</span>}
             </div>
+
+            {Array.isArray(profileData?.badges) && profileData.badges.length > 0 && (
+              <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', marginTop: '12px' }}>
+                {profileData.badges.map((b: any) => (
+                  <span
+                    key={b.id}
+                    title={b.description || b.name}
+                    style={{
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      gap: '5px',
+                      padding: '4px 10px',
+                      borderRadius: '999px',
+                      background: `${b.color || '#5865F2'}22`,
+                      border: `1px solid ${b.color || '#5865F2'}66`,
+                      color: b.color || '#5865F2',
+                      fontSize: '12px',
+                      fontWeight: 700,
+                    }}
+                  >
+                    <span>
+                      {typeof b.icon === 'string' && (b.icon.startsWith('data:image/') || b.icon.startsWith('http')) ? (
+                        <img src={b.icon} alt="" style={{ width: '15px', height: '15px', borderRadius: '4px', objectFit: 'cover', display: 'block' }} />
+                      ) : (
+                        b.icon
+                      )}
+                    </span>
+                    <span>{b.name}</span>
+                  </span>
+                ))}
+              </div>
+            )}
 
             <div style={{ marginTop: '24px', display: 'flex', alignItems: 'center', gap: '16px' }}>
               {!isMe && discordUser && activeProfileId && (
@@ -307,7 +344,7 @@ export const ProfilePage: React.FC<ProfilePageProps> = ({
               {profileData?.playlists?.length > 0 ? (
                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(180px, 1fr))', gap: '20px' }}>
                   {profileData.playlists.map((pl: any) => (
-                    <div key={pl.id} className="playlist-card" style={{ background: 'var(--bg-card)', padding: '16px', borderRadius: '12px', cursor: 'pointer', transition: 'all 0.2s', border: '1px solid var(--border-color)' }} onClick={() => { setActivePlaylistId(pl.id); setActivePage('playlist-detail'); }}>
+                    <div key={pl.id} className="playlist-card" style={{ background: 'var(--bg-card)', padding: '16px', borderRadius: '12px', cursor: 'pointer', transition: 'all 0.2s', border: '1px solid var(--border-color)' }} onClick={() => { if (navigate) navigate('playlist-detail', { playlistId: pl.id }); else { setActivePlaylistId(pl.id); setActivePage('playlist-detail'); } }}>
                       <div style={{ width: '100%', aspectRatio: '1', borderRadius: '8px', overflow: 'hidden', marginBottom: '12px', background: 'var(--bg-card-hover)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                         {pl.avatar ? (
                           <img src={pl.avatar} alt={pl.name} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />

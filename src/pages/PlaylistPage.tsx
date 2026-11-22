@@ -14,6 +14,7 @@ interface PlaylistPageProps {
   playlists: Playlist[];
   setPlaylists: React.Dispatch<React.SetStateAction<Playlist[]>>;
   madeForYouPlaylists: Playlist[];
+  profilePlaylists?: Playlist[];
   discordUser: DiscordUser | null;
   settings: any;
   playHistory: any[];
@@ -70,7 +71,7 @@ interface PlaylistPageProps {
 }
 
 export const PlaylistPage: React.FC<PlaylistPageProps> = ({
-  activePage, activePlaylistId, playlists, setPlaylists, madeForYouPlaylists,
+  activePage, activePlaylistId, playlists, setPlaylists, madeForYouPlaylists, profilePlaylists = [],
   discordUser, settings, playHistory, likedSongs, downloadedSongs, savedPlaylists,
   activeDownloads, currentSong, isEditingPlaylistName, setIsEditingPlaylistName,
   editPlaylistNameValue, setEditPlaylistNameValue, handleEditPlaylistName,
@@ -86,7 +87,10 @@ export const PlaylistPage: React.FC<PlaylistPageProps> = ({
   isPlaylistSearching, handlePlaylistSearch, setPlaylistContextMenu, API_BASE_URL, t
 }) => {
     if (activePage === 'playlist-detail' && activePlaylistId) {
-      const pl = playlists.find(p => p.id === activePlaylistId) || madeForYouPlaylists.find(p => p.id === activePlaylistId);
+      const pl =
+        playlists.find(p => p.id === activePlaylistId) ||
+        madeForYouPlaylists.find(p => p.id === activePlaylistId) ||
+        profilePlaylists.find(p => p.id === activePlaylistId);
       if (!pl) return null;
       const isMyPlaylist = (!pl.discordId || pl.discordId === discordUser?.id) && !(pl as any).isTemporary;
       const isCollaborator = pl.collaborators?.includes(discordUser?.id || '') || false;
