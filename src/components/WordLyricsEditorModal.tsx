@@ -21,8 +21,9 @@ import {
   Trash2,
   Clock,
   Plus,
+  Upload,
 } from 'lucide-react';
-import { injectInstrumentalCues, type LyricWord } from '../utils/karaokeLyrics';
+import { injectInstrumentalCues, parseEnhancedLrcLine, type LyricWord } from '../utils/karaokeLyrics';
 import { KaraokeLine } from './KaraokeLine';
 
 export interface EditableLyricLine {
@@ -537,6 +538,70 @@ export const WordLyricsEditorModal: React.FC<WordLyricsEditorModalProps> = ({
     showToast('Cue instrumental (• • •) ditambahkan', 'success');
   };
 
+  const handleImportLrcFile = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = () => {
+      const content = String(reader.result || '');
+      const rawLines = content.split(/\r?\n/);
+      const parsed: EditableLyricLine[] = [];
+      const lineTagRe = /^\[(\d{1,3}):(\d{2})(?:\.(\d{1,3}))?\](.*)$/;
+
+      for (const raw of rawLines) {
+        const trimmed = raw.trim();
+        if (!trimmed) continue;
+        const m = trimmed.match(lineTagRe);
+        if (m) {
+          const min = parseInt(m[1], 10);
+          const sec = parseInt(m[2], 10);
+          const msRaw = m[3] || '0';
+          const frac = parseInt(msRaw, 10) / Math.pow(10, msRaw.length);
+          const lineTime = min * 60 + sec + frac;
+          const body = (m[4] || '').trim();
+          if (!body) continue;
+          const enh = parseEnhancedLrcLine(body);
+          const cleanText = enh.cleanText.trim();
+          if (!cleanText) continue;
+          const words: LyricWord[] =
+            enh.words && enh.words.length > 0
+              ? enh.words
+              : cleanText.split(/\s+/).filter(Boolean).map((tok) => ({
+                  text: tok,
+                  weight: Math.max(1, tok.length),
+                }));
+          parsed.push({ time: lineTime, text: cleanText, words });
+        }
+      }
+
+      if (parsed.length > 0) {
+        parsed.sort((a, b) => a.time - b.time);
+        setLines(parsed);
+        setRawText(parsed.map((l) => l.text).join('\n'));
+        setCursorLine(0);
+        setCursorWord(0);
+        const allWordsTimed = parsed.every(
+          (l) => l.words && l.words.length > 0 && l.words.every((w) => typeof w.startTime === 'number')
+        );
+        setMode(allWordsTimed ? 'preview' : 'sync');
+        showToast(`Berhasil mengimpor ${parsed.length} baris dari ${file.name}!`, 'success');
+      } else {
+        // Plain .txt fallback (no [mm:ss] tags)
+        const plain = rawLines
+          .map((l) => l.replace(/^\[[a-zA-Z]+:.*\]$/, '').trim())
+          .filter(Boolean);
+        if (plain.length === 0) {
+          showToast('File lirik kosong atau format tidak dikenali', 'error');
+          return;
+        }
+        setRawText(plain.join('\n'));
+        showToast(`Teks dari ${file.name} dimuat (${plain.length} baris). Klik Terapkan & Mulai Sync.`, 'music');
+      }
+    };
+    reader.readAsText(file);
+    e.target.value = '';
+  };
+
   const fetchQaPending = async () => {
     if (!isQaAdmin || !contributorId) return;
     setQaLoading(true);
@@ -650,25 +715,33 @@ export const WordLyricsEditorModal: React.FC<WordLyricsEditorModalProps> = ({
         {/* Header */}
         <div
           style={{
-            padding: '14px 20px',
+            padding: '14px 20px 12px',
             borderBottom: '1px solid var(--border-color)',
             background: 'var(--bg-card, #141519)',
             display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'space-between',
-            gap: '12px',
+            flexDirection: 'column',
+            gap: '10px',
           }}
         >
-          <div style={{ minWidth: 0 }}>
-            <div style={{ fontSize: '15px', fontWeight: 800, color: 'var(--text-primary)' }}>
-              Word-Synced Lyrics Studio
+          <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: '12px' }}>
+            <div style={{ minWidth: 0, flex: 1 }}>
+              <div style={{ fontSize: '15px', fontWeight: 800, color: 'var(--text-primary)' }}>
+                Word-Synced Lyrics Studio
+              </div>
+              <div style={{ fontSize: '12px', color: 'var(--text-secondary)', marginTop: '2px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                {(qaPreviewSong?.title || currentSong.title)} • {(qaPreviewSong?.artist || currentSong.artist)} ({syncedCount}/{lines.length} baris selesai)
+              </div>
             </div>
-            <div style={{ fontSize: '12px', color: 'var(--text-secondary)', marginTop: '2px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-              {(qaPreviewSong?.title || currentSong.title)} • {(qaPreviewSong?.artist || currentSong.artist)} ({syncedCount}/{lines.length} baris selesai)
-            </div>
+            <button
+              onClick={onClose}
+              style={{ background: 'none', border: 'none', color: 'var(--text-secondary)', cursor: 'pointer', padding: '4px', flexShrink: 0 }}
+              title="Tutup"
+            >
+              <X size={20} />
+            </button>
           </div>
 
-          <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flexWrap: 'wrap' }}>
             {[
               { id: 'sync' as const, label: 'Tap & Hold', icon: <Mic size={13} /> },
               { id: 'preview' as const, label: 'Preview', icon: <Eye size={13} /> },
@@ -693,25 +766,21 @@ export const WordLyricsEditorModal: React.FC<WordLyricsEditorModalProps> = ({
                     color: active ? '#fff' : 'var(--text-secondary)',
                     border: '1px solid var(--border-color)',
                     borderRadius: '8px',
-                    padding: '6px 11px',
+                    padding: '6px 12px',
                     fontSize: '12px',
                     fontWeight: 600,
                     cursor: 'pointer',
                     display: 'inline-flex',
                     alignItems: 'center',
-                    gap: '5px',
+                    gap: '6px',
+                    whiteSpace: 'nowrap',
+                    flexShrink: 0,
                   }}
                 >
                   {tab.icon} {tab.label}
                 </button>
               );
             })}
-            <button
-              onClick={onClose}
-              style={{ background: 'none', border: 'none', color: 'var(--text-secondary)', cursor: 'pointer', padding: '6px', marginLeft: '4px' }}
-            >
-              <X size={20} />
-            </button>
           </div>
         </div>
 
@@ -979,25 +1048,48 @@ export const WordLyricsEditorModal: React.FC<WordLyricsEditorModalProps> = ({
                 outline: 'none',
               }}
             />
-            <button
-              onClick={applyRawTextToLines}
-              style={{
-                alignSelf: 'flex-end',
-                background: 'var(--accent-primary)',
-                color: '#fff',
-                border: 'none',
-                borderRadius: '10px',
-                padding: '10px 18px',
-                fontWeight: 700,
-                cursor: 'pointer',
-              }}
-            >
-              Terapkan & Mulai Sync
-            </button>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '10px', flexWrap: 'wrap' }}>
+              <label
+                style={{
+                  background: 'var(--bg-card, #141519)',
+                  border: '1px dashed var(--border-color)',
+                  color: 'var(--text-primary)',
+                  borderRadius: '10px',
+                  padding: '9px 14px',
+                  fontSize: '13px',
+                  fontWeight: 600,
+                  cursor: 'pointer',
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: '6px',
+                }}
+              >
+                <Upload size={14} /> Import File (.lrc / .txt)
+                <input type="file" accept=".lrc,.txt,text/plain" style={{ display: 'none' }} onChange={handleImportLrcFile} />
+              </label>
+              <button
+                onClick={applyRawTextToLines}
+                style={{
+                  background: 'var(--accent-primary)',
+                  color: '#fff',
+                  border: 'none',
+                  borderRadius: '10px',
+                  padding: '10px 18px',
+                  fontWeight: 700,
+                  cursor: 'pointer',
+                }}
+              >
+                Terapkan & Mulai Sync
+              </button>
+            </div>
           </div>
         ) : mode === 'preview' ? (
-          <div style={{ padding: '20px', overflowY: 'auto', flex: 1, display: 'flex', flexDirection: 'column', gap: '12px', background: 'var(--bg-card, #141519)' }}>
-            {previewLines.map((l, idx) => {
+          <div style={{ padding: '20px', overflowY: 'auto', flex: 1, minHeight: '220px', display: 'flex', flexDirection: 'column', gap: '12px', background: 'var(--bg-card, #141519)' }}>
+            {previewLines.length === 0 ? (
+              <div style={{ textAlign: 'center', padding: '48px 20px', color: 'var(--text-muted)', fontSize: '13px' }}>
+                Belum ada lirik untuk dipreview. Import file <strong>.lrc</strong> atau tulis lirik di tab <strong>Edit Teks</strong>.
+              </div>
+            ) : previewLines.map((l, idx) => {
               const nextT = idx + 1 < previewLines.length ? previewLines[idx + 1].time : l.time + 6;
               const isAct = idx === previewLineIdx;
               if (l.isInstrumental) {

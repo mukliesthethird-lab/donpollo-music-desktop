@@ -1591,6 +1591,12 @@ function App() {
     };
   }, [discordUser, activePartyId, userStatus, isGuest, settings.discordActivityEnabled]);
 
+  useEffect(() => {
+    if (discordUser && syncPresenceRef.current) {
+      syncPresenceRef.current();
+    }
+  }, [isPlaying, currentSong?.id, discordUser?.id]);
+
   // Segera broadcast ke party saat Host ganti lagu atau play/pause tanpa mereset timer interval
   useEffect(() => {
     if (!isGuest && discordUser && activePartyId === discordUser.id) {
@@ -7839,7 +7845,29 @@ function App() {
                     );
                   })
                 ) : (
-                  <div style={{ textAlign: 'center', color: 'var(--text-secondary)', marginTop: '40px', fontSize: '14px' }}>{plainLyrics}</div>
+                  <div style={{ textAlign: 'center', color: 'var(--text-secondary)', marginTop: '40px', fontSize: '14px', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '12px' }}>
+                    <span>{plainLyrics}</span>
+                    {currentSong && (plainLyrics === t('lyricsNotFound') || plainLyrics === t('lyricsFailed')) && (
+                      <button
+                        onClick={() => setShowWordLyricsEditor(true)}
+                        style={{
+                          background: 'var(--bg-card)',
+                          border: '1px solid var(--border-color)',
+                          color: 'var(--text-primary)',
+                          borderRadius: '10px',
+                          padding: '8px 14px',
+                          fontSize: '12.5px',
+                          fontWeight: 700,
+                          cursor: 'pointer',
+                          display: 'inline-flex',
+                          alignItems: 'center',
+                          gap: '6px',
+                        }}
+                      >
+                        <Upload size={14} /> Import .lrc / Buat Lirik
+                      </button>
+                    )}
+                  </div>
                 )}
                 {lyricsContributor && lyricsData && lyricsData.length > 0 && (
                   <div style={{ marginTop: '24px', paddingTop: '14px', borderTop: '1px solid var(--border-color)', textAlign: 'center', fontSize: '12px', color: 'var(--text-muted)', letterSpacing: '0.2px' }}>
